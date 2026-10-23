@@ -1,5 +1,5 @@
--- Ket noi vao database minimemoryzone truoc khi chay file nay.
--- Vi du: psql -d minimemoryzone -v ON_ERROR_STOP=1 -f db.sql
+-- Ket noi vao database ieltstudy truoc khi chay file nay.
+-- Vi du: psql -d ieltstudy -v ON_ERROR_STOP=1 -f db.sql
 -- IF NOT EXISTS giu nguyen bang da co, khong cap nhat cau truc bang cu.
 
 BEGIN;
@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS users (
     email VARCHAR(255) NOT NULL UNIQUE,
     full_name VARCHAR(255) NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    hashed_pass VARCHAR(255) NOT NULL,
+    hashed_pass VARCHAR(255) NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS orders (

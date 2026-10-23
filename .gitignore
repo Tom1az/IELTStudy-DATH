@@ -1,9 +1,10 @@
-package-lock.json
-package.json
 node_modules/
 yarn.lock
 .env
 dist/
-src/prisma/contract.d.ts
-src/prisma/contract.json
 .vscode/
+.venv/
+CLAUDE.local.md
+.claude/settings.local.json
+backend/src/prisma/contract.d.ts
+backend/src/prisma/contract.json

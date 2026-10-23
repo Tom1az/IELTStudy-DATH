@@ -1,0 +1,142 @@
+openapi: 3.1.0
+info:
+  title: IELTStudy API
+  version: 0.1.0
+  description: |
+    REST API for IELTStudy, an adaptive IELTS learning platform.
+    Contract-first: add or change an endpoint here in the same change as its code.
+servers:
+  - url: /api/v1
+tags:
+  - name: Health
+  - name: Users
+
+paths:
+  /users:
+    get:
+      tags: [Users]
+      summary: List users
+      responses:
+        "200":
+          description: All users
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/User" }
+                  message: { type: string }
+    post:
+      tags: [Users]
+      summary: Create a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserInput" }
+      responses:
+        "201":
+          description: User created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+  /users/{userID}:
+    parameters:
+      - name: userID
+        in: path
+        required: true
+        schema: { type: integer, minimum: 1 }
+    get:
+      tags: [Users]
+      summary: Get a user
+      responses:
+        "200":
+          description: The user
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "404": { $ref: "#/components/responses/Message" }
+    put:
+      tags: [Users]
+      summary: Replace a user
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserInput" }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+    patch:
+      tags: [Users]
+      summary: Update a user's email or name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UserUpdate" }
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    User:
+      type: object
+      properties:
+        userId: { type: integer }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        createdAt: { type: string, format: date-time }
+    UserInput:
+      type: object
+      required: [email, fullName, password]
+      properties:
+        email: { type: string, format: email }
+        fullName: { type: string, minLength: 3, maxLength: 30 }
+        password: { type: string, minLength: 8 }
+    UserUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        email: { type: string, format: email }
+        fullName: { type: string, minLength: 3, maxLength: 30 }
+
+  responses:
+    Message:
+      description: Result message
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              message: { type: string }
+    ValidationError:
+      description: Request failed Joi validation
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              error:
+                type: array
+                items: { type: string }
