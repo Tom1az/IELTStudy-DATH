@@ -26,6 +26,7 @@ This is a 3rd-year CS integration school project, and the code is built mostly w
 | `ml/` | Offline pyBKT fitting and A/B simulation (Phase 3/6). Python venv lives at the repo root `.venv/`. |
 | `docs/ROADMAP.md` | **Source of truth for progress.** Phases, tasks and approval gates. |
 | `docs/ERD.md` | Data model: diagram, delete rules, JSONB shapes, invariants the app must enforce |
+| `docs/plans/` | Approved plans, one file per phase, with an outcome note per task |
 | `docs/CLAUDE_CODE_GUIDE.md` | How the team steers Claude Code |
 | `specs.md` | Product and technical spec |
 
@@ -44,9 +45,16 @@ Swagger UI is served at `http://localhost:3000/api-docs`.
 ## Workflow
 
 - Work one `docs/ROADMAP.md` task at a time. Start in plan mode for anything beyond a small fix.
+- **Export every approved plan** to `docs/plans/phase-<N>-<slug>.md` (one file per phase, e.g. `phase-2-core-apis.md`). Add one section per task: the task name from `ROADMAP.md`, the approval date, the plan itself, and a short **Outcome** note filled in when the task is done (what changed, any deviation from the plan and why). If the plan changes during implementation, update the file instead of letting it go stale.
 - Tick the task in `docs/ROADMAP.md` when it's done and verified.
 - Before saying a task is done, run `npm run typecheck && npm run lint && npm test` in `backend/`.
 - Work on a feature branch, never directly on `main`.
+- **Context hygiene:** start a fresh context (`/clear`) after each `docs/ROADMAP.md` task, not only at the end of a phase. Mid-task, use `/compact` instead.
+- Before suggesting `/clear`, Claude checks that:
+  1. the task is ticked in `docs/ROADMAP.md`, its **Outcome** note is written in `docs/plans/`, and typecheck, lint and tests pass;
+  2. any decision made only in chat is written to the right file (schema rationale → `docs/ERD.md`, new conventions → `CLAUDE.md` or `backend/CLAUDE.md`);
+  3. the work is committed, or Claude reminds the owner to commit.
+- When a task is finished, Claude says it's a good point to `/clear` and suggests a one-line prompt for the next session, e.g. "Read `docs/ROADMAP.md` and start the next unticked task".
 
 ## Effort guide
 
