@@ -7,6 +7,16 @@ Adaptive IELTS learning platform (full spec: `specs.md`). A 30-question diagnost
 - **Instructor:** builds courses, lessons and media, and tags questions with skills.
 - **Admin:** approves or rejects courses and manages user roles.
 
+## Project context
+
+This is a 3rd-year CS integration school project, and the code is built mostly with Claude Code. The owner wants to learn from the code, keep maintaining it after the course ends, and show it on their CV.
+
+- **Follow `specs.md` strictly.** Build what the spec asks for, and nothing more. If the spec is unclear or something seems missing, ask before adding it. Don't build features the spec doesn't mention.
+- **Write code a 3rd-year CS student can read and maintain.** Prefer plain, common TypeScript and Express patterns: clear names, small functions, `async`/`await`, early returns, and simple loops when they read better than chained calls.
+- **Avoid niche syntax and clever tricks.** Avoid advanced generic or conditional types, type-level programming, dense one-liners and obscure library features. Don't use metaprogramming. If a less common construct is genuinely needed, add a short comment explaining what it does and why.
+- **Explain non-obvious logic.** BKT updates, ranking and scoring get a comment that says what the code does in plain words, with a reference to the spec where it helps.
+- **Explain changes when reporting back:** what changed, why, and which files to read to understand it.
+
 ## Repo map
 
 | Path | What |
@@ -15,13 +25,14 @@ Adaptive IELTS learning platform (full spec: `specs.md`). A 30-question diagnost
 | `frontend/` | Next.js + Tailwind (Phase 4, not scaffolded yet) |
 | `ml/` | Offline pyBKT fitting and A/B simulation (Phase 3/6). Python venv lives at the repo root `.venv/`. |
 | `docs/ROADMAP.md` | **Source of truth for progress.** Phases, tasks and approval gates. |
+| `docs/ERD.md` | Data model: diagram, delete rules, JSONB shapes, invariants the app must enforce |
 | `docs/CLAUDE_CODE_GUIDE.md` | How the team steers Claude Code |
 | `specs.md` | Product and technical spec |
 
 ## Commands (run in `backend/`)
 
 ```bash
-npm run dev            # node --watch src/server.ts (Node >= 24 runs .ts natively)
+npm run dev            # node --watch src/server.ts (Node >= 26.8.2: runs .ts natively and ships Temporal)
 npm run typecheck      # tsc --noEmit
 npm run lint
 npm test               # vitest + supertest

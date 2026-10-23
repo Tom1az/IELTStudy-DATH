@@ -11,7 +11,7 @@
     "strict": true,
     "skipLibCheck": true,
     "esModuleInterop": true,
-    "types": ["node"]
+    "types": ["node", "temporal-polyfill/types/global"]
   },
   "include": ["src/**/*.ts", "prisma.config.ts"]
 }

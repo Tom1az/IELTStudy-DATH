@@ -15,6 +15,8 @@ src/
   types/express.d.ts   # req.value, req.user
   docs/openapi.yaml    # Swagger contract
   prisma/              # schema.prisma (source), schema.d.ts + schema.json (generated), db.ts
+                       # seed.ts + seed-data.ts (npm run seed)
+migrations/            # Prisma 8 migration packages (npm run migration:plan / db:migrate), next to src/
 ```
 
 ## Patterns to follow

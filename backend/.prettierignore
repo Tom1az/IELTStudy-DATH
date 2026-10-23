@@ -1,2 +1,4 @@
 src/prisma/schema.d.ts
 src/prisma/schema.json
+# Prisma migration packages are content-hashed; reformatting them breaks db migrate
+migrations/

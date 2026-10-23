@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=24"
+    "node": ">=26.8.2"
   },
   "scripts": {
     "dev": "node --watch src/server.ts",
@@ -13,7 +13,11 @@
     "lint": "eslint src",
     "format": "prettier --write .",
     "test": "vitest run",
-    "contract:emit": "prisma contract emit"
+    "contract:emit": "prisma contract emit",
+    "migration:plan": "prisma migration plan",
+    "db:migrate": "prisma db migrate",
+    "db:verify": "prisma db verify",
+    "seed": "node src/prisma/seed.ts"
   },
   "dependencies": {
     "@prisma/orm-postgres": "8.0.0-rc.17",
@@ -40,6 +44,7 @@
     "prettier": "3.9.10",
     "prisma": "8.0.0-rc.22",
     "supertest": "^7.1.4",
+    "temporal-polyfill": "1.0.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.46.0",
     "vitest": "^5.0.5"

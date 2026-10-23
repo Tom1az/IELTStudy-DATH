@@ -14,9 +14,11 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 | Topic | Choice | Status | Needed by |
 | --- | --- | --- | --- |
 | Repo layout | Monorepo: `backend/`, `frontend/`, `ml/`, `docs/` | Decided | Phase 0 |
-| Backend language | TypeScript (strict, run natively by Node ≥ 24, `tsc --noEmit` to check) | Decided | Phase 0 |
+| Backend language | TypeScript (strict, run natively by Node ≥ 26.8.2, which also ships the `Temporal` API Prisma 8 timestamps need; `tsc --noEmit` to check) | Decided | Phase 0 |
 | API docs | Swagger: contract-first `openapi.yaml`, served at `/api-docs`; frontend mocks with Prism | Decided | Phase 0 |
 | ORM | Keep Prisma 8 contract API (pinned: orm-postgres rc.17, CLI rc.22) | Decided | Phase 0 |
+| Module unit | A lesson is a module: courses are ordered `core` lessons, gated one by one | Decided | Phase 1 |
+| Remedial content | `lessons.kind = remedial`: outside the gated sequence, reached only through recommendations | Decided | Phase 1 |
 | Recommender ranking | Ranking formula and the rule that unlocks the next module | Open | Phase 3 |
 | UI design | Figma or wireframe approval | Open | Phase 4 |
 
@@ -36,13 +38,14 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 
 ## Phase 1 — Data model (spec week 40)
 
-- [ ] Users (role, target_band), Courses (status, review_feedback), Lessons, PassagesMedia
-- [ ] Skills, Questions (JSONB options), QuestionSkills (Q-matrix with weight)
-- [ ] Quizzes, QuizQuestions, QuizAttempts, QuestionResponses
-- [ ] UserSkillMastery, Enrollments, LessonProgress, Recommendations log
-- [ ] Indexes: `(user_id, skill_id)`, `(attempt_id)`, JSONB GIN
-- [ ] Seed: skill taxonomy, 30-question diagnostic, 3 courses
-- [ ] **Gate:** ERD reviewed, schema frozen
+- [x] Users (role, target_band), Courses (status, review_feedback), Lessons, PassagesMedia
+- [x] Skills, Questions (JSONB options), QuestionSkills (Q-matrix with weight)
+- [x] Quizzes, QuizQuestions, QuizAttempts, QuestionResponses
+- [x] UserSkillMastery, Enrollments, LessonProgress, Recommendations log
+- [x] Indexes: `(user_id, skill_id)`, `(attempt_id)`, JSONB GIN
+- [x] Seed: skill taxonomy, 30-question diagnostic, 3 courses
+- [x] LessonSkills (skill tags on lessons, for remediation); design notes in `docs/ERD.md`
+- [x] **Gate:** ERD reviewed, schema frozen (`docs/ERD.md`, baseline migration `backend/migrations/app/20261023T1815_init/`)
 
 ## Phase 2 — Core backend APIs (spec weeks 41–43)
 

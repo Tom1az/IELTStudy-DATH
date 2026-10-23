@@ -1,78 +1,355 @@
 // use prisma-8
-// Contract inferred from the live database schema. Edit as needed, then run `prisma contract emit`.
+// IELTStudy data model. Design notes and invariants: docs/ERD.md. Run `npm run contract:emit` after editing.
+
+enum UserRole {
+  @@type("pg/text@1")
+  learner    = "learner"
+  instructor = "instructor"
+  admin      = "admin"
+}
+
+enum CourseLevel {
+  @@type("pg/text@1")
+  beginner     = "beginner"
+  intermediate = "intermediate"
+  advanced     = "advanced"
+}
+
+enum CourseStatus {
+  @@type("pg/text@1")
+  draft          = "draft"
+  pending_review = "pending_review"
+  approved       = "approved"
+  rejected       = "rejected"
+  archived       = "archived"
+}
+
+// Core lessons form the gated course sequence; remedial lessons are only reached through recommendations
+enum LessonKind {
+  @@type("pg/text@1")
+  core     = "core"
+  remedial = "remedial"
+}
+
+enum MediaType {
+  @@type("pg/text@1")
+  reading_text    = "reading_text"
+  listening_audio = "listening_audio"
+  video           = "video"
+}
+
+enum SkillCategory {
+  @@type("pg/text@1")
+  listening = "listening"
+  reading   = "reading"
+  writing   = "writing"
+  speaking  = "speaking"
+}
+
+enum QuestionType {
+  @@type("pg/text@1")
+  multiple_choice      = "multiple_choice"
+  true_false_not_given = "true_false_not_given"
+  gap_fill             = "gap_fill"
+  matching             = "matching"
+  error_identification = "error_identification"
+}
+
+enum QuizKind {
+  @@type("pg/text@1")
+  diagnostic = "diagnostic"
+  lesson     = "lesson"
+  practice   = "practice"
+}
+
+enum ProgressStatus {
+  @@type("pg/text@1")
+  in_progress = "in_progress"
+  completed   = "completed"
+}
 
 model Users {
-  userId     Int          @id(map: "users_pkey") @default(autoincrement()) @map("user_id")
-  email      VarChar(255) @unique(map: "users_email_key")
-  fullName   VarChar(255) @map("full_name")
-  createdAt  Timestamp?   @default(now()) @map("created_at")
-  hashedPass VarChar(255) @map("hashed_pass")
-  carts      Carts?
-  orders     Orders[]
+  userId     Int                  @id @default(autoincrement()) @map("user_id")
+  email      VarChar(255)         @unique
+  fullName   VarChar(255)         @map("full_name")
+  hashedPass VarChar(255)         @map("hashed_pass")
+  role       UserRole             @default(learner)
+  targetBand Float?               @map("target_band")
+  isActive   Boolean              @default(true) @map("is_active")
+  createdAt  temporal.createdAt() @map("created_at")
+  updatedAt  temporal.updatedAt() @map("updated_at")
 
+  @@check(expression: "target_band IS NULL OR (target_band BETWEEN 0 AND 9 AND target_band * 2 = trunc(target_band * 2))", name: "users_target_band_half_steps")
   @@map("users")
 }
 
-model Carts {
-  cartId    Int         @id(map: "carts_pkey") @default(autoincrement()) @map("cart_id")
-  userId    Int         @unique(map: "carts_user_id_key") @map("user_id")
-  cartItems CartItems[]
-  user      Users       @relation(fields: [userId], references: [userId], map: "carts_user_id_fkey")
+model Courses {
+  courseId       Int                  @id @default(autoincrement()) @map("course_id")
+  instructorId   Int                  @map("instructor_id")
+  title          VarChar(255)
+  description    String?
+  targetLevel    CourseLevel          @map("target_level")
+  status         CourseStatus         @default(draft)
+  reviewFeedback String?              @map("review_feedback")
+  reviewedById   Int?                 @map("reviewed_by_id")
+  submittedAt    DateTime?            @map("submitted_at")
+  reviewedAt     DateTime?            @map("reviewed_at")
+  createdAt      temporal.createdAt() @map("created_at")
+  updatedAt      temporal.updatedAt() @map("updated_at")
+  instructor     Users                @relation("CourseInstructor", fields: [instructorId], references: [userId])
+  reviewedBy     Users?               @relation("CourseReviewer", fields: [reviewedById], references: [userId], onDelete: SetNull)
 
-  @@map("carts")
+  @@index([instructorId])
+  @@index([status])
+  @@check(expression: "status <> 'rejected' OR review_feedback IS NOT NULL", name: "courses_rejection_has_feedback")
+  @@map("courses")
 }
 
-model Products {
-  productId     Int            @id(map: "products_pkey") @default(autoincrement()) @map("product_id")
-  name          VarChar(255)
-  description   String?
-  imageUrl      VarChar(255)?  @map("image_url")
-  price         Numeric(10, 2)
-  stockQuantity Int            @map("stock_quantity")
-  cartItems     CartItems[]
-  orderItems    OrderItems[]
-  isActive      Boolean @default(true) @map("is_active")
+model Lessons {
+  lessonId   Int                  @id @default(autoincrement()) @map("lesson_id")
+  courseId   Int                  @map("course_id")
+  title      VarChar(255)
+  content    String?
+  kind       LessonKind           @default(core)
+  orderIndex Int                  @map("order_index")
+  createdAt  temporal.createdAt() @map("created_at")
+  updatedAt  temporal.updatedAt() @map("updated_at")
+  course     Courses              @relation(fields: [courseId], references: [courseId], onDelete: Cascade, index: false)
 
-  @@map("products")
+  @@index([courseId, orderIndex])
+  @@check(expression: "order_index >= 0", name: "lessons_order_index_nonnegative")
+  @@map("lessons")
 }
 
-model CartItems {
-  cartItemId Int      @id(map: "cart_items_pkey") @default(autoincrement()) @map("cart_item_id")
-  quantity   Int
-  cartId     Int      @map("cart_id")
-  productId  Int      @map("product_id")
-  cart       Carts    @relation(fields: [cartId], references: [cartId], map: "cart_items_cart_id_fkey", index: false)
-  product    Products @relation(fields: [productId], references: [productId], map: "cart_items_product_id_fkey", index: false)
+model LessonSkills {
+  lessonId Int     @map("lesson_id")
+  skillId  Int     @map("skill_id")
+  weight   Float   @default(1)
+  lesson   Lessons @relation(fields: [lessonId], references: [lessonId], onDelete: Cascade, index: false)
+  skill    Skills  @relation(fields: [skillId], references: [skillId])
 
-  @@unique([cartId, productId], map: "cart_items_cart_id_product_id_key")
-  @@map("cart_items")
+  @@id([lessonId, skillId])
+  @@index([skillId])
+  @@check(expression: "weight > 0 AND weight <= 1", name: "lesson_skills_weight_range")
+  @@map("lesson_skills")
 }
 
-model Orders {
-  orderId         Int          @id(map: "orders_pkey") @default(autoincrement()) @map("order_id")
-  status          VarChar(20)
-  userId          Int          @map("user_id")
-  createdAt       Timestamp?   @default(now()) @map("created_at")
-  customerName    VarChar(255) @map("customer_name")
-  customerPhone   VarChar(10)  @map("customer_phone")
-  customerAddress VarChar(255) @map("customer_address")
-  totalProduct    Int          @map("total_product")
-  orderItems      OrderItems[]
-  user            Users        @relation(fields: [userId], references: [userId], onDelete: Cascade, map: "orders_user_id_fkey", index: false)
+// media_path is a Supabase Storage object path, signed on read (signed URLs expire, so never store them)
+model PassagesMedia {
+  passageId   Int                  @id @default(autoincrement()) @map("passage_id")
+  lessonId    Int?                 @map("lesson_id")
+  createdById Int                  @map("created_by_id")
+  type        MediaType
+  title       VarChar(255)?
+  content     String?
+  mediaPath   VarChar(1024)?       @map("media_path")
+  orderIndex  Int                  @default(0) @map("order_index")
+  createdAt   temporal.createdAt() @map("created_at")
+  updatedAt   temporal.updatedAt() @map("updated_at")
+  lesson      Lessons?             @relation(fields: [lessonId], references: [lessonId], onDelete: Cascade, index: false)
+  createdBy   Users                @relation(fields: [createdById], references: [userId])
 
-  @@check(expression: "((status)::text = ANY ((ARRAY['pending'::character varying, 'processing'::character varying, 'shipping'::character varying, 'completed'::character varying, 'cancelled'::character varying])::text[]))", map: "orders_status_check")
-  @@map("orders")
+  @@index([lessonId, orderIndex])
+  @@index([createdById])
+  @@check(expression: "(type = 'reading_text' AND content IS NOT NULL) OR (type <> 'reading_text' AND media_path IS NOT NULL)", name: "passages_media_has_payload")
+  @@map("passages_media")
 }
 
-model OrderItems {
-  quantity  Int
-  price     Numeric(10, 2)
-  orderId   Int            @map("order_id")
-  productId Int            @map("product_id")
-  order     Orders         @relation(fields: [orderId], references: [orderId], map: "order_items_order_id_fkey", index: false)
-  product   Products       @relation(fields: [productId], references: [productId], map: "order_items_product_id_fkey", index: false)
+// skill_code is the immutable key into ml/output/bkt_params.json
+model Skills {
+  skillId     Int                  @id @default(autoincrement()) @map("skill_id")
+  skillCode   VarChar(64)          @unique @map("skill_code")
+  name        VarChar(255)
+  category    SkillCategory
+  description String?
+  createdAt   temporal.createdAt() @map("created_at")
 
-  @@id([orderId, productId], map: "order_items_pkey")
-  @@check(expression: "(quantity > 0)", map: "order_items_quantity_check")
-  @@map("order_items")
+  @@check(expression: "skill_code ~ '^[A-Z][A-Z0-9_]*$'", name: "skills_code_format")
+  @@map("skills")
+}
+
+model Questions {
+  questionId   Int                  @id @default(autoincrement()) @map("question_id")
+  passageId    Int?                 @map("passage_id")
+  createdById  Int                  @map("created_by_id")
+  questionType QuestionType         @map("question_type")
+  questionText String               @map("question_text")
+  options      Jsonb?
+  answerKey    Jsonb                @map("answer_key")
+  explanation  String?
+  difficulty   SmallInt             @default(3)
+  createdAt    temporal.createdAt() @map("created_at")
+  updatedAt    temporal.updatedAt() @map("updated_at")
+  passage      PassagesMedia?       @relation(fields: [passageId], references: [passageId], onDelete: Cascade)
+  createdBy    Users                @relation(fields: [createdById], references: [userId])
+
+  @@index([passageId])
+  @@index([createdById])
+  @@check(expression: "difficulty BETWEEN 1 AND 5", name: "questions_difficulty_range")
+  @@map("questions")
+}
+
+// Q-matrix. Weights per question must sum to 1; a CHECK can't span rows, so the app enforces it.
+model QuestionSkills {
+  questionId Int       @map("question_id")
+  skillId    Int       @map("skill_id")
+  weight     Float
+  question   Questions @relation(fields: [questionId], references: [questionId], onDelete: Cascade, index: false)
+  skill      Skills    @relation(fields: [skillId], references: [skillId])
+
+  @@id([questionId, skillId])
+  @@index([skillId])
+  @@check(expression: "weight > 0 AND weight <= 1", name: "question_skills_weight_range")
+  @@map("question_skills")
+}
+
+model Quizzes {
+  quizId           Int                  @id @default(autoincrement()) @map("quiz_id")
+  kind             QuizKind
+  lessonId         Int?                 @map("lesson_id")
+  createdById      Int                  @map("created_by_id")
+  title            VarChar(255)
+  description      String?
+  timeLimitSeconds Int?                 @map("time_limit_seconds")
+  createdAt        temporal.createdAt() @map("created_at")
+  updatedAt        temporal.updatedAt() @map("updated_at")
+  lesson           Lessons?             @relation(fields: [lessonId], references: [lessonId], onDelete: Cascade)
+  createdBy        Users                @relation(fields: [createdById], references: [userId])
+
+  @@index([lessonId])
+  @@index([createdById])
+  @@index([kind], unique: true, where: "kind = 'diagnostic'", name: "quizzes_single_diagnostic")
+  @@check(expression: "(kind <> 'lesson' OR lesson_id IS NOT NULL) AND (kind <> 'diagnostic' OR lesson_id IS NULL)", name: "quizzes_kind_lesson_link")
+  @@check(expression: "time_limit_seconds IS NULL OR time_limit_seconds > 0", name: "quizzes_time_limit_positive")
+  @@map("quizzes")
+}
+
+model QuizQuestions {
+  quizId     Int       @map("quiz_id")
+  questionId Int       @map("question_id")
+  orderIndex Int       @map("order_index")
+  quiz       Quizzes   @relation(fields: [quizId], references: [quizId], onDelete: Cascade, index: false)
+  question   Questions @relation(fields: [questionId], references: [questionId], onDelete: Cascade)
+
+  @@id([quizId, questionId])
+  @@index([questionId])
+  @@map("quiz_questions")
+}
+
+// mastery_changes: [{ skillId, before, after }] written on submit, for the post-quiz review
+model QuizAttempts {
+  attemptId      Int                  @id @default(autoincrement()) @map("attempt_id")
+  userId         Int                  @map("user_id")
+  quizId         Int                  @map("quiz_id")
+  startedAt      temporal.createdAt() @map("started_at")
+  completedAt    DateTime?            @map("completed_at")
+  totalScore     Int?                 @map("total_score")
+  maxScore       Int                  @map("max_score")
+  masteryChanges Jsonb?               @map("mastery_changes")
+  user           Users                @relation(fields: [userId], references: [userId], onDelete: Cascade, index: false)
+  quiz           Quizzes              @relation(fields: [quizId], references: [quizId])
+
+  @@index([userId, quizId])
+  @@index([quizId])
+  @@index([userId, quizId], unique: true, where: "completed_at IS NULL", name: "quiz_attempts_one_open")
+  @@check(expression: "(completed_at IS NULL) = (total_score IS NULL)", name: "quiz_attempts_score_on_complete")
+  @@check(expression: "total_score IS NULL OR total_score BETWEEN 0 AND max_score", name: "quiz_attempts_score_range")
+  @@check(expression: "completed_at IS NULL OR completed_at >= started_at", name: "quiz_attempts_time_order")
+  @@map("quiz_attempts")
+}
+
+model QuestionResponses {
+  responseId          Int                  @id @default(autoincrement()) @map("response_id")
+  attemptId           Int                  @map("attempt_id")
+  questionId          Int                  @map("question_id")
+  userAnswer          Jsonb                @map("user_answer")
+  isCorrect           Boolean              @map("is_correct")
+  attemptOrder        Int                  @map("attempt_order")
+  responseTimeSeconds Float?               @map("response_time_seconds")
+  answeredAt          temporal.createdAt() @map("answered_at")
+  attempt             QuizAttempts         @relation(fields: [attemptId], references: [attemptId], onDelete: Cascade, index: false)
+  question            Questions            @relation(fields: [questionId], references: [questionId])
+
+  @@unique([attemptId, questionId])
+  @@unique([attemptId, attemptOrder])
+  @@index([questionId])
+  @@index([userAnswer], type: "gin", name: "question_responses_user_answer_gin")
+  @@check(expression: "attempt_order >= 1", name: "question_responses_order_positive")
+  @@check(expression: "response_time_seconds IS NULL OR response_time_seconds >= 0", name: "question_responses_time_nonnegative")
+  @@map("question_responses")
+}
+
+model UserSkillMastery {
+  userId       Int                  @map("user_id")
+  skillId      Int                  @map("skill_id")
+  masteryProb  Float                @map("mastery_prob")
+  observations Int                  @default(0)
+  updatedAt    temporal.updatedAt() @map("updated_at")
+  user         Users                @relation(fields: [userId], references: [userId], onDelete: Cascade, index: false)
+  skill        Skills               @relation(fields: [skillId], references: [skillId])
+
+  @@id([userId, skillId])
+  @@index([skillId])
+  @@check(expression: "mastery_prob BETWEEN 0 AND 1", name: "user_skill_mastery_prob_range")
+  @@map("user_skill_mastery")
+}
+
+model Enrollments {
+  userId      Int                  @map("user_id")
+  courseId    Int                  @map("course_id")
+  enrolledAt  temporal.createdAt() @map("enrolled_at")
+  completedAt DateTime?            @map("completed_at")
+  user        Users                @relation(fields: [userId], references: [userId], onDelete: Cascade, index: false)
+  course      Courses              @relation(fields: [courseId], references: [courseId], onDelete: Cascade)
+
+  @@id([userId, courseId])
+  @@index([courseId])
+  @@map("enrollments")
+}
+
+model LessonProgress {
+  userId      Int                  @map("user_id")
+  lessonId    Int                  @map("lesson_id")
+  status      ProgressStatus       @default(in_progress)
+  startedAt   temporal.createdAt() @map("started_at")
+  completedAt DateTime?            @map("completed_at")
+  updatedAt   temporal.updatedAt() @map("updated_at")
+  user        Users                @relation(fields: [userId], references: [userId], onDelete: Cascade, index: false)
+  lesson      Lessons              @relation(fields: [lessonId], references: [lessonId], onDelete: Cascade)
+
+  @@id([userId, lessonId])
+  @@index([lessonId])
+  @@check(expression: "(status = 'completed') = (completed_at IS NOT NULL)", name: "lesson_progress_completed_at")
+  @@map("lesson_progress")
+}
+
+// Log of served recommendations; feeds Precision@3 / MRR through rank and clicked_at
+model Recommendations {
+  recommendationId Int                  @id @default(autoincrement()) @map("recommendation_id")
+  userId           Int                  @map("user_id")
+  skillId          Int                  @map("skill_id")
+  lessonId         Int?                 @map("lesson_id")
+  quizId           Int?                 @map("quiz_id")
+  sourceAttemptId  Int?                 @map("source_attempt_id")
+  masteryProb      Float                @map("mastery_prob")
+  rank             SmallInt
+  score            Float
+  rationale        String
+  createdAt        temporal.createdAt() @map("created_at")
+  clickedAt        DateTime?            @map("clicked_at")
+  user             Users                @relation(fields: [userId], references: [userId], onDelete: Cascade, index: false)
+  skill            Skills               @relation(fields: [skillId], references: [skillId])
+  lesson           Lessons?             @relation(fields: [lessonId], references: [lessonId], onDelete: Cascade)
+  quiz             Quizzes?             @relation(fields: [quizId], references: [quizId], onDelete: Cascade)
+  sourceAttempt    QuizAttempts?        @relation(fields: [sourceAttemptId], references: [attemptId], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([skillId])
+  @@index([lessonId])
+  @@index([quizId])
+  @@index([sourceAttemptId])
+  @@check(expression: "num_nonnulls(lesson_id, quiz_id) = 1", name: "recommendations_one_target")
+  @@check(expression: "rank >= 1", name: "recommendations_rank_positive")
+  @@check(expression: "mastery_prob BETWEEN 0 AND 1", name: "recommendations_mastery_range")
+  @@map("recommendations")
 }
