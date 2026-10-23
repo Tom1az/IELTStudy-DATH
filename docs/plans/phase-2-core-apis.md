@@ -200,3 +200,18 @@ Left open:
 - **Remedial lessons outside enrolled courses** (the owner deferred this to the Phase 3 Gate). `GET /lessons/{lessonId}` requires learners to be enrolled in the lesson's course. A learner who has just finished the diagnostic is usually enrolled nowhere, so recommendations would either come back empty or point at lessons that return 403. The contract's own example recommends lesson 20 of "Band 7+ Mastery" right after the diagnostic. Settle it together with the ranking formula and the unlock rule.
 - **Practice quizzes without a lesson.** `QuizInput` doesn't say whether a `practice` quiz needs `lessonId`. Without one, the learner access rule ("same as the quiz's lesson") has nothing to check. The owner chose to settle this in the "Questions and quizzes" task.
 - **Skipped questions.** `question_responses.user_answer` and `attempt_order` are `NOT NULL`, so a skipped question gets no row. The graded result still lists it (`userAnswer: null`, `isCorrect: false`) by reading the quiz's question list. Whether a skip counts as BKT evidence is a Phase 3 decision.
+
+## Task: Gate: API contract approved
+
+Approved: 2026-10-24.
+
+### Plan
+
+Review the contract against `specs.md` and `docs/ERD.md` before the owner signs off. Fix anything that blocks approval, and write down the rest. After approval, update the ERD rules that were waiting for the contract.
+
+### Outcome
+
+Done 2026-10-24. The owner approved `backend/src/docs/openapi.yaml` v0.2.0 (commit `ffde45d`).
+- The review found one blocking gap, locked content. It was fixed before approval (see "Review before the Gate" in the previous task's Outcome).
+- `docs/ERD.md`: the course status transitions and content edit rights are no longer marked "proposed" and now match the contract. Locked content is listed with the other rules the app enforces.
+- Open points: remedial-lesson access goes to the Phase 3 Gate. Practice quizzes without a lesson, and skipped questions, are settled during implementation (see "Left open" in the previous task's Outcome).

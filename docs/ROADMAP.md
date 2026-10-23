@@ -52,7 +52,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 ## Phase 2 — Core backend APIs (spec weeks 41–43)
 
 - [x] OpenAPI contract written first for each module (`backend/src/docs/openapi.yaml` v0.2.0; plan and outcome in `docs/plans/phase-2-core-apis.md`)
-- [ ] **Gate:** API contract approved
+- [x] **Gate:** API contract approved (v0.2.0, 2026-10-24)
 - [ ] Auth: register, login, JWT, `authenticate`, `authorize(...roles)` (port signup/signin from `MiniMemoryZone/backend/controllers/auth.js`)
 - [ ] Courses, lessons and media: instructor CRUD, submit for review, admin approve/reject with feedback, learner enroll
 - [ ] Uploads via Supabase Storage signed URLs

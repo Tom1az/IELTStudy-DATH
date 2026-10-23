@@ -250,8 +250,14 @@ Notes:
 ## Rules the app must enforce
 
 - **Q-matrix weights sum to 1 per question** (±1e-9). A CHECK cannot span rows. Validate on question create and update; the seed asserts it.
-- **Course status transitions** (proposed; settled with the Phase 2 API contract): draft → pending_review (instructor submits) → approved | rejected (admin reviews; rejection needs feedback). A rejected course returns to draft or pending_review after edits, and any status can move to archived. Set `submitted_at`, `reviewed_at` and `reviewed_by_id` with each transition.
-- **Content edit rights** (proposed for Phase 2): the creator (`created_by_id`, or the course's `instructor_id`) or an admin.
+- **Course status transitions** (settled by the Phase 2 API contract):
+  - The owner submits: `draft` or `rejected` → `pending_review`. The course needs at least one core lesson.
+  - An admin reviews: `pending_review` → `approved` (feedback optional) or `rejected` (feedback required).
+  - The owner withdraws: `pending_review` or `approved` → `draft`, to edit an approved course. Enrolments stay.
+  - The owner or an admin archives: any status → `archived`.
+  - Submitting sets `submitted_at`; reviewing sets `reviewed_at` and `reviewed_by_id`.
+- **Content edit rights** (settled by the Phase 2 API contract): only the course's instructor edits a course and its lessons. Passages, questions and quizzes are edited by their creator (`created_by_id`) or an admin.
+- **Locked content.** Content inside a course (lessons, passages, quizzes, and the questions those quizzes use) changes only while the course is `draft` or `rejected`. Questions with responses and quizzes with attempts can't be edited or deleted.
 - **Learners see approved courses only.**
 - **One completed diagnostic per learner** (cross-table, so app-level).
 - **`answer_key` stays server-side.** Never send it to learners before they submit.
