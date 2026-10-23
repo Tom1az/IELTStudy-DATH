@@ -35,6 +35,7 @@ Phase 3 endpoints (`/recommendations`, `/me/mastery`) go into the contract now s
   - Actions on a resource are `POST` sub-paths (`/courses/{courseId}/submit`), which keeps the state machine easy to read.
 - **No pagination.** The data is small (3 courses, about 40 questions), and the spec doesn't ask for it. It can be added later without breaking clients.
 - **Two views of a question.** Learners get `QuestionForLearner`, which has no `answerKey` and no `explanation` until they submit. Authors get `Question`, which has both.
+- **Locked content** (added at the review before the Gate). Content inside a course (lessons, passages, quizzes, and the questions those quizzes use) changes only while the course is `draft` or `rejected`. Questions learners have answered and quizzes they have attempted can't be edited or deleted at all, so past grades and the response logs BKT learns from stay consistent. Both rules return 409.
 
 ### Endpoints
 
@@ -105,7 +106,7 @@ The old `/users` paths stay in the file marked `deprecated: true` until the auth
 | `POST /uploads` | I A | Body `fileName, contentType`, which must be audio, video or image. Returns `{ uploadUrl, path }`: the client uploads the file straight to Supabase Storage with `uploadUrl`, then sends `path` as `mediaPath`. |
 | `POST /passages` | I A | `lessonId?` (instructors must give their own lesson; only admins create lesson-less diagnostic passages), `type, title, content, mediaPath, orderIndex`. The same payload rule as the database: reading text needs `content`, audio and video need `mediaPath`. |
 | `GET /passages/{passageId}` | I own, A | The author view. Learners see passages inside `GET /lessons/{id}` and in attempts. |
-| `PATCH /passages/{passageId}`, `DELETE /passages/{passageId}` | I own, A | |
+| `PATCH /passages/{passageId}`, `DELETE /passages/{passageId}` | I own, A | Same course-status rule as `POST`. `DELETE` also deletes the passage's questions, so it fails with 409 once learners have answered them. |
 
 Responses never contain a Storage URL that lasts. `mediaUrl` is a signed URL that expires after 1 hour, generated on each read.
 
@@ -114,10 +115,10 @@ Responses never contain a Storage URL that lasts. `mediaUrl` is a signed URL tha
 | --- | --- | --- |
 | `GET /questions` | I A | Instructors see their own questions; admins see all. Filters `?skillId=`, `?passageId=`, `?type=`. |
 | `POST /questions` | I A | `passageId?, questionType, questionText, options, answerKey, explanation, difficulty, skills: [{ skillId, weight }]`. **The `skills` weights must sum to 1** (400 otherwise). The `options` and `answerKey` shape depends on `questionType`, following the JSONB table in `docs/ERD.md`. |
-| `GET /questions/{questionId}`, `PATCH`, `DELETE` | I own, A | `PATCH` replaces `skills` as a whole. `DELETE` fails with 409 once the question has responses. |
+| `GET /questions/{questionId}`, `PATCH`, `DELETE` | I own, A | `PATCH` replaces `skills` as a whole. `PATCH` and `DELETE` fail with 409 once the question has responses, or while a quiz in a course that isn't `draft` or `rejected` uses it. |
 | `POST /quizzes` | I A | `kind (lesson \| practice \| diagnostic), lessonId?, title, description, timeLimitSeconds, questionIds` (in order). `diagnostic` is admin-only, and only one can exist. Instructors must attach their quizzes to their own lesson. |
 | `GET /quizzes/{quizId}` | L I A | Authors get the full questions. Learners get `QuestionForLearner`, and the same access rule as the quiz's lesson. |
-| `PATCH /quizzes/{quizId}`, `DELETE` | I own, A | `questionIds` replaces the whole list. `DELETE` fails with 409 once the quiz has attempts. |
+| `PATCH /quizzes/{quizId}`, `DELETE` | I own, A | `questionIds` replaces the whole list. `PATCH` and `DELETE` fail with 409 once the quiz has attempts, or if its course isn't `draft` or `rejected`. |
 | `GET /diagnostic` | L | The diagnostic quiz, plus `completedAttemptId` if the learner has already taken it. |
 
 #### Attempts (taking a quiz)
@@ -191,3 +192,11 @@ Deviations from the plan:
 - **Question shapes.** `QuestionInput` describes `options` and `answerKey` with simple `oneOf` shapes, plus a table of which shape goes with which `questionType`. It doesn't use a per-type `oneOf`. This keeps the YAML readable, and Joi checks the exact pairing at runtime.
 - **Global auth.** Security is declared once at the top (`bearerAuth`), and the public endpoints opt out with `security: []`.
 - **Mock base URL.** Prism serves the mock at the root (`http://localhost:4010/courses`, no `/api/v1` prefix). The frontend's mock base URL must account for this.
+
+Review before the Gate (2026-10-24):
+- **Locked content (fixed).** `PATCH /questions/{questionId}` checked neither the course status nor learner answers, and `PATCH`/`DELETE /quizzes/{quizId}` didn't check the course status. So an instructor could change an approved course's quizzes without a new review. Also, editing an answered question's `answerKey` or skill weights would make old results and the BKT response logs disagree. The rule is now stated once in `info.description` and applied to question, quiz and passage edits and deletes (see **Locked content** under Conventions). Redocly lint is still valid, with the same two warnings.
+
+Left open:
+- **Remedial lessons outside enrolled courses** (the owner deferred this to the Phase 3 Gate). `GET /lessons/{lessonId}` requires learners to be enrolled in the lesson's course. A learner who has just finished the diagnostic is usually enrolled nowhere, so recommendations would either come back empty or point at lessons that return 403. The contract's own example recommends lesson 20 of "Band 7+ Mastery" right after the diagnostic. Settle it together with the ranking formula and the unlock rule.
+- **Practice quizzes without a lesson.** `QuizInput` doesn't say whether a `practice` quiz needs `lessonId`. Without one, the learner access rule ("same as the quiz's lesson") has nothing to check. The owner chose to settle this in the "Questions and quizzes" task.
+- **Skipped questions.** `question_responses.user_answer` and `attempt_order` are `NOT NULL`, so a skipped question gets no row. The graded result still lists it (`userAnswer: null`, `isCorrect: false`) by reading the quiz's question list. Whether a skip counts as BKT evidence is a Phase 3 decision.

@@ -12,6 +12,11 @@ info:
     **Roles.** Each endpoint says who may call it: learner, instructor, admin.
     "Owner" means the instructor who created the resource; admins may always act on it.
 
+    **Locked content.** Content inside a course (lessons, passages, quizzes, and the questions those quizzes use)
+    can only change while the course is `draft` or `rejected`. To change an approved course, the owner withdraws it first.
+    Questions learners have answered and quizzes they have attempted can't be edited or deleted at all, so past grades
+    and the response logs that BKT learns from stay consistent. Both rules return 409.
+
     **Responses.** Success: `{ <resource>, message }`. Errors: `{ error: { message, details? } }`.
     - 400: invalid input
     - 401: no token, or a bad or expired token
@@ -749,7 +754,9 @@ paths:
       tags: [Content]
       operationId: deletePassage
       summary: Delete a passage
-      description: "Roles: owner, admin. Also deletes its questions, so it fails (409) once learners have answered them."
+      description: |
+        Roles: owner, admin. Same course-status rule as creating one.
+        Deleting a passage also deletes its questions, so it fails (409) once learners have answered them.
       responses:
         "200": { $ref: "#/components/responses/Message" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -837,7 +844,9 @@ paths:
       tags: [Questions]
       operationId: updateQuestion
       summary: Edit a question
-      description: "Roles: owner, admin. `skills` replaces the whole list, and its weights must sum to 1."
+      description: |
+        Roles: owner, admin. `skills` replaces the whole list, and its weights must sum to 1.
+        Fails (409) once learners have answered the question, or while a quiz in a course that isn't `draft` or `rejected` uses it.
       requestBody:
         required: true
         content:
@@ -853,11 +862,14 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
     delete:
       tags: [Questions]
       operationId: deleteQuestion
       summary: Delete a question
-      description: "Roles: owner, admin. Fails (409) once learners have answered it."
+      description: |
+        Roles: owner, admin. The same rules as editing: fails (409) once learners have answered it,
+        or while a quiz in a course that isn't `draft` or `rejected` uses it.
       responses:
         "200": { $ref: "#/components/responses/Message" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -927,7 +939,9 @@ paths:
       tags: [Quizzes]
       operationId: updateQuiz
       summary: Edit a quiz
-      description: "Roles: owner, admin. `questionIds` replaces the whole list. Fails (409) once learners have attempted the quiz."
+      description: |
+        Roles: owner, admin. `questionIds` replaces the whole list, with the same question rules as creating a quiz.
+        Fails (409) once learners have attempted the quiz, or if its course isn't `draft` or `rejected`.
       requestBody:
         required: true
         content:
@@ -948,7 +962,9 @@ paths:
       tags: [Quizzes]
       operationId: deleteQuiz
       summary: Delete a quiz
-      description: "Roles: owner, admin. Fails (409) once learners have attempted it."
+      description: |
+        Roles: owner, admin. The same rules as editing: fails (409) once learners have attempted it,
+        or if its course isn't `draft` or `rejected`.
       responses:
         "200": { $ref: "#/components/responses/Message" }
         "401": { $ref: "#/components/responses/Unauthorized" }

@@ -21,7 +21,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 | Remedial content | `lessons.kind = remedial`: outside the gated sequence, reached only through recommendations | Decided | Phase 1 |
 | Course editing after approval | Approved courses are locked; the instructor withdraws to draft, edits and resubmits | Decided | Phase 2 |
 | Auth tokens | JWT in the response body, 1 day, no refresh token; the user is reloaded from the database on every request | Decided | Phase 2 |
-| Recommender ranking | Ranking formula and the rule that unlocks the next module | Open | Phase 3 |
+| Recommender ranking | Ranking formula, the rule that unlocks the next module, and whether learners can open remedial lessons outside their enrolled courses | Open | Phase 3 |
 | UI design | Figma or wireframe approval | Open | Phase 4 |
 
 ## Phase 0 — Harness and repo foundation (~1 day)
@@ -68,7 +68,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 - [ ] `services/recommender.ts`: mastery below 0.65 → tagged lessons, ranked, with a rationale
 - [ ] `GET /api/v1/recommendations` + module gating
 - [ ] Latency test: p95 under 300 ms
-- [ ] **Gate:** ranking formula and unlock rule approved
+- [ ] **Gate:** ranking formula, unlock rule and remedial-lesson access approved
 
 ## Phase 4 — Frontend (parallel, against Prism mocks)
 
