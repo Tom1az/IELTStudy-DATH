@@ -256,7 +256,8 @@ Notes:
   - The owner withdraws: `pending_review` or `approved` → `draft`, to edit an approved course. Enrolments stay.
   - The owner or an admin archives: any status → `archived`.
   - Submitting sets `submitted_at`; reviewing sets `reviewed_at` and `reviewed_by_id`.
-- **Content edit rights** (settled by the Phase 2 API contract): only the course's instructor edits a course and its lessons; admins review and archive courses but don't edit them. Passages, questions and quizzes are edited by their creator (`created_by_id`) or an admin.
+- **Content edit rights** (settled by the Phase 2 API contract): only the course's instructor edits a course and its lessons; admins review and archive courses but don't edit them. Passages, questions and quizzes are edited by their creator (`created_by_id`) or an admin. A quiz's answers are shown to its creator, the instructor who owns its course, and admins; everyone else gets the learner view.
+- **Practice quizzes need a lesson** (API). The database only requires a lesson for `lesson` quizzes, but the API also requires one for `practice` quizzes, so they follow the lesson's access rule (enrolled learners, approved course) and are locked with the course.
 - **Deleting a course** (API): only a `draft` that no learner has enrolled in. The schema doesn't record whether a draft was approved before, and enrolments are the learner history this rule protects.
 - **Enrolment completion:** `enrollments.completed_at` is set when every core lesson of the course is completed, and cleared if a core lesson goes back to `in_progress`.
 - **Locked content.** Content inside a course (lessons, passages, quizzes, and the questions those quizzes use) changes only while the course is `draft` or `rejected`. Questions with responses and quizzes with attempts can't be edited or deleted.
@@ -268,7 +269,7 @@ Notes:
 
 ## JSONB shapes
 
-Validated by Joi in Phase 2.
+Joi checks the general types; `checkQuestionShape` in `backend/src/services/questions.ts` checks that they fit `question_type`. The answer key must point at real options (a choice id that exists; for matching, every item mapped to an existing choice and nothing else), so attempts can be graded.
 
 | `question_type` | `options` | `answer_key` |
 | --- | --- | --- |

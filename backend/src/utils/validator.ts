@@ -79,8 +79,8 @@ const feedback = Joi.string().trim().max(5000);
 const lessonTitle = Joi.string().trim().min(3).max(255);
 const lessonContent = Joi.string().max(50000).allow(null, "");
 const orderIndex = Joi.number().integer().min(0);
-// A lesson's skill tags: at least one, and no skill twice
-const lessonSkills = Joi.array()
+// Skill tags on a lesson or a question: at least one, and no skill twice
+const skillWeights = Joi.array()
   .items(
     Joi.object().keys({
       skillId: Joi.number().integer().positive().required(),
@@ -89,6 +89,46 @@ const lessonSkills = Joi.array()
   )
   .min(1)
   .unique("skillId");
+
+const questionType = Joi.string().valid(
+  "multiple_choice",
+  "true_false_not_given",
+  "gap_fill",
+  "matching",
+  "error_identification",
+);
+const questionText = Joi.string().trim().min(1).max(2000);
+const explanation = Joi.string().trim().max(2000).allow(null, "");
+const difficulty = Joi.number().integer().min(1).max(5);
+// The general shape of options and answerKey. Which shape goes with which question type
+// (the JSONB table in docs/ERD.md) is checked in services/questions.ts, because PATCH has to
+// check it on the merged question.
+const choiceOption = Joi.object().keys({
+  id: Joi.string().trim().min(1).max(20).required(),
+  text: Joi.string().trim().min(1).max(1000).required(),
+});
+const questionOptions = Joi.alternatives()
+  .try(
+    Joi.array().items(choiceOption),
+    Joi.object().keys({
+      items: Joi.array().items(choiceOption).min(1).required(),
+      choices: Joi.array().items(choiceOption).min(1).required(),
+    }),
+  )
+  .allow(null);
+const answerText = Joi.string().trim().min(1).max(500);
+const answerKey = Joi.alternatives().try(
+  answerText,
+  Joi.array().items(answerText).min(1),
+  Joi.object().pattern(Joi.string(), answerText),
+);
+
+const quizKind = Joi.string().valid("diagnostic", "lesson", "practice");
+const quizTitle = Joi.string().trim().min(3).max(255);
+const quizDescription = Joi.string().trim().max(5000).allow(null, "");
+const timeLimitSeconds = Joi.number().integer().min(1).allow(null);
+// The quiz's questions in the order learners will see them, each at most once
+const questionIds = Joi.array().items(Joi.number().integer().positive()).min(1).unique();
 
 const passageTitle = Joi.string().trim().max(255).allow(null, "");
 const passageContent = Joi.string().max(50000).allow(null);
@@ -166,7 +206,7 @@ const schemas = {
     content: lessonContent,
     kind: lessonKind.required(),
     orderIndex: orderIndex.required(),
-    skills: lessonSkills.required(),
+    skills: skillWeights.required(),
   }),
 
   lessonUpdateSchema: Joi.object()
@@ -175,7 +215,7 @@ const schemas = {
       content: lessonContent,
       kind: lessonKind,
       orderIndex,
-      skills: lessonSkills,
+      skills: skillWeights,
     })
     .min(1),
 
@@ -202,6 +242,59 @@ const schemas = {
       content: passageContent,
       mediaPath,
       orderIndex,
+    })
+    .min(1),
+
+  // ----- Questions -----
+  questionInputSchema: Joi.object().keys({
+    passageId: Joi.number().integer().positive().allow(null),
+    questionType: questionType.required(),
+    questionText: questionText.required(),
+    options: questionOptions,
+    answerKey: answerKey.required(),
+    explanation,
+    difficulty: difficulty.default(3),
+    // The question's Q-matrix row. "Weights add up to 1" is checked in services/questions.ts,
+    // so the message can show the sum.
+    skills: skillWeights.required(),
+  }),
+
+  questionUpdateSchema: Joi.object()
+    .keys({
+      passageId: Joi.number().integer().positive().allow(null),
+      questionType,
+      questionText,
+      options: questionOptions,
+      answerKey,
+      explanation,
+      difficulty,
+      skills: skillWeights,
+    })
+    .min(1),
+
+  questionQuerySchema: Joi.object().keys({
+    skillId: Joi.number().integer().positive(),
+    passageId: Joi.number().integer().positive(),
+    type: questionType,
+  }),
+
+  // ----- Quizzes -----
+  // Which kinds need a lessonId (lesson and practice) is checked in controllers/quizzes.ts
+  quizInputSchema: Joi.object().keys({
+    kind: quizKind.required(),
+    lessonId: Joi.number().integer().positive().allow(null),
+    title: quizTitle.required(),
+    description: quizDescription,
+    timeLimitSeconds,
+    questionIds: questionIds.required(),
+  }),
+
+  quizUpdateSchema: Joi.object()
+    .keys({
+      title: quizTitle,
+      description: quizDescription,
+      timeLimitSeconds,
+      questionIds,
     })
     .min(1),
 

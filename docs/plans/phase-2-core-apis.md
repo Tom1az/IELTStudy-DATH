@@ -198,7 +198,7 @@ Review before the Gate (2026-10-24):
 
 Left open:
 - **Remedial lessons outside enrolled courses** (the owner deferred this to the Phase 3 Gate). `GET /lessons/{lessonId}` requires learners to be enrolled in the lesson's course. A learner who has just finished the diagnostic is usually enrolled nowhere, so recommendations would either come back empty or point at lessons that return 403. The contract's own example recommends lesson 20 of "Band 7+ Mastery" right after the diagnostic. Settle it together with the ranking formula and the unlock rule.
-- **Practice quizzes without a lesson.** `QuizInput` doesn't say whether a `practice` quiz needs `lessonId`. Without one, the learner access rule ("same as the quiz's lesson") has nothing to check. The owner chose to settle this in the "Questions and quizzes" task.
+- **Practice quizzes without a lesson.** `QuizInput` doesn't say whether a `practice` quiz needs `lessonId`. Without one, the learner access rule ("same as the quiz's lesson") has nothing to check. The owner chose to settle this in the "Questions and quizzes" task. **Settled** in that task: the API requires `lessonId` for practice quizzes.
 - **Skipped questions.** `question_responses.user_answer` and `attempt_order` are `NOT NULL`, so a skipped question gets no row. The graded result still lists it (`userAnswer: null`, `isCorrect: false`) by reading the quiz's question list. Whether a skip counts as BKT evidence is a Phase 3 decision.
 
 ## Task: Gate: API contract approved
@@ -391,3 +391,170 @@ Left open:
 - `mediaPath` isn't checked against the uploader (Phase 7 security review).
 - Uploaded files that no passage uses, and the files of deleted passages, stay in the bucket. Nothing cleans them up.
 - File size and MIME limits are set on the bucket in the Supabase dashboard, not in code.
+
+## Task: Questions and quizzes with skill tagging
+
+Approved: 2026-10-24 (effort `high`).
+
+Effort: `high` (the effort table's level for multi-file work with rules that are easy to get subtly wrong).
+Branch: `feat/phase-2-questions-quizzes`, created from the current HEAD (`bc51583`, uploads).
+
+### Context
+
+This is the next unticked task in `docs/ROADMAP.md`. It builds the question bank (questions tagged with skills, which make up the Q-matrix) and quiz authoring from the approved contract (`openapi.yaml` v0.2.3):
+- `GET`/`POST /questions`, and `GET`/`PATCH`/`DELETE /questions/{id}`;
+- `POST /quizzes`, and `GET`/`PATCH`/`DELETE /quizzes/{id}`;
+- `GET /diagnostic`.
+
+Attempts are not part of this task; the next task builds them. This task gives that one the quizzes and the learner view of each question.
+
+Decided with the owner:
+- **Practice quizzes need a lesson.** The API requires `lessonId` for `lesson` and `practice` quizzes. A practice quiz follows its lesson's access rule and is locked with its course. This closes the "Left open" item from the contract task. The database CHECK stays as it is, so there is no schema change.
+- **Author view of `GET /quizzes/{id}`**, with answers and skill weights: the quiz's creator, the instructor who owns its course, and admins. Everyone else gets the learner view, if they may open the lesson:
+  - learners must be enrolled in an approved course;
+  - other instructors must be able to see the course, which is the same rule as opening its lessons.
+- **Editing and deleting** a question or quiz stays with its creator or an admin (ERD "Content edit rights"), as it already is for passages.
+
+No new dependency, and no schema change.
+
+### Rules (all return the contract's codes)
+
+**Questions**
+- **Create** (instructor, admin):
+  - `passageId`, if given, must exist (404), and the caller must be the passage's creator or an admin (403).
+  - Skills must exist (400). No skill may appear twice (400), and **the weights must sum to 1 ± 1e-9** (400), the same tolerance as the seed.
+  - `options` and `answerKey` must fit `questionType` (400). This follows the JSONB table in `docs/ERD.md`:
+    - `multiple_choice` / `error_identification`: at least 2 `{id, text}` options with distinct ids. `answerKey` is one of those ids.
+    - `true_false_not_given`: `options` is null. `answerKey` is `true`, `false` or `not_given`.
+    - `gap_fill`: `options` is null. `answerKey` is at least one non-empty string.
+    - `matching`: `{items, choices}`, each with distinct ids. `answerKey` maps **every** item id to a choice id, and has no other keys.
+
+    The answer key must point at real options, so that the next task can grade correctly.
+- **List:** instructors see their own questions; admins see all. Filters `skillId`, `passageId` and `type`. Ordered by `questionId`.
+- **Get, patch, delete:**
+  - 404 if the question doesn't exist; 403 if the caller isn't its creator or an admin.
+  - Patch and delete give 409 once the question has responses, or while any quiz whose course isn't `draft`/`rejected` uses it. The diagnostic has no course, so only responses lock its questions.
+  - Patch checks the shape rule on the **merged** question, because `questionType`, `options` and `answerKey` can change separately. `skills` replaces the whole list. The row and its Q-matrix rows are written in one transaction.
+  - Deleting a question also removes it from quizzes and from the Q-matrix (database cascade).
+
+**Quizzes**
+- **Create:**
+  - `diagnostic`: admin only (403), and `lessonId` must be null (400). Only one may exist: 409 from a pre-check, and also when the partial unique index rejects a race (`isUniqueViolation`).
+  - `lesson` / `practice`: `lessonId` is required (400). Then `findVisibleLesson` (404). An instructor must own the course (403); an admin may use any lesson, as with passages. Then `assertEditable` (409).
+  - `questionIds`: each must exist (400), and an instructor may only use questions they created (403).
+  - The quiz and its `quiz_questions` are written in one transaction. `orderIndex` is the question's position in the array.
+- **Get:** described under "Author view" above. If the quiz is missing, or its lesson isn't visible to the caller, the answer is 404.
+- **Patch and delete:**
+  - Only the creator or an admin (403).
+  - 409 if the lesson's course isn't `draft`/`rejected`, or once the quiz has attempts.
+  - Patch uses the same `questionIds` rules as create, and replaces the list in a transaction.
+- **`GET /diagnostic`** (learner only):
+  - Returns the learner view, plus `completedAttemptId`: the learner's oldest completed diagnostic attempt, or null.
+  - Gives 404 if no diagnostic exists yet. The contract gains this response.
+
+### Files
+
+New:
+- `src/services/questions.ts`:
+  - `checkQuestionShape(type, options, answerKey)`, one small function per question type, written as plain checks with comments;
+  - `assertWeightsSumToOne(skills)`;
+  - `findOwnQuestion` (404/403);
+  - `assertQuestionEditable` (409: responses, or used in a locked course);
+  - `replaceQuestionSkills(tx, ...)`.
+- `src/services/quizzes.ts`:
+  - `findQuizForViewer`, which loads the quiz, applies lesson visibility, and decides author or learner view;
+  - `findOwnQuiz` (404/403);
+  - `assertQuizEditable` (409);
+  - `assertCanUseQuestions` (400/403);
+  - `replaceQuizQuestions(tx, ...)`.
+- `src/services/quiz-views.ts`:
+  - `buildQuestions` (author view, with skill tags loaded in one `IN` query), `toQuestionForLearner`, and `buildQuiz(quiz, view)`;
+  - questions come in quiz order, and the passages they refer to are each listed once, through `buildPassages` from `services/course-views.ts`, so `mediaUrl` is signed.
+- `src/services/skills.ts`: `assertSkillsExist`, moved out of `controllers/lessons.ts` so that lessons and questions share it.
+- `src/controllers/questions.ts`, `src/controllers/quizzes.ts` (which includes `getDiagnostic`).
+- `src/routes/questions.ts` (`authenticate` and `authorize("instructor", "admin")` on the whole router), `src/routes/quizzes.ts` (roles per route, as in `routes/courses.ts`), `src/routes/diagnostic.ts`.
+- Tests:
+  - `src/services/questions.test.ts`: pure unit tests of the shape and weight rules;
+  - `src/routes/questions.test.ts` and `src/routes/quizzes.test.ts`, with `fake-storage` mocked because quiz views contain passages.
+
+Changed:
+- `src/app.ts`: mount `/api/v1/questions`, `/api/v1/quizzes` and `/api/v1/diagnostic`.
+- `src/utils/validator.ts`:
+  - `questionInputSchema`, `questionUpdateSchema` and `questionQuerySchema`. Their `skills` is a list of `{skillId, weight}`, with unique `skillId`s. Joi checks only the general types of `options` and `answerKey`; the pairing with the type is checked in `services/questions.ts`.
+  - `quizInputSchema` and `quizUpdateSchema`. `questionIds` must be non-empty and unique.
+- `src/controllers/lessons.ts`: import `assertSkillsExist` from `services/skills.ts`.
+- `src/test/db.ts`: add `createTestQuestion({ createdById, passageId?, skillIds? })` and `createTestQuiz({ kind, lessonId, createdById, questionIds })`.
+- `src/docs/openapi.yaml`, bumped to **v0.2.4**:
+  - `QuizInput.lessonId` is required for `practice` too;
+  - who gets which quiz view;
+  - admins may attach quizzes to any lesson;
+  - `passageId` ownership on questions;
+  - the shape rules (the answer key must reference options; matching covers every item);
+  - 400 for an unknown skill or question id;
+  - `/diagnostic` 404;
+  - the `info.description` admin sentence adds "questions and quizzes".
+- Docs:
+  - `docs/ERD.md`: the practice-quiz rule and the shape rules under "Rules the app must enforce".
+  - `backend/CLAUDE.md`: the layout gains the new services, and the test helpers gain the new ones.
+  - `docs/plans/phase-2-core-apis.md`: a new task section with this plan, then its Outcome. The "Left open" practice-quiz item is marked as settled.
+  - `docs/ROADMAP.md`: tick the task.
+
+### Tests (main cases)
+
+- **Questions:**
+  - each of the 5 types is created;
+  - shape mismatches give 400: an answer that isn't an option, `options` sent for TFNG, a matching key that misses an item;
+  - weights 0.5 + 0.4 give 400; a duplicate skill or an unknown skill gives 400;
+  - someone else's passage gives 403, a missing passage 404, and a learner caller 403;
+  - list scope (instructor vs. admin) and each filter;
+  - patch: replacing the skills, changing the type checked against the merged row, 409 once answered, 409 when used by an approved course's quiz, 200 when only a draft course's quiz uses it;
+  - delete: the same rules, and the question is removed from the quiz.
+- **Quizzes:**
+  - create a lesson quiz: the author view lists the questions in order and each passage once;
+  - 400 for a practice or lesson quiz without `lessonId`, and for a diagnostic with a lesson; 403 for an instructor creating a diagnostic; 409 for a second diagnostic, including two sent at the same time (one 201, one 409);
+  - 403 for another instructor's approved lesson, 404 for their draft lesson, 409 for my approved course, 403 for a question that isn't mine, 400 for an unknown question;
+  - get:
+    - an enrolled learner gets no `answerKey`, `explanation` or `skills`;
+    - a learner who isn't enrolled gets 403; on a draft course, 404;
+    - another instructor on an approved course gets the learner view;
+    - the course owner gets the author view of a quiz an admin built;
+  - patch and delete: 409 after an attempt (`createAnsweredQuiz`) and 409 on an approved course; patch replaces `questionIds`.
+- **Diagnostic:** 404 when none exists; the learner view with `completedAttemptId` null, then set after a completed attempt; 403 for an instructor.
+
+### Verification
+
+- In `backend/`: `npm run typecheck && npm run lint && npm test`.
+- `npx @redocly/cli@1.34.5 lint src/docs/openapi.yaml`: valid, with only the known `license` warning.
+- Manual run against the test database, with a `fetch` script in the scratchpad:
+  1. The instructor creates a draft course and lesson, a reading passage, 2 questions (MC, matching) and a lesson quiz.
+  2. The instructor submits the course; the admin approves it.
+  3. A learner enrols and opens the quiz: no answers appear.
+  4. Editing that question now gives 409.
+  5. The admin creates the diagnostic: the first succeeds and the second gives 409. `GET /diagnostic` as the learner returns it.
+- Swagger UI renders the updated contract.
+
+### Outcome
+
+Done 2026-10-24.
+- **Checks:** typecheck and lint are clean, and 136 tests pass across 13 files (41 new: 8 unit tests of the shape and weight rules, 15 question route tests, 18 quiz route tests). Redocly lint is valid, with only the known `license` warning. Swagger UI serves contract v0.2.4.
+- **Manual run** against the test database, scripted with `fetch`. Every step returned the expected status:
+  1. The instructor creates a course, a lesson, a reading passage, an MC question (weights 0.6 + 0.4), a matching question and a lesson quiz. The author view lists the passage once and shows the answers.
+  2. The instructor submits the course and the admin approves it.
+  3. The learner gets 403 before enrolling. After enrolling, the learner view of each question has only `questionId, passageId, questionType, questionText, options`.
+  4. Editing the question or the quiz now gives 409.
+  5. `GET /diagnostic` gives 404 before the diagnostic exists. The admin creates it (201); a second one gives 409. The learner then gets it with `completedAttemptId: null`.
+
+To read it: `src/services/questions.ts` (shape rules, Q-matrix weights, locked questions), then `src/services/quizzes.ts` (who sees what, who edits what), `src/services/quiz-views.ts` (response shapes), `src/controllers/questions.ts` and `src/controllers/quizzes.ts`.
+
+Details settled while implementing:
+- **Shared skill weights.** The Joi `lessonSkills` became `skillWeights`, used by lessons and questions. `assertSkillsExist` moved to `services/skills.ts`, as planned.
+- **Shape errors** are a 400 with a `message` and no `details`, like the passage payload rule, because they are checked after Joi, on the merged question for `PATCH`.
+- **Empty strings:** an empty question `explanation` or quiz `description` is stored as `null`.
+- **`?skillId=` filter** runs in code after the database filters (creator, passage, type). The question bank is small and has no pagination, so this keeps the query simple.
+- **Diagnostic race:** a probe with the pre-check disabled showed that the partial unique index error reaches the `catch` from inside the transaction, so two simultaneous creations give one 201 and one 409 either way.
+- **Diagnostic through `GET /quizzes/{id}`:** anyone who isn't an author gets its learner view. There is no lesson to check.
+
+Left open:
+- **Edit while a learner answers.** The "no responses yet" check and the edit are separate statements. A question edited at the same moment as its very first answer could slip through. The Attempts task writes responses, and can close this gap by locking the rows if it matters.
+- **Questions on passages from other lessons.** A quiz may use a question whose passage belongs to a different lesson. The contract doesn't forbid it, and the quiz view lists that passage too.
+- **Creating a question is not locked.** An instructor can add a question to their passage in an approved course. Learners don't see it until a quiz uses it, and changing a quiz still needs a `draft` or `rejected` course.

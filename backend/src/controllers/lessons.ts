@@ -10,6 +10,8 @@ import {
   findVisibleCourse,
   findVisibleLesson,
 } from "../services/courses.ts";
+import { assertSkillsExist } from "../services/skills.ts";
+import type { SkillWeight } from "../services/skills.ts";
 import { varchar } from "../utils/db-types.ts";
 import { httpError } from "../utils/http-error.ts";
 
@@ -19,22 +21,6 @@ const orm = db.orm.public;
 type Orm = typeof db.orm.public;
 
 type LessonKind = "core" | "remedial";
-type SkillWeight = { skillId: number; weight: number };
-
-// Every skill id must exist; an unknown one is an input error (400), not a missing resource
-const assertSkillsExist = async (skills: SkillWeight[]) => {
-  const skillIds = skills.map((skill) => skill.skillId);
-  const found = await orm.Skills.where((s) => s.skillId.in(skillIds))
-    .select("skillId")
-    .all();
-
-  const foundIds = new Set(found.map((skill) => skill.skillId));
-  for (const skillId of skillIds) {
-    if (!foundIds.has(skillId)) {
-      throw httpError(400, `Unknown skill id: ${skillId}`);
-    }
-  }
-};
 
 // Replaces a lesson's whole skill tag list
 const replaceSkillTags = async (tx: Orm, lessonId: number, skills: SkillWeight[]) => {

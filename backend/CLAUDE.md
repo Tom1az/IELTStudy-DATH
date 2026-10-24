@@ -12,6 +12,10 @@ src/
   services/courses.ts  # course access rules: visibility (404), owner (403), editable status (409), status transitions
   services/course-views.ts # builds the contract's Course / Lesson / LessonDetail / Passage / Enrollment shapes
   services/storage.ts  # Supabase Storage: signed upload URLs, signed read URLs (the only file that calls Supabase)
+  services/skills.ts   # assertSkillsExist (400 for an unknown skill), shared by lessons and questions
+  services/questions.ts # question rules: options/answerKey shape per type, Q-matrix weights sum to 1, owner (403), locked (409)
+  services/quizzes.ts  # quiz rules: visibility (404), author or learner view, owner (403), locked (409), usable questions
+  services/quiz-views.ts # builds Question / QuestionForLearner / Quiz / QuizForLearner (passages via buildPassages)
   services/            # more business logic later: bkt.ts, recommender.ts (Phase 3)
   utils/validator.ts   # validateBody / validateParams / validateQuery + Joi schemas
   utils/db-types.ts    # varchar<N>() brand helper for Prisma VARCHAR columns
@@ -32,6 +36,7 @@ migrations/            # Prisma 8 migration packages (npm run migration:plan / d
 
 - **Request flow:** in `routes/<name>.ts`, chain `validateParams(schemas.idSchema, "courseId")`, `validateQuery(...)` and `validateBody(schemas.xSchema)`, then the controller. Controllers read **validated** input from `req.value.body` / `req.value.params` / `req.value.query`, never from `req.body` or `req.query`. Use `routes/me.ts` (small) and `routes/courses.ts` (roles per route) as references.
 - **Auth:** protect a route with `authenticate`, then `authorize("instructor", "admin")` when only some roles may call it (a router can `router.use(authenticate)` once). Read the caller from `req.user` (a `PublicUser`, freshly loaded from the DB), never from the token or the body. Ownership checks ("I own") go in the controller and return 403.
+- **Answers stay server-side:** build quizzes with `buildQuiz(quiz, view)` from `services/quiz-views.ts`. Pick `view` with `findQuizForViewer` (`services/quizzes.ts`), never from the caller's role alone. The learner view has no `answerKey`, `explanation` or skill weights.
 - **Course content checks, in this order:** `findVisibleCourse` / `findVisibleLesson` (404, also for courses the caller may not see), then `assertCourseOwner` (403), then `assertEditable` (409), all from `services/courses.ts`. Change a course's status only through `changeCourseStatus`, which re-checks the status inside the `UPDATE`.
 - **Lists of related rows:** the Prisma contract only has to-one relations, so load children for a whole list with one `.where((x) => x.parentId.in(ids))` query and group them in a `Map` (see `services/course-views.ts`). Guard against empty id lists first.
 - Add new Joi schemas to `schemas` in `utils/validator.ts`.
@@ -47,7 +52,7 @@ migrations/            # Prisma 8 migration packages (npm run migration:plan / d
   - Use `import type` for type-only imports.
 - **Tests:** `*.test.ts` next to the code (vitest + supertest), importing `app` from `app.ts`.
   - They run against a real Postgres database, `TEST_DATABASE_URL` in `.env` (separate from `DATABASE_URL`; `vitest.config.ts` refuses to start if they match). `src/test/global-setup.ts` migrates it once per run, and test files run one at a time.
-  - Start each test from a blank database: `beforeEach(resetDb)`. Build data with `createTestUser({ role })` and send `authHeader(user.userId)` as the `Authorization` header. For content use `createTestSkill`, `createTestCourse({ instructorId, status })`, `createTestLesson`, `enrollTestUser` and `createAnsweredQuiz` (learner history that blocks deletes).
+  - Start each test from a blank database: `beforeEach(resetDb)`. Build data with `createTestUser({ role })` and send `authHeader(user.userId)` as the `Authorization` header. For content use `createTestSkill`, `createTestCourse({ instructorId, status })`, `createTestLesson`, `enrollTestUser`, `createTestQuestion({ createdById, passageId?, skillIds? })`, `createTestQuiz({ createdById, questionIds, kind?, lessonId? })` and `createAnsweredQuiz` (learner history that blocks deletes).
   - When a table is added to `schema.prisma`, add it to the `TRUNCATE` list in `src/test/db.ts`.
   - Tests never call Supabase. `vitest.config.ts` blanks the `SUPABASE_*` variables. A route test whose responses contain passages or upload tickets adds `vi.mock("../services/storage.ts", () => import("../test/fake-storage.ts"))`. The fake signs every path except `missing/...`.
 - **Media:** store only the Storage object path (`mediaPath`), never a URL. Build passages with `buildPassages` / `buildPassage` from `services/course-views.ts`, so every `mediaUrl` is signed fresh, in one Storage request per response.

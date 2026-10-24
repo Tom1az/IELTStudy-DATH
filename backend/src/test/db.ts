@@ -160,3 +160,56 @@ export const createAnsweredQuiz = async (options: {
   });
   return { quiz, question, attempt };
 };
+
+// Inserts a true/false/not given question tagged with the given skills. Their weights are split
+// evenly, so they add up to 1 as the Q-matrix requires.
+export const createTestQuestion = async (options: {
+  createdById: number;
+  passageId?: number;
+  skillIds?: number[];
+}) => {
+  const question = await db.orm.public.Questions.create({
+    passageId: options.passageId ?? null,
+    createdById: options.createdById,
+    questionType: "true_false_not_given",
+    questionText: "The library opens at nine.",
+    options: null,
+    answerKey: "true",
+    explanation: "The notice says 9 am.",
+    difficulty: 3,
+  });
+  const skillIds = options.skillIds ?? [];
+  for (const skillId of skillIds) {
+    await db.orm.public.QuestionSkills.create({
+      questionId: question.questionId,
+      skillId,
+      weight: 1 / skillIds.length,
+    });
+  }
+  return question;
+};
+
+// Inserts a quiz with the given questions, in that order. A diagnostic has no lesson.
+export const createTestQuiz = async (options: {
+  createdById: number;
+  questionIds: number[];
+  kind?: "diagnostic" | "lesson" | "practice";
+  lessonId?: number;
+}) => {
+  const quiz = await db.orm.public.Quizzes.create({
+    kind: options.kind ?? "lesson",
+    lessonId: options.lessonId ?? null,
+    createdById: options.createdById,
+    title: varchar<255>("Test quiz"),
+    description: null,
+    timeLimitSeconds: null,
+  });
+  for (let index = 0; index < options.questionIds.length; index++) {
+    await db.orm.public.QuizQuestions.create({
+      quizId: quiz.quizId,
+      questionId: options.questionIds[index]!,
+      orderIndex: index,
+    });
+  }
+  return quiz;
+};

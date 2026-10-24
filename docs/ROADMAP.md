@@ -21,6 +21,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 | Remedial content | `lessons.kind = remedial`: outside the gated sequence, reached only through recommendations | Decided | Phase 1 |
 | Course editing after approval | Approved courses are locked; the instructor withdraws to draft, edits and resubmits | Decided | Phase 2 |
 | Auth tokens | JWT in the response body, 1 day, no refresh token; the user is reloaded from the database on every request | Decided | Phase 2 |
+| Practice quizzes | Need a lesson (API rule), so they follow the lesson's access and lock rules | Decided | Phase 2 |
 | Recommender ranking | Ranking formula, the rule that unlocks the next module, and whether learners can open remedial lessons outside their enrolled courses | Open | Phase 3 |
 | UI design | Figma or wireframe approval | Open | Phase 4 |
 
@@ -56,7 +57,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 - [x] Auth: register, login, JWT, `authenticate`, `authorize(...roles)`, `GET`/`PATCH /me`; tests run against `TEST_DATABASE_URL` (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [x] Courses, lessons and media: instructor CRUD, submit for review, admin approve/reject with feedback, learner enroll, lesson progress, passages (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [x] Uploads via Supabase Storage signed URLs (plan and outcome in `docs/plans/phase-2-core-apis.md`)
-- [ ] Questions and quizzes with skill tagging
+- [x] Questions and quizzes with skill tagging (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [ ] Attempts: start, submit, score, log responses
 - [ ] Admin: roles and usage stats
 

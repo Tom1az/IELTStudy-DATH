@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IELTStudy API
-  version: 0.2.3
+  version: 0.2.4
   description: |
     REST API for IELTStudy, an adaptive IELTS learning platform (see `specs.md`).
     Contract-first: add or change an endpoint here in the same change as its code.
@@ -11,7 +11,7 @@ info:
 
     **Roles.** Each endpoint says who may call it: learner, instructor, admin.
     "Owner" means the instructor who created the resource. Admins act only where an endpoint lists them:
-    they review and archive courses and edit passages, but they don't edit or submit an instructor's course or lessons.
+    they review and archive courses and edit passages, questions and quizzes, but they don't edit or submit an instructor's course or lessons.
 
     **Locked content.** Content inside a course (lessons, passages, quizzes, and the questions those quizzes use)
     can only change while the course is `draft` or `rejected`. To change an approved course, the owner withdraws it first.
@@ -808,8 +808,9 @@ paths:
       summary: Write a question and tag it with skills
       description: |
         Roles: instructor, admin.
-        - `skills` is the question's row of the Q-matrix: the weights must **sum to 1** (400 otherwise).
+        - `skills` is the question's row of the Q-matrix: the weights must **sum to 1** (400 otherwise). An unknown skill id is a 400.
         - `options` and `answerKey` must match `questionType`; see the `QuestionInput` schema.
+        - `passageId`, if given, must be a passage I created (403 otherwise; admins may use any passage). A missing passage is a 404.
       requestBody:
         required: true
         content:
@@ -849,6 +850,8 @@ paths:
       summary: Edit a question
       description: |
         Roles: owner, admin. `skills` replaces the whole list, and its weights must sum to 1.
+        The `options` / `answerKey` rule is checked on the question as it will be after the edit, so changing `questionType` usually needs new `options` and `answerKey` too.
+        The same `passageId` rule as creating.
         Fails (409) once learners have answered the question, or while a quiz in a course that isn't `draft` or `rejected` uses it.
       requestBody:
         required: true
@@ -890,9 +893,10 @@ paths:
       summary: Build a quiz from questions
       description: |
         Roles: instructor, admin.
-        - `lesson` and `practice` quizzes: instructors must attach them to a lesson of their own course while it is `draft` or `rejected`.
-        - `diagnostic`: admins only, and there can be only one (409).
-        - Only questions I own (or any question, for admins) can be used.
+        - `lesson` and `practice` quizzes need a `lessonId` (400 otherwise). Instructors must use a lesson of their own course (403);
+          admins may use any lesson. Either way the course must be `draft` or `rejected` (409).
+        - `diagnostic`: admins only (403), with no lesson (400), and there can be only one (409).
+        - Only questions I created (or any question, for admins) can be used (403). An unknown question id is a 400.
       requestBody:
         required: true
         content:
@@ -919,8 +923,10 @@ paths:
       summary: Get a quiz
       description: |
         Roles: learner, instructor, admin.
-        - The owner and admins get the author view (questions with answers).
-        - Learners get the learner view (no answers or explanations), with the same access rule as the quiz's lesson.
+        - The quiz's creator, the instructor who owns its course, and admins get the author view (questions with answers).
+        - Everyone else gets the learner view (no answers, explanations or skill weights), with the same access rule as the quiz's lesson:
+          learners must be enrolled in its approved course (403 otherwise), and a course the caller can't see is a 404.
+          Anyone may see the learner view of the diagnostic.
       responses:
         "200":
           description: The quiz
@@ -997,6 +1003,11 @@ paths:
                   message: { type: string }
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: No diagnostic has been created yet.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
 
   # ---------------------------------------------------------------------------
   # Attempts
@@ -1899,6 +1910,12 @@ components:
         question: { $ref: "#/components/schemas/Question" }
         message: { type: string }
     QuestionInput:
+      description: |
+        `options` and `answerKey` must fit `questionType` (400 otherwise):
+        - `multiple_choice`, `error_identification`: at least 2 options with different ids; `answerKey` is one of those ids.
+        - `true_false_not_given`: no `options` (null); `answerKey` is `"true"`, `"false"` or `"not_given"`.
+        - `gap_fill`: no `options` (null); `answerKey` is the list of accepted answers.
+        - `matching`: `{ items, choices }`, ids different within each list; `answerKey` maps **every** item id to a choice id, and nothing else.
       type: object
       required: [questionType, questionText, answerKey, skills]
       properties:
@@ -2008,7 +2025,7 @@ components:
         lessonId:
           type: [integer, "null"]
           minimum: 1
-          description: Required for `lesson` quizzes; must be null for the diagnostic.
+          description: Required for `lesson` and `practice` quizzes; must be null for the diagnostic.
         title: { type: string, minLength: 3, maxLength: 255 }
         description: { type: [string, "null"], maxLength: 5000 }
         timeLimitSeconds: { type: [integer, "null"], minimum: 1 }
