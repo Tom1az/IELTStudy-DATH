@@ -93,6 +93,16 @@ const lessonSkills = Joi.array()
 const passageTitle = Joi.string().trim().max(255).allow(null, "");
 const passageContent = Joi.string().max(50000).allow(null);
 const mediaPath = Joi.string().trim().max(1024).allow(null);
+// File types instructors may upload: audio, video and images (the contract's UploadRequest)
+const uploadContentType = Joi.string().valid(
+  "audio/mpeg",
+  "audio/mp4",
+  "audio/wav",
+  "video/mp4",
+  "video/webm",
+  "image/png",
+  "image/jpeg",
+);
 
 const schemas = {
   idSchema: Joi.object().keys({
@@ -194,6 +204,12 @@ const schemas = {
       orderIndex,
     })
     .min(1),
+
+  // ----- Uploads -----
+  uploadRequestSchema: Joi.object().keys({
+    fileName: Joi.string().trim().min(1).max(255).required(),
+    contentType: uploadContentType.required(),
+  }),
 
   // ----- Skills -----
   skillQuerySchema: Joi.object().keys({

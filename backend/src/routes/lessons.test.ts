@@ -1,5 +1,5 @@
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import app from "../app.ts";
 import { db } from "../prisma/db.ts";
@@ -13,6 +13,9 @@ import {
   enrollTestUser,
   resetDb,
 } from "../test/db.ts";
+
+// Never call Supabase from tests (see src/test/fake-storage.ts)
+vi.mock("../services/storage.ts", () => import("../test/fake-storage.ts"));
 
 beforeEach(async () => {
   await resetDb();
@@ -228,10 +231,29 @@ describe("GET /api/v1/lessons/:lessonId", () => {
       learnerId: learner.userId,
     });
 
+    const passages = [
+      { type: "reading_text", content: "Text" },
+      { type: "listening_audio", mediaPath: "2/part1.mp3" },
+      { type: "video", mediaPath: "missing/lecture.mp4" },
+    ];
+    for (const passage of passages) {
+      await request(app)
+        .post("/api/v1/passages")
+        .set("Authorization", authHeader(instructor.userId))
+        .send({ lessonId: lesson.lessonId, ...passage })
+        .expect(201);
+    }
+
     const res = await request(app)
       .get(`/api/v1/lessons/${lesson.lessonId}`)
       .set("Authorization", authHeader(instructor.userId));
 
+    // Media is signed on read; a file that can't be signed gets null
+    expect(res.body.lesson.passages.map((p: { mediaUrl: string | null }) => p.mediaUrl)).toEqual([
+      null,
+      "https://storage.test/sign/2/part1.mp3?token=test",
+      null,
+    ]);
     expect(res.body.lesson.quizzes).toEqual([
       expect.objectContaining({ kind: "lesson", title: "Test quiz", questionCount: 1 }),
     ]);

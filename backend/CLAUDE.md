@@ -11,6 +11,7 @@ src/
   middlewares/auth.ts  # authenticate (JWT -> req.user, reloaded from the DB) and authorize(...roles)
   services/courses.ts  # course access rules: visibility (404), owner (403), editable status (409), status transitions
   services/course-views.ts # builds the contract's Course / Lesson / LessonDetail / Passage / Enrollment shapes
+  services/storage.ts  # Supabase Storage: signed upload URLs, signed read URLs (the only file that calls Supabase)
   services/            # more business logic later: bkt.ts, recommender.ts (Phase 3)
   utils/validator.ts   # validateBody / validateParams / validateQuery + Joi schemas
   utils/db-types.ts    # varchar<N>() brand helper for Prisma VARCHAR columns
@@ -19,7 +20,8 @@ src/
   utils/jwt.ts         # signToken / verifyToken (HS256, sub = userId, 1 day)
   utils/public-user.ts # toPublicUser + PublicUser: the contract's User, never hashedPass
   types/express.d.ts   # req.value, req.user
-  test/                # test-only helpers: global-setup.ts (migrate), setup.ts, db.ts (resetDb, createTestUser, authHeader)
+  test/                # test-only helpers: global-setup.ts (migrate), setup.ts, db.ts (resetDb, createTestUser, authHeader),
+                       # fake-storage.ts (stands in for services/storage.ts)
   docs/openapi.yaml    # Swagger contract
   prisma/              # schema.prisma (source), schema.d.ts + schema.json (generated), db.ts
                        # seed.ts + seed-data.ts (npm run seed)
@@ -47,3 +49,5 @@ migrations/            # Prisma 8 migration packages (npm run migration:plan / d
   - They run against a real Postgres database, `TEST_DATABASE_URL` in `.env` (separate from `DATABASE_URL`; `vitest.config.ts` refuses to start if they match). `src/test/global-setup.ts` migrates it once per run, and test files run one at a time.
   - Start each test from a blank database: `beforeEach(resetDb)`. Build data with `createTestUser({ role })` and send `authHeader(user.userId)` as the `Authorization` header. For content use `createTestSkill`, `createTestCourse({ instructorId, status })`, `createTestLesson`, `enrollTestUser` and `createAnsweredQuiz` (learner history that blocks deletes).
   - When a table is added to `schema.prisma`, add it to the `TRUNCATE` list in `src/test/db.ts`.
+  - Tests never call Supabase. `vitest.config.ts` blanks the `SUPABASE_*` variables. A route test whose responses contain passages or upload tickets adds `vi.mock("../services/storage.ts", () => import("../test/fake-storage.ts"))`. The fake signs every path except `missing/...`.
+- **Media:** store only the Storage object path (`mediaPath`), never a URL. Build passages with `buildPassages` / `buildPassage` from `services/course-views.ts`, so every `mediaUrl` is signed fresh, in one Storage request per response.

@@ -6,6 +6,7 @@ import { db } from "../prisma/db.ts";
 import type { PublicUser } from "../utils/public-user.ts";
 import { isCourseOwner } from "./courses.ts";
 import type { CourseRow, LessonRow } from "./courses.ts";
+import { signMediaUrls } from "./storage.ts";
 
 const orm = db.orm.public;
 
@@ -50,17 +51,38 @@ export type CourseView = {
   updatedAt: Temporal.Instant;
 };
 
-export const toPassage = (row: PassageRow) => ({
+const toPassage = (row: PassageRow, mediaUrl: string | null) => ({
   passageId: row.passageId,
   lessonId: row.lessonId,
   type: row.type,
   title: row.title,
   content: row.content,
   mediaPath: row.mediaPath,
-  // Signed Storage URLs arrive with the Uploads task; until then there is nothing to sign
-  mediaUrl: null,
+  mediaUrl,
   orderIndex: row.orderIndex,
 });
+
+// The contract's Passage objects. Each `mediaUrl` is signed fresh on every read (valid 1 hour),
+// all in one Storage request. It is null for reading text, or when the file can't be signed.
+export const buildPassages = async (rows: PassageRow[]) => {
+  const paths: string[] = [];
+  for (const row of rows) {
+    if (row.mediaPath) paths.push(row.mediaPath);
+  }
+  const urls = await signMediaUrls(paths);
+
+  const result = [];
+  for (const row of rows) {
+    const mediaUrl = row.mediaPath ? urls.get(row.mediaPath) : undefined;
+    result.push(toPassage(row, mediaUrl ?? null));
+  }
+  return result;
+};
+
+export const buildPassage = async (row: PassageRow) => {
+  const [result] = await buildPassages([row]);
+  return result!;
+};
 
 export const toProgress = (row: ProgressRow) => ({
   lessonId: row.lessonId,
@@ -312,7 +334,7 @@ export const buildLessonDetail = async (lesson: LessonRow, viewer: PublicUser) =
   return {
     ...view!,
     content: lesson.content,
-    passages: passages.map(toPassage),
+    passages: await buildPassages(passages),
     quizzes: quizSummaries,
   };
 };

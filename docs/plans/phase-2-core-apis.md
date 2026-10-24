@@ -332,3 +332,62 @@ Left open:
 - **Admin-created passages** in an instructor's lesson can only be edited by their creator or an admin, following the ERD's creator rule. The course owner can't edit them.
 - **`mediaUrl`** is `null` until the Uploads task.
 - **Remedial lessons outside enrolled courses** are still deferred to the Phase 3 Gate.
+
+## Task: Uploads via Supabase Storage signed URLs
+
+Approved: 2026-10-24 (effort `high`).
+
+### Context
+
+The courses task shipped passages with `mediaUrl: null` because nothing could sign Storage paths yet. This task builds `POST /uploads` and signs `mediaUrl` on every read, following the approved contract (`UploadRequest`, `UploadTicket`, `Passage.mediaUrl`). The database keeps storing only object paths (`docs/ERD.md`).
+
+Decided with the owner for this task:
+- **Dependency:** `@supabase/supabase-js` (official client), `^2.117.3`, the newest release at least two weeks old.
+- **No `mediaPath` ownership check** on passages. The contract doesn't ask for one; it's left for the Phase 7 security review.
+- **Signing failures on read** (not configured, object missing, Supabase down) give `mediaUrl: null` and a logged warning. The request still succeeds.
+
+No schema change.
+
+### Plan
+
+1. `services/storage.ts`, the only file that calls Supabase:
+   - It reads `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY` and `SUPABASE_STORAGE_BUCKET` on every call and creates a server-side client once.
+   - `buildObjectPath(userId, fileName)` returns `<userId>/<uuid>-<safe name>`.
+   - `createUploadTicket` wraps `createSignedUploadUrl` (Supabase fixes its lifetime at 2 hours).
+   - `signMediaUrls(paths)` makes one `createSignedUrls(paths, 3600)` call. It leaves out paths that can't be signed.
+2. `POST /uploads` (`routes/uploads.ts`, `controllers/uploads.ts`) for instructors and admins. `uploadRequestSchema` holds the contract's 7 MIME types.
+3. `services/course-views.ts`: `buildPassages` / `buildPassage` sign every passage's `mediaPath` in one batch. `GET /lessons/{id}` and the passage handlers use them.
+4. Tests never reach Supabase:
+   - `vitest.config.ts` blanks the `SUPABASE_*` variables.
+   - `services/storage.test.ts` mocks `@supabase/supabase-js`.
+   - Route tests mock `services/storage.ts` with `src/test/fake-storage.ts`.
+5. Docs: contract v0.2.3 (`mediaUrl` note, private bucket), `.env.example`, `docs/ERD.md`, `backend/CLAUDE.md`.
+
+### Outcome
+
+Done 2026-10-24.
+- **Checks:** typecheck and lint are clean, and 95 tests pass across 10 files (14 new). Redocly lint is valid, with only the known `license` warning. Swagger UI renders and lists `/uploads`.
+- **Smoke test** of the real client, without credentials:
+  - not configured: an empty map and one warning;
+  - unreachable host: the error is returned and handled, so signing gives an empty map and an upload throws a clear error.
+- **Manual run against a real Supabase project** (private `media` bucket, `sb_secret_` key), on the test database, all checks pass:
+  - `POST /uploads` → `PUT` a WAV to `uploadUrl` (200) → create an audio passage with `path`;
+  - `GET /passages/{id}` and `GET /lessons/{id}` return a signed `mediaUrl` that downloads the same bytes (`audio/wav`);
+  - a passage pointing at a missing file gets `mediaUrl: null`;
+  - the public URL of the object is refused (400), so the bucket is private.
+
+  `npm test` still passes with the real keys in `.env`, because the test config blanks them.
+
+To read it: `src/services/storage.ts`, then `buildPassages` in `src/services/course-views.ts`, `src/controllers/uploads.ts`, and `src/test/fake-storage.ts` (how the route tests avoid Supabase).
+
+Details settled while implementing:
+- **Version:** `npm install` with `^2.117.3` resolves to 2.118.0, so the lockfile pins 2.117.3 explicitly (`package.json` keeps `^2.117.3`).
+- **Supabase errors:** the client returns network failures as `error` rather than throwing. `signMediaUrls` handles both.
+- **`contentType`** is validated but not used when signing, because Supabase signed upload URLs can't restrict the type. The client sends it again as the `PUT`'s `Content-Type`.
+- **`SUPABASE_URL` is the project origin only.** The first manual run failed with "Invalid path specified in request URL" because the value copied from the dashboard ended in `/rest/v1/`. `.env.example` now warns about it.
+- **Safe names** turn every run of other characters into one `-`, so `Part 1 (Booking).MP3` becomes `part-1-booking-.mp3`.
+
+Left open:
+- `mediaPath` isn't checked against the uploader (Phase 7 security review).
+- Uploaded files that no passage uses, and the files of deleted passages, stay in the bucket. Nothing cleans them up.
+- File size and MIME limits are set on the bucket in the Supabase dashboard, not in code.

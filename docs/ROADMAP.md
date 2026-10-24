@@ -55,7 +55,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 - [x] **Gate:** API contract approved (v0.2.0, 2026-10-24)
 - [x] Auth: register, login, JWT, `authenticate`, `authorize(...roles)`, `GET`/`PATCH /me`; tests run against `TEST_DATABASE_URL` (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [x] Courses, lessons and media: instructor CRUD, submit for review, admin approve/reject with feedback, learner enroll, lesson progress, passages (plan and outcome in `docs/plans/phase-2-core-apis.md`)
-- [ ] Uploads via Supabase Storage signed URLs
+- [x] Uploads via Supabase Storage signed URLs (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [ ] Questions and quizzes with skill tagging
 - [ ] Attempts: start, submit, score, log responses
 - [ ] Admin: roles and usage stats

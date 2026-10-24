@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IELTStudy API
-  version: 0.2.2
+  version: 0.2.3
   description: |
     REST API for IELTStudy, an adaptive IELTS learning platform (see `specs.md`).
     Contract-first: add or change an endpoint here in the same change as its code.
@@ -666,6 +666,8 @@ paths:
         1. Call this to get `uploadUrl` and `path`.
         2. `PUT` the file straight to `uploadUrl`, with the same `Content-Type`. The file never passes through this API.
         3. Create or update a passage with `mediaPath: path`.
+
+        The Storage bucket is private: files are read only through the signed `mediaUrl` of a passage.
       requestBody:
         required: true
         content:
@@ -1707,7 +1709,7 @@ components:
         mediaUrl:
           type: [string, "null"]
           format: uri
-          description: Signed URL to play the media, valid for 1 hour. Generated on every read. Null until Supabase Storage signing ships (Uploads task).
+          description: Signed URL to play the media, valid for 1 hour. Generated on every read. Null for reading text, or when the file can't be signed (for example it was never uploaded).
         orderIndex: { type: integer }
       example:
         passageId: 1

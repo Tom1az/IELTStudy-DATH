@@ -12,6 +12,7 @@ import lessonsRoute from "./routes/lessons.ts";
 import meRoute from "./routes/me.ts";
 import passagesRoute from "./routes/passages.ts";
 import skillsRoute from "./routes/skills.ts";
+import uploadsRoute from "./routes/uploads.ts";
 import { httpError } from "./utils/http-error.ts";
 import type { HttpError } from "./utils/http-error.ts";
 
@@ -35,6 +36,7 @@ app.use("/api/v1/skills", skillsRoute);
 app.use("/api/v1/courses", coursesRoute);
 app.use("/api/v1/lessons", lessonsRoute);
 app.use("/api/v1/passages", passagesRoute);
+app.use("/api/v1/uploads", uploadsRoute);
 app.use("/api/v1/instructor", instructorRoute);
 app.use("/api/v1/admin", adminRoute);
 

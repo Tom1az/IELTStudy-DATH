@@ -218,7 +218,7 @@ Notes:
 - **Questions are reusable** across quizzes through `quiz_questions`. A question may hang off a passage (reading text or listening transcript) or stand alone.
 - **Q-matrix.** `question_skills.weight` splits a question's evidence across skills for the BKT update.
 - **`skill_code` is immutable.** It is the key that joins the database to `ml/output/bkt_params.json`.
-- **`media_path` stores a Supabase Storage object path**, never a signed URL, because signed URLs expire. The API signs it on read.
+- **`media_path` stores a Supabase Storage object path**, never a signed URL, because signed URLs expire. The API signs it on read. Uploads go to `<userId>/<random id>-<file name>` in a private bucket.
 - **`mastery_changes`** on an attempt records `[{ skillId, before, after }]` at submit, so the post-quiz review can show what moved.
 - **`recommendations` is a log** of what was served, kept for Precision@3 / MRR (`rank`, `clicked_at`) and for debugging the rationale.
 - **Timestamps** are `timestamptz`, read and written as `Temporal.Instant`, so Node ≥ 26.8.2 is required. `created_at` / `updated_at` are filled by the ORM (`temporal.createdAt()` / `temporal.updatedAt()`), not by database defaults, so raw SQL inserts must supply them.
@@ -288,7 +288,7 @@ Validated by Joi in Phase 2.
 - The 30-question diagnostic: listening 7, reading 8, writing 8, speaking 7. It assesses every skill at least once.
 - 3 approved courses (Beginner, Intermediate, Advanced), with 21 lessons in total (12 of them remedial) and one lesson quiz each.
 
-Every skill has at least one remedial lesson. The seed refuses to run on a non-empty database. Listening passages carry a transcript and a placeholder `media_path`; real audio arrives with uploads in Phase 2.
+Every skill has at least one remedial lesson. The seed refuses to run on a non-empty database. Listening passages carry a transcript and a placeholder `media_path`. No file exists at that path, so its `mediaUrl` is `null` until an instructor uploads real audio (`POST /uploads`) and points the passage at it.
 
 ## Applying migrations
 

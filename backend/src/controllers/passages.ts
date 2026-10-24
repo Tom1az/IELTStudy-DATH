@@ -1,7 +1,7 @@
 import type { Request, Response } from "express";
 import type { Varchar } from "@prisma/orm-postgres/target/codec-types";
 import { db } from "../prisma/db.ts";
-import { toPassage } from "../services/course-views.ts";
+import { buildPassage } from "../services/course-views.ts";
 import { assertEditable, findVisibleLesson, isCourseOwner } from "../services/courses.ts";
 import { varchar } from "../utils/db-types.ts";
 import { httpError } from "../utils/http-error.ts";
@@ -86,7 +86,7 @@ const createPassage = async (req: Request, res: Response) => {
   });
 
   return res.status(201).json({
-    passage: toPassage(passage),
+    passage: await buildPassage(passage),
     message: "Passage created",
   });
 };
@@ -95,7 +95,7 @@ const getPassage = async (req: Request, res: Response) => {
   const passage = await findOwnPassage(req.value!.params!.passageId, req.user!);
 
   return res.status(200).json({
-    passage: toPassage(passage),
+    passage: await buildPassage(passage),
     message: "Passage",
   });
 };
@@ -144,7 +144,7 @@ const updatePassage = async (req: Request, res: Response) => {
   }
 
   return res.status(200).json({
-    passage: toPassage(updated),
+    passage: await buildPassage(updated),
     message: "Passage updated",
   });
 };

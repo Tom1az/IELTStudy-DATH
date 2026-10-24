@@ -1,5 +1,5 @@
 import request from "supertest";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import app from "../app.ts";
 import { db } from "../prisma/db.ts";
@@ -11,6 +11,9 @@ import {
   createTestUser,
   resetDb,
 } from "../test/db.ts";
+
+// Never call Supabase from tests (see src/test/fake-storage.ts)
+vi.mock("../services/storage.ts", () => import("../test/fake-storage.ts"));
 
 beforeEach(async () => {
   await resetDb();
@@ -144,7 +147,32 @@ describe("PATCH and DELETE /api/v1/passages/:passageId", () => {
     expect(withMedia.body.passage).toMatchObject({
       type: "listening_audio",
       mediaPath: "2/part1.mp3",
+      mediaUrl: "https://storage.test/sign/2/part1.mp3?token=test",
     });
+  });
+
+  it("signs mediaUrl on every read, and gives null for a file that can't be signed", async () => {
+    const { instructor, lesson } = await setUpLesson();
+    const asInstructor = authHeader(instructor.userId);
+
+    const audio = await request(app)
+      .post("/api/v1/passages")
+      .set("Authorization", asInstructor)
+      .send({ lessonId: lesson.lessonId, type: "listening_audio", mediaPath: "2/part1.mp3" });
+    expect(audio.status).toBe(201);
+    expect(audio.body.passage.mediaUrl).toBe("https://storage.test/sign/2/part1.mp3?token=test");
+
+    const read = await request(app)
+      .get(`/api/v1/passages/${audio.body.passage.passageId}`)
+      .set("Authorization", asInstructor);
+    expect(read.body.passage.mediaUrl).toBe("https://storage.test/sign/2/part1.mp3?token=test");
+
+    const neverUploaded = await request(app)
+      .post("/api/v1/passages")
+      .set("Authorization", asInstructor)
+      .send({ lessonId: lesson.lessonId, type: "video", mediaPath: "missing/lecture.mp4" });
+    expect(neverUploaded.status).toBe(201);
+    expect(neverUploaded.body.passage.mediaUrl).toBeNull();
   });
 
   it("returns 403 to another instructor and lets an admin read it", async () => {
