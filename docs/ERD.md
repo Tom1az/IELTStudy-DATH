@@ -281,6 +281,13 @@ Joi checks the general types; `checkQuestionShape` in `backend/src/services/ques
 
 `question_responses.user_answer` has the same shape as `answer_key` for a single answer (a string, or an object for matching).
 
+**Grading** (`backend/src/services/grading.ts`, at submit). A question scores 1 point or 0, and `quiz_attempts.total_score` counts the correct ones:
+- `multiple_choice`, `error_identification`, `true_false_not_given`: the answer equals the key exactly.
+- `gap_fill`: the answer matches any accepted answer, ignoring case and extra spaces.
+- `matching`: all or nothing. Every item must map to the key's choice, with no extra items.
+- An answer of the wrong shape (an object for a text question, or the reverse) is rejected with 400, not graded.
+- A skipped question gets no `question_responses` row and counts as wrong.
+
 ## Seed data
 
 `npm run seed` (after migrating) creates:

@@ -29,7 +29,7 @@ export type QuizView = "author" | "learner";
 
 // Loads a quiz and the course of its lesson (null for the diagnostic, which has no lesson).
 // A quiz in a course the user may not see gets the same 404 as a missing one.
-const findVisibleQuiz = async (quizId: number, user: PublicUser) => {
+export const findVisibleQuiz = async (quizId: number, user: PublicUser) => {
   const quiz = await orm.Quizzes.first({ quizId });
   if (!quiz) {
     throw httpError(404, "Quiz not found");

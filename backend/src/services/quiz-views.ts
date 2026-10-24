@@ -4,7 +4,7 @@
 import { db } from "../prisma/db.ts";
 import { buildPassages } from "./course-views.ts";
 import type { Json, QuestionType } from "./questions.ts";
-import type { QuizRow, QuizView } from "./quizzes.ts";
+import type { QuizKind, QuizRow, QuizView } from "./quizzes.ts";
 
 const orm = db.orm.public;
 
@@ -24,7 +24,7 @@ export type QuestionRow = {
 type SkillTag = { skillId: number; skillCode: string; name: string; weight: number };
 
 // The Q-matrix row of each question: questionId -> [{ skillId, skillCode, name, weight }]
-const loadQuestionSkillTags = async (questionIds: number[]) => {
+export const loadQuestionSkillTags = async (questionIds: number[]) => {
   const tagsByQuestion = new Map<number, SkillTag[]>();
   if (questionIds.length === 0) return tagsByQuestion;
 
@@ -86,7 +86,7 @@ export const toQuestionForLearner = (row: QuestionRow) => ({
 });
 
 // The quiz's questions in quiz order
-const loadQuizQuestions = async (quizId: number) => {
+export const loadQuizQuestions = async (quizId: number) => {
   const links = await orm.QuizQuestions.where({ quizId })
     .orderBy((qq) => qq.orderIndex.asc())
     .all();
@@ -155,4 +155,40 @@ export const buildQuiz = async (quiz: QuizRow, view: QuizView) => {
     passages,
     questions: questions.map(toQuestionForLearner),
   };
+};
+
+// The contract's QuizSummary
+export type QuizSummary = {
+  quizId: number;
+  kind: QuizKind;
+  title: string;
+  questionCount: number;
+  timeLimitSeconds: number | null;
+};
+
+// QuizSummary for a list of quizzes, with one query for all their question counts
+export const buildQuizSummaries = async (quizzes: QuizRow[]) => {
+  // Number of questions in each quiz: quizId -> count
+  const questionCounts = new Map<number, number>();
+  if (quizzes.length > 0) {
+    const quizIds = quizzes.map((quiz) => quiz.quizId);
+    const links = await orm.QuizQuestions.where((qq) => qq.quizId.in(quizIds))
+      .select("quizId")
+      .all();
+    for (const link of links) {
+      questionCounts.set(link.quizId, (questionCounts.get(link.quizId) ?? 0) + 1);
+    }
+  }
+
+  const summaries: QuizSummary[] = [];
+  for (const quiz of quizzes) {
+    summaries.push({
+      quizId: quiz.quizId,
+      kind: quiz.kind,
+      title: quiz.title,
+      questionCount: questionCounts.get(quiz.quizId) ?? 0,
+      timeLimitSeconds: quiz.timeLimitSeconds,
+    });
+  }
+  return summaries;
 };

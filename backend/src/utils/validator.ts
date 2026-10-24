@@ -123,6 +123,13 @@ const answerKey = Joi.alternatives().try(
   Joi.object().pattern(Joi.string(), answerText),
 );
 
+// A learner's answer (the contract's Answer): a string, or for matching an object of
+// item id -> choice id. Which one fits the question type is checked in services/grading.ts.
+const learnerAnswer = Joi.alternatives().try(
+  answerText,
+  Joi.object().pattern(Joi.string(), answerText),
+);
+
 const quizKind = Joi.string().valid("diagnostic", "lesson", "practice");
 const quizTitle = Joi.string().trim().min(3).max(255);
 const quizDescription = Joi.string().trim().max(5000).allow(null, "");
@@ -297,6 +304,26 @@ const schemas = {
       questionIds,
     })
     .min(1),
+
+  // ----- Attempts -----
+  // In the order the learner answered; skipped questions are left out
+  submitAttemptSchema: Joi.object().keys({
+    responses: Joi.array()
+      .items(
+        Joi.object().keys({
+          questionId: Joi.number().integer().positive().required(),
+          answer: learnerAnswer.required(),
+          responseTimeSeconds: Joi.number().min(0),
+        }),
+      )
+      .max(200)
+      .unique("questionId")
+      .required(),
+  }),
+
+  myAttemptsQuerySchema: Joi.object().keys({
+    quizId: Joi.number().integer().positive(),
+  }),
 
   // ----- Uploads -----
   uploadRequestSchema: Joi.object().keys({

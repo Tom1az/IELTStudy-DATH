@@ -119,8 +119,11 @@ type StatusChanges = {
 // The status is checked twice:
 // 1. on the row we already loaded, to answer with a clear 409;
 // 2. in the UPDATE's WHERE clause. If another request changed the status in between (say an
-//    admin approved the course while the owner withdrew it), the UPDATE matches no row and
-//    returns null, so this request gets a 409 instead of overwriting the other change.
+//    admin approved the course while the owner withdrew it), the UPDATE matches no row, so
+//    this request gets a 409 instead of overwriting the other change.
+// Step 2 must be ONE SQL statement, so it uses updateAndCount. The ORM's update() reads the
+// matching row first and then updates it by id alone, which lets two parallel changes both
+// pass the check (backend/CLAUDE.md, Prisma notes).
 export const changeCourseStatus = async (
   course: CourseRow,
   from: CourseStatus[],
@@ -131,12 +134,14 @@ export const changeCourseStatus = async (
     throw httpError(409, conflictMessage);
   }
 
-  const updated = await Courses.where((c) =>
+  const updatedCount = await Courses.where((c) =>
     and(c.courseId.eq(course.courseId), c.status.in(from)),
-  ).update(changes);
+  ).updateAndCount(changes);
 
-  if (!updated) {
+  if (updatedCount === 0) {
     throw httpError(409, conflictMessage);
   }
-  return updated;
+  // We updated this row a moment ago, so it exists
+  const updated = await Courses.first({ courseId: course.courseId });
+  return updated!;
 };

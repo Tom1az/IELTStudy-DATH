@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IELTStudy API
-  version: 0.2.4
+  version: 0.2.5
   description: |
     REST API for IELTStudy, an adaptive IELTS learning platform (see `specs.md`).
     Contract-first: add or change an endpoint here in the same change as its code.
@@ -1020,9 +1020,13 @@ paths:
       operationId: startAttempt
       summary: Start (or resume) a quiz attempt
       description: |
-        Roles: learner, with access to the quiz.
-        If I already have an unfinished attempt on this quiz, it is returned (200) instead of starting a new one (201).
-        Starting the diagnostic again after finishing it returns 409.
+        Roles: learner, with access to the quiz (the same rule as its lesson: enrolled in an approved course).
+        Any learner may take the diagnostic. Instructors and admins get 403.
+        - If I already have an unfinished attempt on this quiz, it is returned (200) instead of starting a new one (201).
+          Two starts at the same moment get the same attempt.
+        - `quiz` is the learner view: no answers.
+        - 403 if I'm not enrolled in the quiz's course; 404 if the quiz doesn't exist or its course isn't visible.
+        - 409 if I already completed the diagnostic, or the quiz has no questions.
       responses:
         "200":
           description: Resumed my unfinished attempt
@@ -1047,7 +1051,7 @@ paths:
       operationId: getAttempt
       summary: Review an attempt
       description: |
-        Roles: the learner who made it, admin.
+        Roles: the learner who made it, admin. Another learner, or an instructor, gets 403.
         After submitting, this is the full graded result for the post-quiz review screen.
         Before submitting, `responses` is empty and no answers are revealed.
       responses:
@@ -1076,6 +1080,9 @@ paths:
         Roles: the learner who started the attempt.
         - Send all answers at once. The array order is the order I answered in (`attemptOrder`).
         - Each `questionId` must belong to the quiz and appear at most once (400 otherwise). Questions I skip count as wrong.
+        - Each answer must fit its question type: a string, or for `matching` an object of item id → choice id (400 otherwise).
+        - Grading: option ids and `true`/`false`/`not_given` must match exactly; gap-fill answers match any accepted answer,
+          ignoring case and extra spaces; `matching` is all or nothing (every item right, and no extra items).
         - The server grades the answers; the client never sends `isCorrect`. Grading, logging and (Phase 3) the mastery update happen in one transaction.
         - Submitting twice returns 409.
 
@@ -1107,7 +1114,7 @@ paths:
       tags: [Attempts]
       operationId: listMyAttempts
       summary: My attempt history
-      description: "Roles: learner. Newest first."
+      description: "Roles: learner. Newest first. With `quizId`, only that quiz's attempts (an empty list if there are none)."
       parameters:
         - name: quizId
           in: query

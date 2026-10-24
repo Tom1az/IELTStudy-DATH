@@ -555,6 +555,120 @@ Details settled while implementing:
 - **Diagnostic through `GET /quizzes/{id}`:** anyone who isn't an author gets its learner view. There is no lesson to check.
 
 Left open:
-- **Edit while a learner answers.** The "no responses yet" check and the edit are separate statements. A question edited at the same moment as its very first answer could slip through. The Attempts task writes responses, and can close this gap by locking the rows if it matters.
+- **Edit while a learner answers.** The "no responses yet" check and the edit are separate statements. A question edited at the same moment as its very first answer could slip through. The Attempts task writes responses, and can close this gap by locking the rows if it matters. **Reviewed** in the Attempts task: accepted, not locked (see that task's Outcome).
 - **Questions on passages from other lessons.** A quiz may use a question whose passage belongs to a different lesson. The contract doesn't forbid it, and the quiz view lists that passage too.
 - **Creating a question is not locked.** An instructor can add a question to their passage in an approved course. Learners don't see it until a quiz uses it, and changing a quiz still needs a `draft` or `rejected` course.
+
+## Task: Attempts: start, submit, score, log responses
+
+Approved: 2026-10-24 (effort `high`).
+
+Effort: `high` (the effort table names "attempt submission + scoring in a transaction" as `high`).
+Branch: `feat/phase-2-attempts`, created from `fecbb1b` (the Questions and quizzes commit, made first with the owner's OK).
+
+### Context
+
+This is the next unticked task in `docs/ROADMAP.md`. It builds the contract's **Attempts** section (`openapi.yaml` v0.2.4):
+- `POST /quizzes/{quizId}/attempts`: start, or resume the open attempt (201 / 200);
+- `POST /attempts/{attemptId}/submit`: grade, log `question_responses` and close the attempt, in one transaction;
+- `GET /attempts/{attemptId}`: the `AttemptResult` for the review screen;
+- `GET /me/attempts`: my history, newest first, with an optional `?quizId=`.
+
+This is the pipeline Phase 3 learns from (spec: "Quiz Logs → Recommendation Engine"). `masteryChanges` and `recommendations` stay `[]`, as the contract says, until Phase 3 adds BKT inside the same submit transaction.
+
+No schema change, and no new dependency.
+
+### Rules
+
+**Start** (learners only; 403 for other roles)
+- Quiz access follows the quiz's learner view: `findVisibleQuiz` (404, now exported) and `assertCanStudy` (403 if not enrolled). The diagnostic has no course, so any learner may start it.
+- If I have already completed the diagnostic: 409 ("One completed diagnostic per learner", ERD).
+- If I have an open attempt on this quiz, it is returned (200). Otherwise a new one is created (201) with `maxScore` = the quiz's question count.
+- Two starts at the same moment: the partial unique index `quiz_attempts_one_open` rejects the second insert. `isUniqueViolation` catches it, and that request returns the open attempt (200).
+- A quiz with no questions gives 409.
+- The response is `{ attempt, quiz }`, with `quiz` from `buildQuiz(quiz, "learner")`.
+
+**Submit** (the learner who started it)
+- 404 for a missing attempt, 403 if it isn't mine, 409 if it is already submitted.
+- Body: `responses`, at most 200 of `{ questionId, answer, responseTimeSeconds? }`, with unique `questionId`s. `answer` is a string (≤ 500 characters) or an object of strings.
+- Each `questionId` must be in the quiz (400).
+- **The answer shape must fit the question type (400)**, for example an object for a multiple-choice question. An unknown option id is simply graded wrong.
+- **Grading** (`services/grading.ts`):
+  - option ids and `true`/`false`/`not_given` must match exactly;
+  - gap fill accepts any listed answer, ignoring case and extra spaces;
+  - matching is all or nothing.
+- Skipped questions get no row and count as wrong. `attemptOrder` is the position in the array, starting at 1.
+- **One transaction:** close the attempt with a conditional update (`completed_at IS NULL`, 409 if nothing was updated), then insert the responses. `maxScore` is recounted at submit, so the CHECK `total_score <= max_score` holds even if a question was removed while the attempt was open.
+
+**Get** (the learner who made it, or an admin; 403 for others)
+- Completed: every quiz question in quiz order, with `userAnswer`, `isCorrect`, `correctAnswer`, `explanation`, `attemptOrder`, `responseTimeSeconds` and `skills`. A skipped question has `userAnswer: null`, `isCorrect: false` and `attemptOrder: null`.
+- Open: `responses: []` and `scorePercent: null`.
+- `scorePercent` = `totalScore / maxScore × 100`, rounded to 1 decimal.
+
+**My attempts** (learners only): newest first, each with its `QuizSummary`. Quizzes and question counts are loaded once per list. With an unknown `quizId` the list is `[]`.
+
+**Not built** (neither the spec nor the contract asks for them):
+- `timeLimitSeconds` is not enforced;
+- access isn't re-checked at submit;
+- quiz results don't change lesson progress (module gating is Phase 3).
+
+### Files
+
+New:
+- `src/services/grading.ts`, `src/services/attempts.ts`, `src/services/attempt-views.ts`;
+- `src/controllers/attempts.ts`, `src/routes/attempts.ts`;
+- tests: `src/services/grading.test.ts` and `src/routes/attempts.test.ts`.
+
+Changed:
+- `src/routes/quizzes.ts` (start), `src/routes/me.ts` (`/me/attempts`), `src/app.ts` (mount);
+- `src/services/quizzes.ts` (export `findVisibleQuiz`);
+- `src/services/quiz-views.ts` (export the question loaders, add `buildQuizSummaries`);
+- `src/utils/validator.ts` (`submitAttemptSchema`, `myAttemptsQuerySchema`);
+- `src/test/db.ts`;
+- `src/docs/openapi.yaml`, bumped to v0.2.5;
+- docs.
+
+### Tests (main cases)
+
+- **Grading (unit):** each type right and wrong; gap-fill normalisation; matching with a missing, a wrong or an extra item; shape mismatches.
+- **Start:** start then resume; the learner view has no answers; 403 for an instructor and for a learner who isn't enrolled; 404 on a draft course; 409 for a second diagnostic; a new attempt after a submitted one; two parallel starts give one attempt.
+- **Submit:** grading and logging; skips; `attemptOrder`; 400 cases; 403; 409 on a second submit; two parallel submits write the responses once; an answered diagnostic question is locked.
+- **Get and list:** the open attempt reveals nothing; the review matches the submit result; admin access; 403 cases; order and filter.
+
+### Verification
+
+- `npm run typecheck && npm run lint && npm test`, and Redocly lint.
+- A manual `fetch` run against the test database.
+- Swagger UI renders v0.2.5.
+
+### Outcome
+
+Done 2026-10-24.
+- **Checks:** typecheck and lint are clean, and 164 tests pass across 15 files (28 new: 8 grading unit tests, 20 attempt route tests). The two race tests passed 5 runs in a row. Redocly lint is valid, with only the known `license` warning. Swagger UI serves contract v0.2.5.
+- **Manual run:** a script in the scratchpad ran the real server against the test database (wiped before and after) and drove it with `fetch`. Every step returned the expected status:
+  1. Starting before enrolling gives 403. After enrolling, the start gives 201, and the questions have only `questionId, passageId, questionType, questionText, options`. A second start gives 200 with the same attempt.
+  2. The review before submitting has no responses and a null score.
+  3. Submitting with one skip (gap fill `"  COLOR "` right, MC wrong) scores 1/3 = 33.3%. The skip is listed with `userAnswer: null`, and `attemptOrder` follows the submitted order. A second submit gives 409. An admin can read the review.
+  4. The diagnostic: start 201, submit 100%, start again 409. `GET /diagnostic` then returns its `completedAttemptId`.
+  5. `/me/attempts` lists both attempts, newest first. 3 `question_responses` rows were written.
+
+To read it: `src/services/grading.ts` (how answers are graded), then `submitAttempt` and `startOrResumeAttempt` in `src/services/attempts.ts` (the transaction and the races), `src/services/attempt-views.ts` (response shapes), and `src/controllers/attempts.ts`.
+
+Deviation from the plan:
+- **The conditional update uses `updateAndCount`, not `update()`.** The parallel-submit test failed at first: one 200 and one 500 (a duplicate `question_responses` key) instead of 200 and 409. In this Prisma 8 build, `.where(...).update()` SELECTs the matching row and then updates it by primary key alone, so "only if still open" isn't checked atomically. `updateAndCount` sends one `UPDATE ... WHERE attempt_id = ? AND completed_at IS NULL`. The second submit waits for the first, updates 0 rows and gets 409. The attempt row is reloaded afterwards in the same transaction. `backend/CLAUDE.md` now documents this.
+
+Details settled while implementing:
+- **Duplicate question ids** in a submit are rejected by Joi (`unique("questionId")`), with the usual `details`.
+- **Answers are trimmed** by Joi, like other text input, so `"  COLOR "` is stored as `"COLOR"`.
+- **`isCorrect` in the body** is rejected (400): Joi doesn't allow unknown keys.
+- **Helpers:** `createTestQuestion` takes an optional `questionType`, `options` and `answerKey`. `isPlainObject` in `services/questions.ts` is exported and reused by grading.
+
+Left open:
+- **Edit while a learner answers** (from the previous task): a question in an open attempt can still be edited until the first response is written. Lesson quizzes can't hit this, because learners only take quizzes in approved courses, which are locked. For the diagnostic, it would need an admin editing during an open attempt. Accepted without row locks.
+- **`timeLimitSeconds` isn't enforced** by the server. The frontend timer is expected to submit when time runs out.
+
+Follow-up (2026-10-24, approved by the owner): **`changeCourseStatus` had the same race.** It used `.where(...).update()`, so two status changes at the same moment could both succeed, for example an admin approving while the owner withdraws.
+- The existing HTTP race test in `routes/courses.test.ts` passed only because the two requests rarely overlap closely enough.
+- The new `src/services/courses.test.ts` calls the service directly, 10 rounds of approve and reject in parallel. It failed on the old code (both won) and passes with the fix.
+- The fix is the same `updateAndCount` pattern, plus a reload of the row.
+- Every other `update()` in the code filters by primary key only, so none of them has this race.

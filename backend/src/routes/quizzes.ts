@@ -2,6 +2,7 @@ import express from "express";
 import { authenticate, authorize } from "../middlewares/auth.ts";
 import { validateBody, validateParams, schemas } from "../utils/validator.ts";
 
+import attemptsController from "../controllers/attempts.ts";
 import quizzesController from "../controllers/quizzes.ts";
 
 const router = express.Router();
@@ -29,5 +30,8 @@ router
     quizzesController.updateQuiz,
   )
   .delete(authorize("instructor", "admin"), quizId, quizzesController.deleteQuiz);
+
+// Only learners take quizzes
+router.post("/:quizId/attempts", authorize("learner"), quizId, attemptsController.startAttempt);
 
 export default router;

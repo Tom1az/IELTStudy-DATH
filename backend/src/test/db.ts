@@ -4,6 +4,7 @@ import { db } from "../prisma/db.ts";
 import { varchar } from "../utils/db-types.ts";
 import { signToken } from "../utils/jwt.ts";
 import type { CourseLevel, CourseStatus } from "../services/courses.ts";
+import type { Json, QuestionType } from "../services/questions.ts";
 import type { UserRole } from "../utils/public-user.ts";
 
 type SkillCategory = "listening" | "reading" | "writing" | "speaking";
@@ -161,20 +162,24 @@ export const createAnsweredQuiz = async (options: {
   return { quiz, question, attempt };
 };
 
-// Inserts a true/false/not given question tagged with the given skills. Their weights are split
-// evenly, so they add up to 1 as the Q-matrix requires.
+// Inserts a question tagged with the given skills. Their weights are split evenly, so they add
+// up to 1 as the Q-matrix requires. By default it is a true/false/not given question whose
+// answer is "true"; pass `questionType`, `options` and `answerKey` together for another type.
 export const createTestQuestion = async (options: {
   createdById: number;
   passageId?: number;
   skillIds?: number[];
+  questionType?: QuestionType;
+  options?: Json;
+  answerKey?: Json;
 }) => {
   const question = await db.orm.public.Questions.create({
     passageId: options.passageId ?? null,
     createdById: options.createdById,
-    questionType: "true_false_not_given",
+    questionType: options.questionType ?? "true_false_not_given",
     questionText: "The library opens at nine.",
-    options: null,
-    answerKey: "true",
+    options: options.options ?? null,
+    answerKey: options.answerKey ?? "true",
     explanation: "The notice says 9 am.",
     difficulty: 3,
   });

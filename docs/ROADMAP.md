@@ -58,7 +58,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 - [x] Courses, lessons and media: instructor CRUD, submit for review, admin approve/reject with feedback, learner enroll, lesson progress, passages (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [x] Uploads via Supabase Storage signed URLs (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [x] Questions and quizzes with skill tagging (plan and outcome in `docs/plans/phase-2-core-apis.md`)
-- [ ] Attempts: start, submit, score, log responses
+- [x] Attempts: start, submit, score, log responses (plan and outcome in `docs/plans/phase-2-core-apis.md`)
 - [ ] Admin: roles and usage stats
 
 ## Phase 3 — BKT and recommender

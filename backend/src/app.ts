@@ -5,6 +5,7 @@ import swaggerUi from "swagger-ui-express";
 import YAML from "yaml";
 
 import adminRoute from "./routes/admin.ts";
+import attemptsRoute from "./routes/attempts.ts";
 import authRoute from "./routes/auth.ts";
 import coursesRoute from "./routes/courses.ts";
 import diagnosticRoute from "./routes/diagnostic.ts";
@@ -43,6 +44,7 @@ app.use("/api/v1/uploads", uploadsRoute);
 app.use("/api/v1/questions", questionsRoute);
 app.use("/api/v1/quizzes", quizzesRoute);
 app.use("/api/v1/diagnostic", diagnosticRoute);
+app.use("/api/v1/attempts", attemptsRoute);
 app.use("/api/v1/instructor", instructorRoute);
 app.use("/api/v1/admin", adminRoute);
 

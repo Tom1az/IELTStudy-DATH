@@ -33,7 +33,7 @@ const isChoiceList = (options: Json): options is ChoiceOption[] => {
   return Array.isArray(options);
 };
 
-const isPlainObject = (value: Json): value is { [key: string]: Json } => {
+export const isPlainObject = (value: Json): value is { [key: string]: Json } => {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 };
 
