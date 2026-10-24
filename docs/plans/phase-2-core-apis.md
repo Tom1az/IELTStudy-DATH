@@ -215,3 +215,46 @@ Done 2026-10-24. The owner approved `backend/src/docs/openapi.yaml` v0.2.0 (comm
 - The review found one blocking gap, locked content. It was fixed before approval (see "Review before the Gate" in the previous task's Outcome).
 - `docs/ERD.md`: the course status transitions and content edit rights are no longer marked "proposed" and now match the contract. Locked content is listed with the other rules the app enforces.
 - Open points: remedial-lesson access goes to the Phase 3 Gate. Practice quizzes without a lesson, and skipped questions, are settled during implementation (see "Left open" in the previous task's Outcome).
+
+## Task: Auth: register, login, JWT, `authenticate`, `authorize(...roles)`
+
+Approved: 2026-10-24 (effort `high`).
+
+### Context
+
+Auth is the first implementation task after the contract Gate, because every other Phase 2 route depends on `authenticate` and `authorize`. Until now the only API was the Phase 0 `/users` CRUD, which was open to anyone. The contract marked it deprecated, to be removed when Auth lands.
+
+Decisions taken with the owner for this task:
+- **Tests use a separate test database** (`TEST_DATABASE_URL`), migrated once per run and wiped between tests. Every later Phase 2 suite follows this pattern.
+- **`GET /me` and `PATCH /me` ship in this task** (contract section "Auth and profile"). `/admin/users` stays in the "Admin" task.
+
+The contract already fixes the rest: HS256 JWT with `sub = userId`, 1 day, in the response body, no refresh token; the user is reloaded from the database on every request; the same 401 for an unknown email and a wrong password; 409 on a duplicate email; register always creates a learner; logging in to a deactivated account gives 403.
+
+No new dependencies (`bcrypt` and `jsonwebtoken` were already installed) and no schema change.
+
+### Plan
+
+1. **Helpers:** `utils/http-error.ts` (`httpError(status, message)`, the `HttpError` type moved out of `app.ts`), `utils/jwt.ts` (`signToken` / `verifyToken`, algorithm pinned to HS256, clear error if `JWT_SECRET` is missing), `utils/public-user.ts` (`toPublicUser`, exactly the contract's `User` fields).
+2. **Validation:** both validators return the contract's 400 shape `{ error: { message: "Validation failed", details } }` with `abortEarly: false`. New `registerSchema`, `loginSchema` and `profileUpdateSchema`. Emails are trimmed and lowercased. Passwords are limited to 72 bytes (bcrypt's limit), counted with `max(72, "utf8")`.
+3. **Middlewares** (`middlewares/auth.ts`): `authenticate` reads the Bearer token, reloads the user by primary key, and gives 401 for a missing, bad or expired token, a deleted user, or a deactivated user. `authorize(...roles)` gives 403 for a role that isn't listed, and 401 if `authenticate` didn't run. `req.user` becomes a `PublicUser`.
+4. **Routes:** `POST /auth/register`, `POST /auth/login` (ported from MiniMemoryZone `auth.js`, with the contract's changes), `GET /me` and `PATCH /me`. Remove `routes/user.ts` and `controllers/user.ts`.
+5. **Contract:** delete the deprecated `/users` paths, their tag and the `LegacyUser` / `LegacyValidationError` components. Note on `/me` that a deactivated account's token gets 401. Version `0.2.1`.
+6. **Test database:** `vitest.config.ts` (requires `TEST_DATABASE_URL`, refuses to run if it equals `DATABASE_URL`, runs files one at a time), `src/test/global-setup.ts` (`prisma db migrate`), `src/test/setup.ts` (closes the pool), `src/test/db.ts` (`resetDb`, `createTestUser`, `authHeader`).
+7. **Tests:** `routes/auth.test.ts`, `routes/me.test.ts`, `middlewares/auth.test.ts`, and an updated `app.test.ts`.
+8. **Docs:** `backend/CLAUDE.md` conventions, the root `CLAUDE.md` test command, two new rules in `docs/ERD.md`, `.env.example`.
+
+### Outcome
+
+Done 2026-10-24. Typecheck, lint and 38 tests pass (4 files, against a real Postgres test database). Redocly lint is valid, with only the known `license` warning; the deprecated-endpoint warning is gone. Manual run with `curl` against the test database: register → `GET /me` → `PATCH /me { targetBand: 7 }` → login (wrong password 401, right password 200); `GET /api/v1/users` now returns 404; Swagger UI still renders.
+
+To read it: `src/middlewares/auth.ts`, then `src/controllers/auth.ts`, `src/controllers/me.ts`, `src/utils/jwt.ts`, and `src/test/db.ts` for the test pattern.
+
+Deviations from the plan, and details settled while implementing:
+- **Duplicate email race.** Prisma 8 throws a `SqlQueryError` with `sqlState: "23505"` when the `UNIQUE` index rejects an insert (checked with a throwaway probe). `register` maps it to the same 409, and a test sends two sign-ups at once and expects one 201 and one 409.
+- **Login timing.** For an unknown email, login still runs one `bcrypt.compare` against a fixed dummy hash, so response time doesn't reveal which emails have accounts. This applies the contract's "same answer" rule to timing as well.
+- **Deactivated token → 401** with the message "This account is deactivated" (login gives 403). `/me` only lists 401 in the contract, and the token has stopped working, so 401 fits. Recorded in the `/me` description.
+- **Role-change test** is in `middlewares/auth.test.ts` (a learner promoted to admin passes `authorize("admin")` on the very next request with the old token), not in `me.test.ts`. That's where the behaviour lives.
+- **Migration output** from the test global setup is captured and printed only on failure. vitest 5 crashes while printing a global-setup error (`code.charCodeAt is not a function`), so the setup also logs a plain message.
+
+Left open:
+- None for this task. `authorize` has no production caller yet; the Courses task is the first to use it.

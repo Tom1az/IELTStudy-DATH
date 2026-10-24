@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IELTStudy API
-  version: 0.2.0
+  version: 0.2.1
   description: |
     REST API for IELTStudy, an adaptive IELTS learning platform (see `specs.md`).
     Contract-first: add or change an endpoint here in the same change as its code.
@@ -53,8 +53,6 @@ tags:
     description: Taking a quiz, submitting answers and reviewing the result.
   - name: Dashboard
     description: Learner progress, skill mastery and recommendations.
-  - name: Users (deprecated)
-    description: The Phase 0 user CRUD. It is removed when Auth is implemented; use Auth, Profile and Admin instead.
 
 paths:
   # ---------------------------------------------------------------------------
@@ -110,7 +108,9 @@ paths:
       tags: [Profile]
       operationId: getMe
       summary: Get my profile
-      description: "Roles: learner, instructor, admin."
+      description: |
+        Roles: learner, instructor, admin. Every protected endpoint reloads the user from the database,
+        so a deactivated account's token gets 401 at once, and a role change applies to the next request.
       responses:
         "200":
           description: The logged-in user
@@ -1201,109 +1201,6 @@ paths:
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
 
-  # ---------------------------------------------------------------------------
-  # Users (deprecated): the Phase 0 CRUD, removed when Auth is implemented
-  # ---------------------------------------------------------------------------
-  /users:
-    get:
-      tags: [Users (deprecated)]
-      operationId: legacyListUsers
-      summary: List users
-      deprecated: true
-      security: []
-      responses:
-        "200":
-          description: All users
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  users:
-                    type: array
-                    items: { $ref: "#/components/schemas/LegacyUser" }
-                  message: { type: string }
-    post:
-      tags: [Users (deprecated)]
-      operationId: legacyCreateUser
-      summary: Create a user
-      deprecated: true
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/RegisterInput" }
-      responses:
-        "201":
-          description: User created
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user: { $ref: "#/components/schemas/LegacyUser" }
-                  message: { type: string }
-        "400": { $ref: "#/components/responses/LegacyValidationError" }
-
-  /users/{userID}:
-    parameters:
-      - name: userID
-        in: path
-        required: true
-        schema: { type: integer, minimum: 1 }
-    get:
-      tags: [Users (deprecated)]
-      operationId: legacyGetUser
-      summary: Get a user
-      deprecated: true
-      security: []
-      responses:
-        "200":
-          description: The user
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  user: { $ref: "#/components/schemas/LegacyUser" }
-                  message: { type: string }
-        "400": { $ref: "#/components/responses/LegacyValidationError" }
-        "404": { $ref: "#/components/responses/Message" }
-    put:
-      tags: [Users (deprecated)]
-      operationId: legacyReplaceUser
-      summary: Replace a user
-      deprecated: true
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/RegisterInput" }
-      responses:
-        "200": { $ref: "#/components/responses/Message" }
-        "400": { $ref: "#/components/responses/LegacyValidationError" }
-    patch:
-      tags: [Users (deprecated)]
-      operationId: legacyUpdateUser
-      summary: Update a user's email or name
-      deprecated: true
-      security: []
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              minProperties: 1
-              properties:
-                email: { type: string, format: email }
-                fullName: { type: string, minLength: 3, maxLength: 30 }
-      responses:
-        "200": { $ref: "#/components/responses/Message" }
-        "400": { $ref: "#/components/responses/LegacyValidationError" }
-
 components:
   securitySchemes:
     bearerAuth:
@@ -1396,16 +1293,6 @@ components:
           schema: { $ref: "#/components/schemas/Error" }
           example:
             error: { message: Only draft or rejected courses can be edited }
-    LegacyValidationError:
-      description: The input failed validation (Phase 0 shape)
-      content:
-        application/json:
-          schema:
-            type: object
-            properties:
-              error:
-                type: array
-                items: { type: string }
 
   schemas:
     # ----- Shared -----
@@ -1545,13 +1432,6 @@ components:
         isActive: { type: boolean }
       example:
         role: instructor
-    LegacyUser:
-      type: object
-      properties:
-        userId: { type: integer }
-        email: { type: string, format: email }
-        fullName: { type: string }
-        createdAt: { type: string, format: date-time }
 
     # ----- Skills -----
     Skill:

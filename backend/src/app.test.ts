@@ -25,9 +25,17 @@ describe("app", () => {
     expect(res.body.error.message).toBe("Not Found");
   });
 
-  it("rejects a non-numeric user id before touching the DB", async () => {
-    const res = await request(app).get("/api/v1/users/abc");
+  it("returns validation errors in the contract's error shape", async () => {
+    const res = await request(app).post("/api/v1/auth/login").send({});
 
     expect(res.status).toBe(400);
+    expect(res.body.error.message).toBe("Validation failed");
+    expect(res.body.error.details).toEqual(['"email" is required', '"password" is required']);
+  });
+
+  it("no longer serves the old open /users routes", async () => {
+    const res = await request(app).get("/api/v1/users");
+
+    expect(res.status).toBe(404);
   });
 });

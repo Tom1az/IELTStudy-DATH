@@ -36,7 +36,7 @@ This is a 3rd-year CS integration school project, and the code is built mostly w
 npm run dev            # node --watch src/server.ts (Node >= 26.8.2: runs .ts natively and ships Temporal)
 npm run typecheck      # tsc --noEmit
 npm run lint
-npm test               # vitest + supertest
+npm test               # vitest + supertest, against the TEST_DATABASE_URL database (migrated and wiped by the tests)
 npm run contract:emit  # regenerate Prisma contract after editing schema.prisma
 ```
 

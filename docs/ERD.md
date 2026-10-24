@@ -261,6 +261,8 @@ Notes:
 - **Learners see approved courses only.**
 - **One completed diagnostic per learner** (cross-table, so app-level).
 - **`answer_key` stays server-side.** Never send it to learners before they submit.
+- **Emails are stored lowercase** (trimmed). Joi lowercases them on register and login, so the `UNIQUE` index on `email` also rejects the same address in other letter case.
+- **`hashed_pass` never leaves the API.** Responses build users with `toPublicUser` (`utils/public-user.ts`). bcrypt only reads the first 72 bytes, so passwords are limited to 72 bytes.
 
 ## JSONB shapes
 

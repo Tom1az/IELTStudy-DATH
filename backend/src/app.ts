@@ -4,7 +4,10 @@ import logger from "morgan";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yaml";
 
-import userRoute from "./routes/user.ts";
+import authRoute from "./routes/auth.ts";
+import meRoute from "./routes/me.ts";
+import { httpError } from "./utils/http-error.ts";
+import type { HttpError } from "./utils/http-error.ts";
 
 const app = express();
 
@@ -20,7 +23,8 @@ app.use(express.json());
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiDoc));
 
 // Routes
-app.use("/api/v1/users", userRoute);
+app.use("/api/v1/auth", authRoute);
+app.use("/api/v1/me", meRoute);
 
 app.get("/", (req, res) => {
   return res.status(200).json({
@@ -30,9 +34,7 @@ app.get("/", (req, res) => {
 
 // Catch 404 and forward to error handler
 app.use((req, res, next) => {
-  const error: HttpError = new Error("Not Found");
-  error.status = 404;
-  next(error);
+  next(httpError(404, "Not Found"));
 });
 
 // Error handler function
@@ -48,7 +50,5 @@ app.use((err: HttpError, req: Request, res: Response, _next: NextFunction) => {
     },
   });
 });
-
-type HttpError = Error & { status?: number };
 
 export default app;

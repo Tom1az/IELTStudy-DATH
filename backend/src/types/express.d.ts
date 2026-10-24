@@ -1,4 +1,5 @@
 import "express";
+import type { PublicUser } from "../utils/public-user.ts";
 
 declare global {
   namespace Express {
@@ -11,11 +12,8 @@ declare global {
         params?: Record<string, any>;
       };
       /* eslint-enable @typescript-eslint/no-explicit-any */
-      // Authenticated user, set by the auth middleware (Phase 2)
-      user?: {
-        id: number;
-        role: "learner" | "instructor" | "admin";
-      };
+      // The logged-in user, freshly loaded from the database by `authenticate` (middlewares/auth.ts)
+      user?: PublicUser;
     }
   }
 }
