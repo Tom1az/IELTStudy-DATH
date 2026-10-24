@@ -2,7 +2,15 @@ import request from "supertest";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import app from "../app.ts";
-import { authHeader, createTestUser, resetDb } from "../test/db.ts";
+import { db } from "../prisma/db.ts";
+import {
+  authHeader,
+  createTestCourse,
+  createTestLesson,
+  createTestUser,
+  enrollTestUser,
+  resetDb,
+} from "../test/db.ts";
 
 beforeEach(async () => {
   await resetDb();
@@ -74,5 +82,46 @@ describe("PATCH /api/v1/me", () => {
       .send(body);
 
     expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /api/v1/me/enrollments", () => {
+  it("reports completed core lessons as a percentage", async () => {
+    const { user: instructor } = await createTestUser({ role: "instructor" });
+    const { user: learner } = await createTestUser();
+    const course = await createTestCourse({ instructorId: instructor.userId, status: "approved" });
+    const done = await createTestLesson({ courseId: course.courseId, orderIndex: 0 });
+    await createTestLesson({ courseId: course.courseId, orderIndex: 1 });
+    await enrollTestUser(learner.userId, course.courseId);
+    await db.orm.public.LessonProgress.create({
+      userId: learner.userId,
+      lessonId: done.lessonId,
+      status: "completed",
+      completedAt: Temporal.Now.instant(),
+    });
+
+    const res = await request(app)
+      .get("/api/v1/me/enrollments")
+      .set("Authorization", authHeader(learner.userId));
+
+    expect(res.status).toBe(200);
+    expect(res.body.enrollments).toHaveLength(1);
+    expect(res.body.enrollments[0]).toMatchObject({
+      course: { courseId: course.courseId, isEnrolled: true },
+      completedLessons: 1,
+      totalCoreLessons: 2,
+      progressPercent: 50,
+      completedAt: null,
+    });
+  });
+
+  it("returns 403 to instructors", async () => {
+    const { user } = await createTestUser({ role: "instructor" });
+
+    const res = await request(app)
+      .get("/api/v1/me/enrollments")
+      .set("Authorization", authHeader(user.userId));
+
+    expect(res.status).toBe(403);
   });
 });

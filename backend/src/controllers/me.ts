@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import type { Varchar } from "@prisma/orm-postgres/target/codec-types";
 import { db } from "../prisma/db.ts";
+import { buildEnrollments } from "../services/course-views.ts";
 import { varchar } from "../utils/db-types.ts";
 import { httpError } from "../utils/http-error.ts";
 import { toPublicUser } from "../utils/public-user.ts";
@@ -36,7 +37,20 @@ const updateMe = async (req: Request, res: Response) => {
   });
 };
 
+// My enrolments, oldest first, each with how many core lessons I have completed
+const listMyEnrollments = async (req: Request, res: Response) => {
+  const rows = await db.orm.public.Enrollments.where({ userId: req.user!.userId })
+    .orderBy([(e) => e.enrolledAt.asc(), (e) => e.courseId.asc()])
+    .all();
+
+  return res.status(200).json({
+    enrollments: await buildEnrollments(rows, req.user!),
+    message: "Your enrolments",
+  });
+};
+
 export default {
   getMe,
   updateMe,
+  listMyEnrollments,
 };

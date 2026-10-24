@@ -4,8 +4,14 @@ import logger from "morgan";
 import swaggerUi from "swagger-ui-express";
 import YAML from "yaml";
 
+import adminRoute from "./routes/admin.ts";
 import authRoute from "./routes/auth.ts";
+import coursesRoute from "./routes/courses.ts";
+import instructorRoute from "./routes/instructor.ts";
+import lessonsRoute from "./routes/lessons.ts";
 import meRoute from "./routes/me.ts";
+import passagesRoute from "./routes/passages.ts";
+import skillsRoute from "./routes/skills.ts";
 import { httpError } from "./utils/http-error.ts";
 import type { HttpError } from "./utils/http-error.ts";
 
@@ -25,6 +31,12 @@ app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiDoc));
 // Routes
 app.use("/api/v1/auth", authRoute);
 app.use("/api/v1/me", meRoute);
+app.use("/api/v1/skills", skillsRoute);
+app.use("/api/v1/courses", coursesRoute);
+app.use("/api/v1/lessons", lessonsRoute);
+app.use("/api/v1/passages", passagesRoute);
+app.use("/api/v1/instructor", instructorRoute);
+app.use("/api/v1/admin", adminRoute);
 
 app.get("/", (req, res) => {
   return res.status(200).json({

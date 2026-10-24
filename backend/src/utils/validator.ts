@@ -14,12 +14,28 @@ const sendValidationError = (res: Response, error: Joi.ValidationError) => {
 
 const validateBody = (schema: Joi.ObjectSchema) => {
   return (req: Request, res: Response, next: NextFunction) => {
-    const { error, value } = schema.validate(req.body, { abortEarly: false });
+    // Express 5 leaves req.body undefined when the request has no body (e.g. an approve without
+    // feedback). Validating {} instead still rejects missing required fields.
+    const { error, value } = schema.validate(req.body ?? {}, { abortEarly: false });
 
     if (error) return sendValidationError(res, error);
 
     req.value ??= {};
     req.value.body = value;
+    next();
+  };
+};
+
+// Query strings like `?status=pending_review`. Express 5 makes `req.query` read-only, so the
+// validated copy goes in `req.value.query`.
+const validateQuery = (schema: Joi.ObjectSchema) => {
+  return (req: Request, res: Response, next: NextFunction) => {
+    const { error, value } = schema.validate(req.query, { abortEarly: false });
+
+    if (error) return sendValidationError(res, error);
+
+    req.value ??= {};
+    req.value.query = value;
     next();
   };
 };
@@ -42,6 +58,41 @@ const email = Joi.string().trim().lowercase().email();
 const fullName = Joi.string().trim().min(3).max(30);
 // IELTS bands go from 0 to 9 in steps of 0.5. null clears the target.
 const targetBand = Joi.number().min(0).max(9).multiple(0.5).allow(null);
+
+// Enum values, the same as schema.prisma
+const courseLevel = Joi.string().valid("beginner", "intermediate", "advanced");
+const courseStatus = Joi.string().valid(
+  "draft",
+  "pending_review",
+  "approved",
+  "rejected",
+  "archived",
+);
+const lessonKind = Joi.string().valid("core", "remedial");
+const mediaType = Joi.string().valid("reading_text", "listening_audio", "video");
+const skillCategory = Joi.string().valid("listening", "reading", "writing", "speaking");
+
+const courseTitle = Joi.string().trim().min(3).max(255);
+const courseDescription = Joi.string().trim().max(5000).allow(null, "");
+const feedback = Joi.string().trim().max(5000);
+
+const lessonTitle = Joi.string().trim().min(3).max(255);
+const lessonContent = Joi.string().max(50000).allow(null, "");
+const orderIndex = Joi.number().integer().min(0);
+// A lesson's skill tags: at least one, and no skill twice
+const lessonSkills = Joi.array()
+  .items(
+    Joi.object().keys({
+      skillId: Joi.number().integer().positive().required(),
+      weight: Joi.number().greater(0).max(1).required(),
+    }),
+  )
+  .min(1)
+  .unique("skillId");
+
+const passageTitle = Joi.string().trim().max(255).allow(null, "");
+const passageContent = Joi.string().max(50000).allow(null);
+const mediaPath = Joi.string().trim().max(1024).allow(null);
 
 const schemas = {
   idSchema: Joi.object().keys({
@@ -67,6 +118,87 @@ const schemas = {
       targetBand,
     })
     .min(1),
+
+  // ----- Courses -----
+  courseInputSchema: Joi.object().keys({
+    title: courseTitle.required(),
+    description: courseDescription,
+    targetLevel: courseLevel.required(),
+  }),
+
+  courseUpdateSchema: Joi.object()
+    .keys({
+      title: courseTitle,
+      description: courseDescription,
+      targetLevel: courseLevel,
+    })
+    .min(1),
+
+  approveInputSchema: Joi.object().keys({
+    feedback: feedback.allow(""),
+  }),
+
+  rejectInputSchema: Joi.object().keys({
+    feedback: feedback.min(1).required(),
+  }),
+
+  catalogQuerySchema: Joi.object().keys({
+    level: courseLevel,
+  }),
+
+  courseStatusQuerySchema: Joi.object().keys({
+    status: courseStatus,
+  }),
+
+  // ----- Lessons -----
+  lessonInputSchema: Joi.object().keys({
+    title: lessonTitle.required(),
+    content: lessonContent,
+    kind: lessonKind.required(),
+    orderIndex: orderIndex.required(),
+    skills: lessonSkills.required(),
+  }),
+
+  lessonUpdateSchema: Joi.object()
+    .keys({
+      title: lessonTitle,
+      content: lessonContent,
+      kind: lessonKind,
+      orderIndex,
+      skills: lessonSkills,
+    })
+    .min(1),
+
+  progressInputSchema: Joi.object().keys({
+    status: Joi.string().valid("in_progress", "completed").required(),
+  }),
+
+  // ----- Passages -----
+  // The "reading text needs content, audio and video need mediaPath" rule is checked in
+  // controllers/passages.ts, because PATCH has to check it on the merged row.
+  passageInputSchema: Joi.object().keys({
+    lessonId: Joi.number().integer().positive().allow(null),
+    type: mediaType.required(),
+    title: passageTitle,
+    content: passageContent,
+    mediaPath,
+    orderIndex: orderIndex.default(0),
+  }),
+
+  passageUpdateSchema: Joi.object()
+    .keys({
+      type: mediaType,
+      title: passageTitle,
+      content: passageContent,
+      mediaPath,
+      orderIndex,
+    })
+    .min(1),
+
+  // ----- Skills -----
+  skillQuerySchema: Joi.object().keys({
+    category: skillCategory,
+  }),
 };
 
-export { validateBody, validateParams, schemas };
+export { validateBody, validateParams, validateQuery, schemas };

@@ -3,7 +3,10 @@ import bcrypt from "bcrypt";
 import { db } from "../prisma/db.ts";
 import { varchar } from "../utils/db-types.ts";
 import { signToken } from "../utils/jwt.ts";
+import type { CourseLevel, CourseStatus } from "../services/courses.ts";
 import type { UserRole } from "../utils/public-user.ts";
+
+type SkillCategory = "listening" | "reading" | "writing" | "speaking";
 
 // Empties every table and restarts the id counters, so each test starts from a blank
 // database. When a table is added to schema.prisma, add it here too.
@@ -45,3 +48,115 @@ export const createTestUser = async (
 
 // The `Authorization` header value for a user, as the frontend would send it
 export const authHeader = (userId: number) => `Bearer ${signToken(userId)}`;
+
+let skillCount = 0;
+
+// Inserts a skill with a unique code (e.g. TEST_SKILL_1)
+export const createTestSkill = async (options: { category?: SkillCategory } = {}) => {
+  skillCount += 1;
+  return db.orm.public.Skills.create({
+    skillCode: varchar<64>(`TEST_SKILL_${skillCount}`),
+    name: varchar<255>(`Test skill ${skillCount}`),
+    category: options.category ?? "reading",
+    description: null,
+  });
+};
+
+// Inserts a course straight into the database, in any status. A rejected course gets
+// feedback, because the database requires it.
+export const createTestCourse = async (options: {
+  instructorId: number;
+  status?: CourseStatus;
+  targetLevel?: CourseLevel;
+}) => {
+  const status = options.status ?? "draft";
+  return db.orm.public.Courses.create({
+    instructorId: options.instructorId,
+    title: varchar<255>("Test course"),
+    description: null,
+    targetLevel: options.targetLevel ?? "intermediate",
+    status,
+    reviewFeedback: status === "rejected" ? "Needs work" : null,
+  });
+};
+
+// Inserts a lesson, tagged with the given skills (weight 1 each)
+export const createTestLesson = async (options: {
+  courseId: number;
+  kind?: "core" | "remedial";
+  orderIndex?: number;
+  skillIds?: number[];
+}) => {
+  const lesson = await db.orm.public.Lessons.create({
+    courseId: options.courseId,
+    title: varchar<255>("Test lesson"),
+    content: "Lesson body",
+    kind: options.kind ?? "core",
+    orderIndex: options.orderIndex ?? 0,
+  });
+  for (const skillId of options.skillIds ?? []) {
+    await db.orm.public.LessonSkills.create({ lessonId: lesson.lessonId, skillId, weight: 1 });
+  }
+  return lesson;
+};
+
+export const enrollTestUser = async (userId: number, courseId: number) => {
+  return db.orm.public.Enrollments.create({ userId, courseId });
+};
+
+// Gives a lesson a quiz with one question that a learner has already answered, as if they had
+// submitted an attempt. Used to check that learner history blocks deletes.
+// With `passageId`, the question belongs to that passage.
+export const createAnsweredQuiz = async (options: {
+  lessonId: number;
+  createdById: number;
+  learnerId: number;
+  passageId?: number;
+}) => {
+  const orm = db.orm.public;
+  const quiz = await orm.Quizzes.create({
+    kind: "lesson",
+    lessonId: options.lessonId,
+    createdById: options.createdById,
+    title: varchar<255>("Test quiz"),
+    description: null,
+    timeLimitSeconds: null,
+  });
+  const question = await orm.Questions.create({
+    passageId: options.passageId ?? null,
+    createdById: options.createdById,
+    questionType: "true_false_not_given",
+    questionText: "The sky is green.",
+    options: null,
+    answerKey: "false",
+    explanation: null,
+    difficulty: 3,
+  });
+  await orm.QuizQuestions.create({
+    quizId: quiz.quizId,
+    questionId: question.questionId,
+    orderIndex: 0,
+  });
+  // Started first and completed afterwards, so completed_at is never before started_at
+  const attempt = await orm.QuizAttempts.create({
+    userId: options.learnerId,
+    quizId: quiz.quizId,
+    completedAt: null,
+    totalScore: null,
+    maxScore: 1,
+    masteryChanges: null,
+  });
+  await orm.QuizAttempts.where({ attemptId: attempt.attemptId }).update({
+    completedAt: Temporal.Now.instant(),
+    totalScore: 1,
+  });
+  await orm.QuestionResponses.create({
+    attemptId: attempt.attemptId,
+    questionId: question.questionId,
+    userAnswer: "false",
+    isCorrect: true,
+    attemptOrder: 1,
+    responseTimeSeconds: 5,
+  });
+  return { quiz, question, attempt };
+};

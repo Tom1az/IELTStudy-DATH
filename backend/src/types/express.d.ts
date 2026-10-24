@@ -10,6 +10,7 @@ declare global {
       value?: {
         body?: any;
         params?: Record<string, any>;
+        query?: any;
       };
       /* eslint-enable @typescript-eslint/no-explicit-any */
       // The logged-in user, freshly loaded from the database by `authenticate` (middlewares/auth.ts)

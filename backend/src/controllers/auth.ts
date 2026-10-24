@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
 import { db } from "../prisma/db.ts";
+import { isUniqueViolation } from "../utils/db-errors.ts";
 import { varchar } from "../utils/db-types.ts";
 import { httpError } from "../utils/http-error.ts";
 import { signToken } from "../utils/jwt.ts";
@@ -16,11 +17,6 @@ const Users = db.orm.public.Users;
 const DUMMY_HASH = "$2b$10$C6qsLH1Aax4M2kHvnWqZxuiGjvcM0lC3nl2RxFB5iHPlZvmGEpw1q";
 
 const DUPLICATE_EMAIL = "An account with this email already exists";
-
-// Postgres reports a broken UNIQUE constraint with SQLSTATE 23505
-const isUniqueViolation = (err: unknown) => {
-  return typeof err === "object" && err !== null && "sqlState" in err && err.sqlState === "23505";
-};
 
 const register = async (req: Request, res: Response) => {
   const { email, fullName, password } = req.value!.body;

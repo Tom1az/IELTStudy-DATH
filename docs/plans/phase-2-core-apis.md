@@ -258,3 +258,77 @@ Deviations from the plan, and details settled while implementing:
 
 Left open:
 - None for this task. `authorize` has no production caller yet; the Courses task is the first to use it.
+
+## Task: Courses, lessons and media
+
+Approved: 2026-10-24 (effort `high`).
+
+### Context
+
+Auth is done (`b1b891c`), so `authenticate` and `authorize` exist, but nothing called `authorize` yet. This task builds the first content APIs from the approved contract (v0.2.1):
+- instructor course CRUD and the review state machine;
+- lessons with skill tags;
+- passages;
+- learner enrolment and lesson progress.
+
+Decisions taken with the owner for this task:
+- **Passages ship now.** `mediaUrl` is `null` until the Uploads task adds Supabase signing (the contract allows `null`).
+- **Extra routes in scope:** `GET /admin/courses` (review queue), `GET /skills`, `PUT /lessons/{id}/progress`, `GET /me/enrollments`. No other roadmap task names them, and the flow needs them.
+- **Course delete rule:** only a `draft` that no learner has ever enrolled in (409 otherwise). The schema can't tell "was once approved" (`reviewedAt` is also set by a rejection), and enrolments are the learner history the rule protects. The contract wording changes to match.
+
+No schema change and no new dependency.
+
+### Plan
+
+1. **Roles** follow each endpoint's contract description and `docs/ERD.md`:
+   - only the course's instructor edits, submits, withdraws or deletes a course and its lessons;
+   - admins review (approve/reject), archive and edit passages.
+
+   The contract's "admins may always act on it" sentence is narrowed to match.
+2. **Shared rules** in `services/courses.ts`:
+   - `findVisibleCourse` / `findVisibleLesson` give 404 for missing *or* invisible courses;
+   - `assertCourseOwner` gives 403;
+   - `assertEditable` gives 409;
+   - `assertCanStudy` gives 403 to learners who aren't enrolled;
+   - `changeCourseStatus` checks the status on the loaded row (for a clear 409), then again in the `UPDATE ... WHERE status IN (...)`, so two conflicting transitions can't both win.
+3. **Endpoints (19):**
+   - Courses: catalog, my courses, all courses (admin), CRUD, submit, withdraw, approve, reject, archive, enrol.
+   - Lessons: list, create, get (`LessonDetail` with passages and quiz summaries), update (a skill-list replacement runs in a transaction), delete (409 with learner history), progress.
+   - Passages: CRUD with the payload rule checked before the database CHECK.
+   - `GET /skills` and `GET /me/enrollments`.
+4. **Response shapes** are built in batches (one `IN (...)` query per related table), because the Prisma contract only has to-one relations.
+5. `validateQuery` for `?level=`, `?status=`, `?category=`. `isUniqueViolation` moves to `utils/db-errors.ts` so that enrolment can reuse it.
+6. **Docs and tests:**
+   - Contract v0.2.2 (delete rule, `mediaUrl` note, admin roles sentence). `docs/ERD.md` and `backend/CLAUDE.md` updated.
+   - Supertest suites for courses, lessons, passages, skills and `/me/enrollments`, with new helpers in `src/test/db.ts`.
+
+### Outcome
+
+Done 2026-10-24.
+- **Checks:** typecheck and lint are clean, and 81 tests pass across 8 files (43 new). Redocly lint is valid, with only the known `license` warning.
+- **Manual run** against the test database, scripted with `fetch`:
+  - create → submit without a lesson (409) → add lesson and passage → submit → admin queue → reject → edit → resubmit → approve → edit while approved (409);
+  - learner: catalog → open lesson while not enrolled (403) → enrol (201, then 200) → open lesson → complete it → `/me/enrollments` shows 100%.
+
+  Swagger UI renders.
+
+To read it: `src/services/courses.ts` (the rules), then `src/controllers/courses.ts`, `src/controllers/lessons.ts`, `src/controllers/passages.ts`, `src/services/course-views.ts` (response shapes), and `src/routes/courses.ts` (which role may call what).
+
+Deviations from the plan, and details settled while implementing:
+- **Two service files instead of `utils/views.ts`.** The response builders query the database to load instructors, counts, tags and progress, so they live in `services/course-views.ts` next to `services/courses.ts`. They aren't pure utils.
+- **Passage payload rule** (reading text needs `content`, audio/video need `mediaPath`) is one controller helper used by `POST` and `PATCH`, instead of a Joi `when`. `PATCH` has to check the merged row anyway. Its 400 has a `message` but no `details`.
+- **Empty strings:** passage `content` and `mediaPath` must be `null`, not `""`, so an empty string can't satisfy the payload rule. Course descriptions, lesson content and passage titles accept `""`.
+- **`validateBody` validates `{}` when there is no body.** Express 5 leaves `req.body` undefined for a bodiless `POST /approve`. Required fields still fail.
+- **Unknown query parameters are a 400.** This matches how bodies are validated.
+- **Visibility comes before ownership.** Another instructor gets 404 on someone else's draft and 403 on their approved course. An enrolled learner gets 404 for a lesson once its course is withdrawn, because the course isn't visible to learners until it is approved again.
+- **Review queue order:** with `?status=`, the oldest submission comes first (noted in the contract).
+- **Enrolment completion:** `enrollments.completed_at` is set when every core lesson is completed and cleared if one goes back to `in_progress` (recorded in `docs/ERD.md`).
+- **Concurrency tests:**
+  - approve and reject sent at the same moment give exactly one 200 and one 409;
+  - two simultaneous enrol calls give one 201 and one 200 (the unique-violation path reads the row back).
+
+Left open:
+- **First progress write race.** Two simultaneous `PUT /lessons/{id}/progress` calls for a lesson with no progress row yet can make the second one fail with a 500 (primary key). The client sends these one at a time, so it was left as is. The enrolment fix (catch `isUniqueViolation` and update) applies if it ever matters.
+- **Admin-created passages** in an instructor's lesson can only be edited by their creator or an admin, following the ERD's creator rule. The course owner can't edit them.
+- **`mediaUrl`** is `null` until the Uploads task.
+- **Remedial lessons outside enrolled courses** are still deferred to the Phase 3 Gate.

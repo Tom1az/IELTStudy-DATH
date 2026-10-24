@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IELTStudy API
-  version: 0.2.1
+  version: 0.2.2
   description: |
     REST API for IELTStudy, an adaptive IELTS learning platform (see `specs.md`).
     Contract-first: add or change an endpoint here in the same change as its code.
@@ -10,7 +10,8 @@ info:
     Tokens last 1 day. Every endpoint needs a token unless it says otherwise.
 
     **Roles.** Each endpoint says who may call it: learner, instructor, admin.
-    "Owner" means the instructor who created the resource; admins may always act on it.
+    "Owner" means the instructor who created the resource. Admins act only where an endpoint lists them:
+    they review and archive courses and edit passages, but they don't edit or submit an instructor's course or lessons.
 
     **Locked content.** Content inside a course (lessons, passages, quizzes, and the questions those quizzes use)
     can only change while the course is `draft` or `rejected`. To change an approved course, the owner withdraws it first.
@@ -217,7 +218,7 @@ paths:
       tags: [Admin]
       operationId: listAllCourses
       summary: List all courses (the review queue)
-      description: "Roles: admin. Use `?status=pending_review` for the courses waiting for review."
+      description: "Roles: admin. Use `?status=pending_review` for the courses waiting for review. With `status`, the oldest submission comes first."
       parameters:
         - name: status
           in: query
@@ -382,7 +383,7 @@ paths:
       tags: [Courses]
       operationId: deleteCourse
       summary: Delete a draft course
-      description: "Roles: owner. Only a `draft` that was never approved (409 otherwise). Archive a course that learners have used."
+      description: "Roles: owner. Only a `draft` that no learner has enrolled in (409 otherwise). Archive a course that learners have used."
       responses:
         "200": { $ref: "#/components/responses/Message" }
         "401": { $ref: "#/components/responses/Unauthorized" }
@@ -1706,7 +1707,7 @@ components:
         mediaUrl:
           type: [string, "null"]
           format: uri
-          description: Signed URL to play the media, valid for 1 hour. Generated on every read.
+          description: Signed URL to play the media, valid for 1 hour. Generated on every read. Null until Supabase Storage signing ships (Uploads task).
         orderIndex: { type: integer }
       example:
         passageId: 1
