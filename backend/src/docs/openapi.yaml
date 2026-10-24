@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: IELTStudy API
-  version: 0.2.5
+  version: 0.2.6
   description: |
     REST API for IELTStudy, an adaptive IELTS learning platform (see `specs.md`).
     Contract-first: add or change an endpoint here in the same change as its code.
@@ -156,7 +156,7 @@ paths:
       tags: [Admin]
       operationId: listUsers
       summary: List users
-      description: "Roles: admin."
+      description: "Roles: admin. Ordered by `userId`, oldest account first."
       parameters:
         - name: role
           in: query
@@ -190,7 +190,7 @@ paths:
       summary: Change a user's role or deactivate them
       description: |
         Roles: admin. A deactivated user can't log in, and their existing token stops working at once.
-        Admins can't change their own role or deactivate themselves (409), so there is always at least one admin.
+        Admins can't use this on their own account (409), even for a change that does nothing. Only an admin can demote an admin, so there is always at least one admin.
       requestBody:
         required: true
         content:

@@ -72,7 +72,11 @@ Set effort with `/effort <level>` before starting a task. Match the level to how
 - Plan at a higher level, then implement at a lower one. For example, plan the schema at `xhigh`, then write the migration and seed at `medium` once the plan is approved.
 - If a `low`/`medium` task fails twice or the fix keeps changing, stop. Raise effort one level and re-plan instead of retrying.
 - Reviews (`/code-review`) of auth, scoring, BKT or recommender code: use `high` or above. Other reviews: `medium`.
-- At the start of a task, Claude states the effort level this table suggests. If the current level differs by two or more steps, Claude says so before starting.
+- **At the start of every task, Claude suggests an effort for the task and for each of its subtasks**, before any work begins. The goal is the best result for the fewest tokens: spend effort where a mistake is likely and costly, and keep it low everywhere else.
+  - One line per subtask: what it is, the level, and a short reason tied to the table above. Example: "Stats counting: `medium`. It follows the aggregate pattern, but zero-filled groups are easy to forget."
+  - Usual split: plan at the task's level. Implement routine parts one level lower. Tests at `medium`. Docs, the **Outcome** note and the `ROADMAP.md` tick at `low`. Reviews at the level the review rule above gives.
+  - Before a subtask that needs a **higher** level than the current one, Claude stops and asks the owner to run `/effort <level>`. For a **lower** level, Claude mentions it, and the owner may switch or carry on.
+  - If the current level is two or more steps away from the suggestion, Claude says so before starting.
 
 ## Hard rules
 

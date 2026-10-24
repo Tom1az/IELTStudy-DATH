@@ -672,3 +672,74 @@ Follow-up (2026-10-24, approved by the owner): **`changeCourseStatus` had the sa
 - The new `src/services/courses.test.ts` calls the service directly, 10 rounds of approve and reject in parallel. It failed on the old code (both won) and passes with the fix.
 - The fix is the same `updateAndCount` pattern, plus a reload of the row.
 - Every other `update()` in the code filters by primary key only, so none of them has this race.
+
+## Task: Admin: roles and usage stats
+
+Approved: 2026-10-24 (effort `medium`; the effort table lists "a new CRUD route/controller" as `medium`, and the RBAC it relies on already exists and is tested).
+Branch: `feat/phase-2-admin`, created from `50c4bca` (the Attempts commit).
+
+### Context
+
+This is the last unticked Phase 2 task. The contract (`openapi.yaml`, Admin tag) already defines the three endpoints; only `GET /admin/courses` was built. It covers the spec's admin story: "manage user roles and access rights" and "monitor platform usage statistics".
+- `GET /admin/users?role=&isActive=`: list users (`User` shape, never `hashedPass`);
+- `PATCH /admin/users/{userId}`: change `role` and/or `isActive`;
+- `GET /admin/stats`: the `AdminStats` shape.
+
+No schema change, and no new dependency.
+
+The owner also asked for a new effort rule in the root `CLAUDE.md` (Effort guide → Rules of thumb): at the start of every task, Claude suggests an effort for the task and for each subtask, and asks the owner to switch before a subtask that needs a higher level. That was done first, in the same branch.
+
+### Effort per subtask
+
+| Subtask | Effort | Why |
+| --- | --- | --- |
+| Validator schemas, routes, `controllers/admin.ts` | `medium` | Copies the `routes/me.ts` / `controllers/me.ts` pattern |
+| Self-update 409 rule and deactivation | `medium` | Rule decided in the plan; `authenticate` already reloads the user |
+| `services/stats.ts` | `medium` | Aggregate pattern; zero-fill and the 7-day window are easy to get wrong |
+| `routes/admin.test.ts` | `medium` | Standard supertest suite |
+| `openapi.yaml` wording and version | `low` | Two sentences, no shape change |
+| `backend/CLAUDE.md`, Outcome, `ROADMAP.md` tick | `low` | Mechanical |
+| Optional `/code-review` of the role-change code | `high` | Review rule: auth code needs `high` or above |
+
+### Rules
+
+**List users**
+- Optional filters `role` and `isActive` (Joi turns `"true"`/`"false"` into booleans). Ordered by `userId`. Mapped through `toPublicUser`.
+
+**Update user**
+- Body `AdminUserUpdate`: `role` and/or `isActive`, at least one (400 otherwise; unknown keys rejected).
+- 404 if the user doesn't exist.
+- **409 if `userId` is the caller**, even for a change that does nothing. One simple rule instead of comparing field by field. Only an admin can demote an admin, and nobody can demote themselves, so the platform can't lose its last admin.
+- Takes effect at once: `authenticate` reloads the user on every request, so a deactivated user's token gives 401 on the next request, and a promoted learner passes `authorize("instructor")` straight away. Login already returns 403 for deactivated accounts.
+- Plain `.where({ userId }).update(...)` is fine here, because the filter is the primary key only.
+
+**Stats**, counted by Postgres with `aggregate` / `groupBy` (nothing is loaded into memory), run in parallel:
+- `users`: one `groupBy("role", "isActive")`; a loop adds each group to `byRole` and to `active` or `inactive`. Every role starts at 0.
+- `courses`: `groupBy("status")`, the same zero-filled loop.
+- `enrollments`: one count.
+- `attempts.completed`: `completedAt IS NOT NULL`. `completedLast7Days`: `completedAt >= now − 168 hours` (a rolling window).
+- `activeLearnersLast7Days`: the number of distinct `userId`s among those recent attempts (`groupBy("userId")`). Only learners can start attempts.
+
+### Files
+
+`src/routes/admin.ts`, `src/controllers/admin.ts` (new), `src/services/stats.ts` (new), `src/utils/validator.ts` (`userRole`, `adminUsersQuerySchema`, `adminUserUpdateSchema`), `src/docs/openapi.yaml` (wording, v0.2.6), `src/routes/admin.test.ts` (new), `backend/CLAUDE.md`, root `CLAUDE.md` (effort rule).
+
+### Outcome
+
+Done 2026-10-24.
+- **Checks:** typecheck and lint are clean, and 187 tests pass across 17 files (22 new in `routes/admin.test.ts`). Redocly lint is valid, with only the known `license` warning. The contract is v0.2.6.
+- **Manual run:** a script in the scratchpad ran the real app on a real port against the test database (wiped before and after) and drove it with `fetch`. Every step returned the expected status:
+  1. The admin lists all users (no `hashedPass`), and `?role=learner&isActive=true` returns only the learner.
+  2. The learner gets 403 on `/instructor/courses`. After the admin promotes them, the same token gets 200.
+  3. After deactivation, the same token gets 401 ("This account is deactivated").
+  4. The admin's PATCH on their own account gives 409.
+  5. `/admin/stats` returns zero-filled groups and the right counts. The deactivated user's token gets 401.
+
+To read it: `src/controllers/admin.ts` (the list and the self-update rule), then `src/services/stats.ts` (each count has a comment saying what it counts), then `src/routes/admin.test.ts` (the stats test sets up data where each number is different, so a wrong window or a double count shows up).
+
+Deviation from the plan:
+- **The 8-days-ago attempt in the stats test is moved back in SQL.** The plan assumed a `Temporal.Instant` could be passed to `db.raw.sql`. The runtime rejects it ("unsupported JS value type for raw-SQL interpolation"). The test now shifts `started_at` and `completed_at` together with `- interval '8 days'`, which also keeps the `completed_at >= started_at` check. `backend/CLAUDE.md` notes this, and the counting pattern.
+
+Left open:
+- **Two admins demoting each other at the same moment** could leave zero admins. Preventing it needs row locks for a case that can't happen with one admin. Accepted.
+- **`activeLearnersLast7Days`** counts users who completed an attempt, whatever their role is now. A learner promoted to instructor this week still counts. Accepted: the number answers "how many people studied this week".

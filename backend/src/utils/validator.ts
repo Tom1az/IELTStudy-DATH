@@ -60,6 +60,7 @@ const fullName = Joi.string().trim().min(3).max(30);
 const targetBand = Joi.number().min(0).max(9).multiple(0.5).allow(null);
 
 // Enum values, the same as schema.prisma
+const userRole = Joi.string().valid("learner", "instructor", "admin");
 const courseLevel = Joi.string().valid("beginner", "intermediate", "advanced");
 const courseStatus = Joi.string().valid(
   "draft",
@@ -173,6 +174,20 @@ const schemas = {
     .keys({
       fullName,
       targetBand,
+    })
+    .min(1),
+
+  // ----- Admin: users -----
+  adminUsersQuerySchema: Joi.object().keys({
+    role: userRole,
+    // Joi turns the query strings "true" and "false" into booleans
+    isActive: Joi.boolean(),
+  }),
+
+  adminUserUpdateSchema: Joi.object()
+    .keys({
+      role: userRole,
+      isActive: Joi.boolean(),
     })
     .min(1),
 

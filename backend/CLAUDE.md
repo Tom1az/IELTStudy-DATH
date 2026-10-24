@@ -7,7 +7,7 @@ src/
   server.ts            # listen only
   app.ts               # Express app: middleware, /api-docs, routes, 404 + error handler (exported for tests)
   routes/<name>.ts     # router -> validators -> controller
-  controllers/<name>.ts
+  controllers/<name>.ts # controllers/admin.ts: user list, role/deactivation (409 on yourself), stats
   middlewares/auth.ts  # authenticate (JWT -> req.user, reloaded from the DB) and authorize(...roles)
   services/courses.ts  # course access rules: visibility (404), owner (403), editable status (409), status transitions
   services/course-views.ts # builds the contract's Course / Lesson / LessonDetail / Passage / Enrollment shapes
@@ -19,6 +19,7 @@ src/
   services/grading.ts  # answer shape per question type (400) and isAnswerCorrect (pure, no database)
   services/attempts.ts # attempt rules: own attempt (404/403), start or resume, submit (grade + log responses in one transaction)
   services/attempt-views.ts # builds Attempt / AttemptResult / AttemptSummary
+  services/stats.ts    # getUsageStats: the AdminStats numbers, counted by Postgres (groupBy / aggregate)
   services/            # more business logic later: bkt.ts, recommender.ts (Phase 3)
   utils/validator.ts   # validateBody / validateParams / validateQuery + Joi schemas
   utils/db-types.ts    # varchar<N>() brand helper for Prisma VARCHAR columns
@@ -48,6 +49,8 @@ migrations/            # Prisma 8 migration packages (npm run migration:plan / d
 - **Prisma 8** (contract API, not classic Prisma Client):
   - Model access: `db.orm.public.<Model>` from `src/prisma/db.ts`, with `.all()`, `.first({...})`, `.where({...}).update(...)`, `.create(...)`, and `db.transaction(async (tx) => ...)`.
   - **`.where(...).update()` is not atomic.** It SELECTs the first matching row, then UPDATEs it by primary key alone, so the filter isn't checked again. For a conditional update that must hold under concurrency ("close the attempt only if it is still open"), use `.where(...).updateAndCount(...)`. It sends one `UPDATE ... WHERE <filter>`, and 0 means the condition no longer held. See `submitAttempt` in `services/attempts.ts` and `changeCourseStatus` in `services/courses.ts`.
+  - **Counting:** use `.aggregate((agg) => ({ count: agg.count() }))`, or `.groupBy("field").aggregate(...)` for one row per value, instead of loading rows and taking `.length`. Groups with no rows don't come back, so start every count at 0 (see `services/stats.ts`).
+  - Raw SQL (`db.raw.sql`) only takes plain values such as numbers as `${...}` parameters, not `Temporal` values. Do date arithmetic in SQL (`started_at - interval '8 days'`) instead.
   - VARCHAR columns are branded types. Wrap strings with `varchar<255>(value)` from `utils/db-types.ts`, and only after Joi has checked the length.
   - After editing `schema.prisma`, run `npm run contract:emit`. Never hand-edit `schema.d.ts` or `schema.json`.
 - **TypeScript:**
