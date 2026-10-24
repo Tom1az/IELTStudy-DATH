@@ -1,0 +1,33 @@
+{
+  "_comment": "Exported by the offline Python pipeline (pyBKT, calibrated on EdNet). Replace this file with the latest export; the runtime reads it as-is.",
+  "threshold": 0.65,
+  "default": { "pInit": 0.3, "pTransit": 0.12, "pSlip": 0.1 },
+  "guessByType": { "tfng": 0.3, "ynng": 0.3, "mcq": 0.22, "heading": 0.12, "gap": 0.05 },
+  "skills": {
+    "L.SPELL": { "pInit": 0.4, "pTransit": 0.15, "pSlip": 0.12 },
+    "L.FORM": { "pInit": 0.35, "pTransit": 0.14, "pSlip": 0.1 },
+    "L.MAP": { "pInit": 0.3, "pTransit": 0.12, "pSlip": 0.1 },
+    "L.MCQ": { "pInit": 0.25, "pTransit": 0.1, "pSlip": 0.12 },
+    "L.MATCH": { "pInit": 0.25, "pTransit": 0.1, "pSlip": 0.12 },
+    "L.LECT": { "pInit": 0.25, "pTransit": 0.1, "pSlip": 0.1 },
+    "R.SKIM": { "pInit": 0.4, "pTransit": 0.15, "pSlip": 0.08 },
+    "R.PARA": { "pInit": 0.3, "pTransit": 0.1, "pSlip": 0.1 },
+    "R.SENT": { "pInit": 0.35, "pTransit": 0.13, "pSlip": 0.1 },
+    "R.TFNG": { "pInit": 0.2, "pTransit": 0.1, "pSlip": 0.12 },
+    "R.HEAD": { "pInit": 0.25, "pTransit": 0.1, "pSlip": 0.1 },
+    "R.MINF": { "pInit": 0.25, "pTransit": 0.1, "pSlip": 0.1 },
+    "R.MCQ": { "pInit": 0.3, "pTransit": 0.11, "pSlip": 0.1 },
+    "W.T1OV": { "pInit": 0.3, "pTransit": 0.14, "pSlip": 0.1 },
+    "W.T1": { "pInit": 0.3, "pTransit": 0.12, "pSlip": 0.1 },
+    "W.T2": { "pInit": 0.25, "pTransit": 0.1, "pSlip": 0.1 },
+    "W.COH": { "pInit": 0.3, "pTransit": 0.12, "pSlip": 0.1 },
+    "G.COND3": { "pInit": 0.25, "pTransit": 0.12, "pSlip": 0.08 },
+    "G.INV": { "pInit": 0.15, "pTransit": 0.1, "pSlip": 0.08 },
+    "V.COLL": { "pInit": 0.3, "pTransit": 0.1, "pSlip": 0.1 },
+    "S.P1": { "pInit": 0.4, "pTransit": 0.15, "pSlip": 0.1 },
+    "S.DM": { "pInit": 0.3, "pTransit": 0.13, "pSlip": 0.1 },
+    "S.P2": { "pInit": 0.3, "pTransit": 0.12, "pSlip": 0.1 },
+    "S.P3": { "pInit": 0.25, "pTransit": 0.1, "pSlip": 0.1 },
+    "S.PRON": { "pInit": 0.3, "pTransit": 0.1, "pSlip": 0.1 }
+  }
+}
