@@ -5,6 +5,7 @@ dist/
 .vscode/
 .venv/
 CLAUDE.local.md
-.claude/settings.local.json
+.claude/
+# .claude/settings.local.json
 backend/src/prisma/contract.d.ts
 backend/src/prisma/contract.json
