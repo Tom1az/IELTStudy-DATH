@@ -4,6 +4,8 @@ yarn.lock
 dist/
 .vscode/
 .venv/
+.idea/
+qodana.yaml
 CLAUDE.local.md
 .claude/
 # .claude/settings.local.json
