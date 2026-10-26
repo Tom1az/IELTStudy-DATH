@@ -45,18 +45,6 @@ export function mmss(totalSeconds: number) {
 export const initials = (name: string) =>
   name.split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0]).join("").toUpperCase();
 
-export const pct = (v: number) => `${Math.round(v * 100)}%`;
 export const cx = (...c: (string | false | null | undefined)[]) => c.filter(Boolean).join(" ");
 export const plural = (n: number, w: string) => `${n} ${w}${n === 1 ? "" : "s"}`;
 
-export function dueIn(iso: string) {
-  const ms = Date.parse(iso) - Date.now();
-  if (ms < 0) return "overdue";
-  const days = Math.floor(ms / 86400000);
-  if (days === 0) return "due today";
-  return `in ${days} day${days === 1 ? "" : "s"}`;
-}
-
-/** Figma shows the level name for the three core courses; any other course shows its own title. */
-export const courseHeading = (c: { title: string; levelName: string }) => (c.title === `IELTS ${c.levelName}` ? c.levelName : c.title);
-export const isCoreCourse = (c: { title: string; levelName: string }) => c.title === `IELTS ${c.levelName}`;

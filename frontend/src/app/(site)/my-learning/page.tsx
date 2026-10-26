@@ -1,11 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { CalendarClock, Compass, PenSquare } from "lucide-react";
+import { Compass } from "lucide-react";
 import { meApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { RequireRole } from "@/lib/auth-context";
-import { SKILL_META, SKILL_HEX, band, courseHeading, cx, dueIn, fmtDate } from "@/lib/format";
+import { SKILL_META, band } from "@/lib/format";
 import { SKILL_CATEGORIES } from "@/lib/types";
 import { EmptyState, ErrorState, ProgressBar, Skeleton, StatusPill } from "@/components/ui";
 import { RecommendationList } from "@/components/RecommendationList";
@@ -25,6 +25,7 @@ function Dashboard() {
   }
   if (!data) return null;
   const d = data;
+  const bands = d.bands;
 
   return (
     <div className="container pb-16 pt-10 md:pt-12">
@@ -32,7 +33,7 @@ function Dashboard() {
 
       {!d.user.placementDone && (
         <div className="mt-6 flex flex-col items-start justify-between gap-4 rounded-2xl border border-line bg-white p-5 md:flex-row md:items-center">
-          <div className="flex items-center gap-3"><Compass className="h-6 w-6 text-brand" /><p className="text-sm"><strong>Start with the 15-minute placement quiz.</strong> It sets up your skill map so recommendations fit you from day one.</p></div>
+          <div className="flex items-center gap-3"><Compass className="h-6 w-6 text-brand" /><p className="text-sm"><strong>Start with the placement quiz.</strong> It sets up your skill map so recommendations fit you from day one.</p></div>
           <Link href="/placement" className="btn-primary">Take the placement quiz</Link>
         </div>
       )}
@@ -49,9 +50,9 @@ function Dashboard() {
               <span className="whitespace-nowrap text-[13px] font-semibold">{d.continue.pct}% of course</span>
             </div>
             <div className="mt-auto flex flex-wrap gap-3 pt-7">
-              <Link href={`/learn/${d.continue.courseSlug}/${d.continue.lessonId}`} className="btn-light px-5">Resume lesson</Link>
-              <Link href={d.inProgressAttempt ? `/practice/${d.inProgressAttempt.setId}` : `/learn/${d.continue.courseSlug}/${d.continue.lessonId}#practice`} className="btn-outline-light px-5">
-                Go to practice set
+              <Link href={`/learn/${d.continue.courseId}/${d.continue.lessonId}`} className="btn-light px-5">Resume lesson</Link>
+              <Link href={d.inProgressAttempt ? `/practice/${d.inProgressAttempt.quizId}` : `/learn/${d.continue.courseId}/${d.continue.lessonId}#practice`} className="btn-outline-light px-5">
+                {d.inProgressAttempt ? "Resume your quiz" : "Go to the lesson quiz"}
               </Link>
             </div>
           </section>
@@ -68,19 +69,25 @@ function Dashboard() {
         <section className="rounded-2xl border border-line bg-white p-6" aria-labelledby="band-h">
           <div className="flex items-baseline justify-between">
             <h2 id="band-h" className="font-serif text-[22px] font-bold">Estimated band by skill</h2>
-            <span className="text-[13px] text-ink-muted">Overall {band(d.overall)}</span>
+            {d.overall !== null && <span className="text-[13px] text-ink-muted">Overall {band(d.overall)}</span>}
           </div>
-          <ul className="mt-5 space-y-3.5">
-            {SKILL_CATEGORIES.map((s) => (
-              <li key={s} className="flex items-center gap-4">
-                <span className="w-[76px] text-sm">{SKILL_META[s].label}</span>
-                <div className="flex-1"><ProgressBar value={d.bands[s] - 3} max={4.5} color={SKILL_META[s].bar} height="h-2.5" label={`${SKILL_META[s].label} band`} /></div>
-                <span className="w-8 text-right text-sm font-semibold tabular-nums">{band(d.bands[s])}</span>
-              </li>
-            ))}
-          </ul>
-          <p className="mt-6 text-[11.5px] leading-snug text-ink-soft">Estimates come from your practice sets. They are not official IELTS scores.</p>
-          <Link href="/mastery" className="mt-3 inline-block text-xs font-semibold text-brand hover:underline">Open skill mastery map →</Link>
+          {bands === null ? (
+            <p className="mt-5 text-sm text-ink-muted">Skill estimates are not available yet. They will appear here once skill tracking is switched on.</p>
+          ) : (
+            <>
+              <ul className="mt-5 space-y-3.5">
+                {SKILL_CATEGORIES.map((s) => (
+                  <li key={s} className="flex items-center gap-4">
+                    <span className="w-[76px] text-sm">{SKILL_META[s].label}</span>
+                    <div className="flex-1"><ProgressBar value={bands[s] - 3} max={4.5} color={SKILL_META[s].bar} height="h-2.5" label={`${SKILL_META[s].label} band`} /></div>
+                    <span className="w-8 text-right text-sm font-semibold tabular-nums">{band(bands[s])}</span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-6 text-[11.5px] leading-snug text-ink-soft">Estimates come from your quizzes. They are not official IELTS scores.</p>
+              <Link href="/mastery" className="mt-3 inline-block text-xs font-semibold text-brand hover:underline">Open skill mastery map →</Link>
+            </>
+          )}
         </section>
       </div>
 
@@ -91,11 +98,11 @@ function Dashboard() {
       ) : (
         <div className="mt-4 grid gap-5 md:grid-cols-2">
           {d.courses.map((c) => (
-            <Link key={c.course.id} href={`/courses/${c.course.slug}`} className="rounded-2xl border border-line bg-white p-5 transition-colors hover:border-navy/30">
+            <Link key={c.course.id} href={`/courses/${c.course.id}`} className="rounded-2xl border border-line bg-white p-5 transition-colors hover:border-navy/30">
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <p className="eyebrow-muted">Level {c.course.level}</p>
-                  <h3 className="mt-0.5 font-serif text-[24px] font-bold leading-tight">{courseHeading(c.course)}</h3>
+                  <h3 className="mt-0.5 font-serif text-[24px] font-bold leading-tight">{c.course.title}</h3>
                 </div>
                 {c.status === "completed" ? <StatusPill tone="green">Completed</StatusPill> : <StatusPill tone="amber">In progress</StatusPill>}
               </div>
@@ -117,27 +124,31 @@ function Dashboard() {
         <section className="rounded-2xl border border-line bg-white p-5" aria-labelledby="next-h">
           <h2 id="next-h" className="font-serif text-[24px] font-bold">Up next</h2>
           <div className="mt-4">
-            {d.upNext.length ? <RecommendationList items={d.upNext} compact /> : <p className="text-sm text-ink-muted">Enroll in a course to get a personalised path.</p>}
+            {d.upNext === null ? (
+              <p className="text-sm text-ink-muted">Recommendations are not available yet.</p>
+            ) : d.upNext.length ? (
+              <RecommendationList items={d.upNext} compact />
+            ) : (
+              <p className="text-sm text-ink-muted">Enroll in a course to get a personalised path.</p>
+            )}
           </div>
-          {d.upNext.length > 0 && <p className="mt-3 text-[11px] text-ink-soft">Ranked from your skill map in {d.recLatencyMs.toFixed(1)} ms.</p>}
         </section>
 
         <section className="rounded-2xl border border-line bg-white p-5" aria-labelledby="res-h">
           <div className="flex items-baseline justify-between">
-            <h2 id="res-h" className="font-serif text-[24px] font-bold">Recent practice results</h2>
+            <h2 id="res-h" className="font-serif text-[24px] font-bold">Recent quiz results</h2>
             <Link href="/my-learning/history" className="text-xs font-semibold text-brand hover:underline">All history</Link>
           </div>
           {d.recent.length === 0 ? (
-            <p className="mt-4 text-sm text-ink-muted">Your practice set scores will appear here.</p>
+            <p className="mt-4 text-sm text-ink-muted">Your quiz scores will appear here.</p>
           ) : (
             <div className="mt-3 overflow-x-auto">
               <table className="table-base">
-                <thead><tr><th>Practice set</th><th>Skill</th><th>Score</th><th>Review</th></tr></thead>
+                <thead><tr><th>Quiz</th><th>Score</th><th>Review</th></tr></thead>
                 <tbody>
                   {d.recent.map((r) => (
                     <tr key={r.attemptId}>
-                      <td className="font-semibold">Practice set {r.setCode} · {r.setTitle}</td>
-                      <td>{SKILL_META[r.skill].label}</td>
+                      <td className="font-semibold">{r.title}</td>
                       <td className="font-semibold tabular-nums">{r.score} / {r.max}</td>
                       <td><Link href={`/practice/result/${r.attemptId}`} className="font-semibold text-brand hover:underline">Review</Link></td>
                     </tr>
@@ -149,27 +160,6 @@ function Dashboard() {
         </section>
       </div>
 
-      {/* Deadlines */}
-      {d.deadlines.length > 0 && (
-        <section className="mt-8 rounded-2xl border border-line bg-white p-5" aria-labelledby="dl-h">
-          <h2 id="dl-h" className="flex items-center gap-2 font-serif text-[22px] font-bold"><CalendarClock className="h-5 w-5 text-brand" /> Writing tasks</h2>
-          <ul className="mt-3 divide-y divide-line">
-            {d.deadlines.map(({ assignment: a, submitted }) => {
-              const soon = Date.parse(a.dueAt) - Date.now() < 5 * 86400000;
-              return (
-                <li key={a.id}>
-                  <Link href={`/assignments/${a.id}`} className="flex flex-wrap items-center gap-3 py-3 hover:bg-cream">
-                    <PenSquare className="h-4 w-4" style={{ color: SKILL_HEX.writing }} />
-                    <span className="flex-1 text-sm font-semibold">{a.title}</span>
-                    <span className={cx("text-xs", soon && !submitted ? "font-semibold text-brand" : "text-ink-muted")}>Due {fmtDate(a.dueAt, true)} · {dueIn(a.dueAt)}</span>
-                    {submitted ? <StatusPill tone="green">Submitted</StatusPill> : <StatusPill tone="orange">To do</StatusPill>}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }

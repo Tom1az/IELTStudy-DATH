@@ -1,460 +1,392 @@
+import type { Course, Enrollment, Lesson, Paginated, Recommendation, Skill, SkillCategory, User } from "@/lib/types";
 import type {
-  AppNotification, Assignment, ContentReport, Course, DiscussionPost, Enrollment, Lesson, Paginated, Recommendation, RemediationGate, Skill, SkillCategory, Submission, User,
-} from "@/lib/types";
-import { SKILL_CATEGORIES } from "@/lib/types";
-import { recommendNext } from "@/lib/adaptive/recommender";
-import { bandsBySkill } from "@/lib/adaptive/bkt";
-import { ApiError, qs, request } from "./client";
-import { commit, currentUser, db, notify, nowIso, publicUser, requireUser, uid, validate } from "./mock-db";
+  BackendAttemptSummary, BackendCourse, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendRecommendation, BackendSkill,
+} from "./backend-types";
+import { ApiError, backendRequest, getToken } from "./client";
+import { authApi } from "./auth";
 import {
-  canManageCourse, courseById, courseBySlug, enrollmentOf, isLessonUnlocked, lessonsOf, masteryMap, perSkillProgress, prerequisiteMet, progressOf, setOf, skillCounts,
-} from "./helpers";
+  buildSyllabus, lessonCategory, toCourse, toEnrollment, toLesson, toRecommendation, toSkill, toSkillCategories, type SkillCategories,
+} from "./mappers";
+
+/**
+ * Catalog, lessons and the learner dashboard. Each call builds the shape a page needs
+ * from the endpoints in `backend/src/docs/openapi.yaml`. Decisions:
+ * `docs/plans/phase-4-frontend.md`.
+ */
 
 /* ───────── DTOs ───────── */
 
 export interface CourseSummary extends Course {
   lessonCount: number;
-  practiceSetCount: number;
   skillCounts: Record<SkillCategory, number>;
   instructorName: string;
-  enrollment?: { status: Enrollment["status"]; pct: number } | null;
+  enrollment: { status: Enrollment["status"]; pct: number } | null;
 }
 
 export interface LessonHit {
   lessonId: string;
-  courseSlug: string;
+  courseId: string;
   courseLevel: number;
   courseLevelName: string;
   skill: SkillCategory;
   order: number;
   title: string;
-  videoMinutes: number;
-  questions: number;
-  freePreview: boolean;
 }
 
 export interface SyllabusLesson {
   id: string;
   title: string;
-  shortTitle?: string;
   order: number;
-  videoMinutes: number;
-  questions: number;
-  freePreview: boolean;
   completed: boolean;
   unlocked: boolean;
-  gated: boolean;
+}
+
+export interface SyllabusSection {
+  skill: SkillCategory;
+  done: number;
+  total: number;
+  lessons: SyllabusLesson[];
 }
 
 export interface CourseDetail {
   course: CourseSummary;
-  instructor: { name: string; bio?: string };
-  sections: { skill: SkillCategory; lessons: SyllabusLesson[] }[];
+  sections: SyllabusSection[];
   enrollment: Enrollment | null;
   canEnroll: { ok: boolean; reason?: string };
-  learners: number;
+}
+
+/** A reading text, recording or video inside a lesson. */
+export interface LessonPassage {
+  id: string;
+  type: "reading_text" | "listening_audio" | "video";
+  title: string | null;
+  content: string | null;
+  mediaUrl: string | null;
 }
 
 export interface LessonView {
   course: Course;
   lesson: Lesson;
-  sections: { skill: SkillCategory; done: number; total: number; lessons: SyllabusLesson[] }[];
+  passages: LessonPassage[];
+  sections: SyllabusSection[];
   enrollment: Enrollment | null;
   progress: { done: number; total: number; pct: number };
-  practice: { id: string; code: string; title: string; questions: number; minutes: number; kind: string } | null;
+  practice: { id: string; title: string; questions: number; minutes: number } | null;
   unlocked: boolean;
-  previewOnly: boolean;
-  gate: (RemediationGate & { skillName: string; mastery: number; attemptId?: string }) | null;
   prevId?: string;
   nextId?: string;
-  note: string;
-  assignment?: Assignment;
-  postCount: number;
 }
 
 export interface DashboardData {
   user: User;
-  continue: { courseSlug: string; courseTitle: string; lessonId: string; lessonTitle: string; skill: SkillCategory; order: number; skillTotal: number; pct: number } | null;
-  bands: Record<SkillCategory, number>;
-  overall: number;
+  continue: { courseId: string; courseTitle: string; lessonId: string; lessonTitle: string; skill: SkillCategory; order: number; skillTotal: number; pct: number } | null;
+  /** Estimated band per skill. Null until BKT mastery exists (Phase 3). */
+  bands: Record<SkillCategory, number> | null;
+  overall: number | null;
   courses: { course: Course; status: Enrollment["status"]; perSkill: { skill: SkillCategory; done: number; total: number }[]; pct: number }[];
-  upNext: Recommendation[];
-  recLatencyMs: number;
-  recent: { attemptId: string; setId: string; setCode: string; setTitle: string; skill: SkillCategory; score: number; max: number; completedAt: string }[];
-  deadlines: { assignment: Assignment; submitted: boolean }[];
-  inProgressAttempt?: { setId: string; code: string; answered: number; total: number };
+  /** Null while `GET /recommendations` is not built (Phase 3). */
+  upNext: Recommendation[] | null;
+  recent: { attemptId: string; quizId: string; title: string; score: number; max: number; completedAt: string }[];
+  inProgressAttempt?: { quizId: string; total: number };
 }
 
-const instructorName = (id: string) => db().users.find((u) => u.id === id)?.name ?? "Instructor";
+/* ───────── Shared loaders ───────── */
 
-function summarize(c: Course, userId?: string): CourseSummary {
-  const ls = lessonsOf(c.id);
-  const e = userId ? enrollmentOf(userId, c.id) : undefined;
-  return { ...c, lessonCount: ls.length, practiceSetCount: ls.filter((l) => !!setOf(l.practiceSetId)).length, skillCounts: skillCounts(ls), instructorName: instructorName(c.instructorId), enrollment: e ? { status: e.status, pct: progressOf(e).pct } : null };
+// The skill taxonomy is read-only, so it is loaded once per page load
+let skillsCache: BackendSkill[] | null = null;
+
+async function loadSkills(): Promise<BackendSkill[]> {
+  if (!skillsCache) {
+    const res = await backendRequest<{ skills: BackendSkill[] }>("GET", "/skills");
+    skillsCache = res.skills;
+  }
+  return skillsCache;
 }
 
-function syllabus(c: Course, e: Enrollment | undefined) {
-  const gates = (e?.remediation ?? []).filter((g) => !g.clearedAt);
-  return SKILL_CATEGORIES.map((skill) => {
-    const lessons = lessonsOf(c.id).filter((l) => l.skill === skill).map<SyllabusLesson>((l) => ({
-      id: l.id, title: l.title, shortTitle: l.shortTitle, order: l.order, videoMinutes: l.videoMinutes, questions: setOf(l.practiceSetId)?.questions.length ?? 0,
-      freePreview: l.freePreview, completed: !!e?.completedLessonIds.includes(l.id), unlocked: isLessonUnlocked(l, e), gated: gates.some((g) => g.beforeLessonId === l.id),
-    }));
-    return { skill, lessons, done: lessons.filter((l) => l.completed).length, total: lessons.length };
-  }).filter((s) => s.total > 0);
+async function loadCategories(): Promise<SkillCategories> {
+  return toSkillCategories(await loadSkills());
+}
+
+async function loadCourse(courseId: string): Promise<BackendCourse> {
+  const res = await backendRequest<{ course: BackendCourse }>("GET", `/courses/${courseId}`);
+  return res.course;
+}
+
+async function loadLessons(courseId: string | number): Promise<BackendLesson[]> {
+  const res = await backendRequest<{ lessons: BackendLesson[] }>("GET", `/courses/${courseId}/lessons`);
+  return res.lessons;
+}
+
+/** Done / total / percent over a course's core lessons. */
+function coreProgress(lessons: BackendLesson[]) {
+  const core = lessons.filter((l) => l.kind === "core");
+  const done = core.filter((l) => l.progress?.status === "completed").length;
+  return { done, total: core.length, pct: core.length ? Math.round((done / core.length) * 100) : 0 };
+}
+
+/** The four skill sections of a course, in the shape the syllabus and lesson sidebar use. */
+function syllabusSections(lessons: BackendLesson[], categories: SkillCategories): SyllabusSection[] {
+  const sections: SyllabusSection[] = [];
+  for (const section of buildSyllabus(lessons, categories)) {
+    const items: SyllabusLesson[] = [];
+    for (const entry of section.entries) {
+      items.push({
+        id: String(entry.lesson.lessonId),
+        title: entry.lesson.title,
+        order: entry.order,
+        completed: entry.lesson.progress?.status === "completed",
+        // `locked` is only sent to learners; staff can open every lesson
+        unlocked: !entry.lesson.locked,
+      });
+    }
+    const done = items.filter((l) => l.completed).length;
+    sections.push({ skill: section.skill, done, total: items.length, lessons: items });
+  }
+  return sections;
+}
+
+function skillCounts(lessons: BackendLesson[], categories: SkillCategories): Record<SkillCategory, number> {
+  const counts: Record<SkillCategory, number> = { listening: 0, reading: 0, writing: 0, speaking: 0 };
+  for (const lesson of lessons) {
+    if (lesson.kind === "core") counts[lessonCategory(lesson, categories)] += 1;
+  }
+  return counts;
+}
+
+function summarize(course: BackendCourse, lessons: BackendLesson[], categories: SkillCategories): CourseSummary {
+  let enrollment: CourseSummary["enrollment"] = null;
+  if (course.isEnrolled) {
+    const progress = coreProgress(lessons);
+    const completed = progress.total > 0 && progress.done === progress.total;
+    enrollment = { status: completed ? "completed" : "active", pct: progress.pct };
+  }
+  return {
+    ...toCourse(course),
+    lessonCount: course.lessonCount,
+    skillCounts: skillCounts(lessons, categories),
+    instructorName: course.instructor.fullName,
+    enrollment,
+  };
+}
+
+/** `GET /recommendations` is built in Phase 3. Until then it is a 404, and the dashboard says so. */
+async function loadRecommendations(categories: SkillCategories): Promise<Recommendation[] | null> {
+  try {
+    const res = await backendRequest<{ recommendations: BackendRecommendation[] }>("GET", "/recommendations");
+    return res.recommendations.map((r) => toRecommendation(r, categories));
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 404) return null;
+    throw e;
+  }
 }
 
 /* ───────── Catalog ───────── */
 
 export const catalogApi = {
-  /** Course catalogue with lesson search, skill filter and pagination (requirement 4.2). */
-  list(params: { q?: string; skill?: SkillCategory | "all"; page?: number; pageSize?: number } = {}) {
-    return request<{ courses: CourseSummary[]; lessons: Paginated<LessonHit> }>("GET", `/courses${qs(params)}`, undefined, () => {
-      const u = currentUser();
-      const page = Math.max(1, params.page ?? 1);
-      const pageSize = params.pageSize ?? 8;
-      const q = (params.q ?? "").trim().toLowerCase();
-      const skill = params.skill && params.skill !== "all" ? params.skill : undefined;
-      const published = db().courses.filter((c) => c.status === "published").sort((a, b) => a.level - b.level);
-      const courses = published.map((c) => summarize(c, u?.id)).filter((c) => !skill || c.skillCounts[skill] > 0);
-      let hits: LessonHit[] = [];
-      if (q || skill) {
-        hits = published.flatMap((c) =>
-          lessonsOf(c.id)
-            .filter((l) => (!skill || l.skill === skill) && (!q || `${l.title} ${setOf(l.practiceSetId)?.title ?? ""} ${l.skillIds.join(" ")}`.toLowerCase().includes(q)))
-            .map((l) => ({ lessonId: l.id, courseSlug: c.slug, courseLevel: c.level, courseLevelName: c.levelName, skill: l.skill, order: l.order, title: l.title, videoMinutes: l.videoMinutes, questions: setOf(l.practiceSetId)?.questions.length ?? 0, freePreview: l.freePreview })),
-        );
+  /** The course catalog, plus a search over lesson titles (by text and/or skill), paged. */
+  async list(params: { q?: string; skill?: SkillCategory | "all"; page?: number; pageSize?: number } = {}) {
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = params.pageSize ?? 8;
+    const emptyHits: Paginated<LessonHit> = { items: [], page, pageSize, total: 0, totalPages: 1 };
+
+    // The catalog needs a token (only /auth/* is public), so logged-out visitors see no courses
+    if (!getToken()) return { courses: [] as CourseSummary[], lessons: emptyHits };
+
+    const [res, categories] = await Promise.all([backendRequest<{ courses: BackendCourse[] }>("GET", "/courses"), loadCategories()]);
+    // One lesson list per course, to count lessons per skill and to search lesson titles
+    const lessonLists = await Promise.all(res.courses.map((c) => loadLessons(c.courseId)));
+
+    const q = (params.q ?? "").trim().toLowerCase();
+    const skill = params.skill && params.skill !== "all" ? params.skill : undefined;
+    const courses: CourseSummary[] = [];
+    const hits: LessonHit[] = [];
+
+    for (let i = 0; i < res.courses.length; i++) {
+      const summary = summarize(res.courses[i], lessonLists[i], categories);
+      if (skill && summary.skillCounts[skill] === 0) continue;
+      courses.push(summary);
+      if (!q && !skill) continue;
+      for (const section of buildSyllabus(lessonLists[i], categories)) {
+        if (skill && section.skill !== skill) continue;
+        for (const entry of section.entries) {
+          if (q && !entry.lesson.title.toLowerCase().includes(q)) continue;
+          hits.push({
+            lessonId: String(entry.lesson.lessonId),
+            courseId: summary.id,
+            courseLevel: summary.level,
+            courseLevelName: summary.levelName,
+            skill: section.skill,
+            order: entry.order,
+            title: entry.lesson.title,
+          });
+        }
       }
-      const total = hits.length;
-      return { courses, lessons: { items: hits.slice((page - 1) * pageSize, page * pageSize), page, pageSize, total, totalPages: Math.max(1, Math.ceil(total / pageSize)) } };
-    });
+    }
+    courses.sort((a, b) => a.level - b.level);
+
+    const lessons: Paginated<LessonHit> = {
+      items: hits.slice((page - 1) * pageSize, page * pageSize),
+      page,
+      pageSize,
+      total: hits.length,
+      totalPages: Math.max(1, Math.ceil(hits.length / pageSize)),
+    };
+    return { courses, lessons };
   },
 
-  /** Micro-skill taxonomy (public). */
-  skills() {
-    return request<Skill[]>("GET", "/skills", undefined, () => db().skills);
+  /** The micro-skill taxonomy. */
+  async skills(): Promise<Skill[]> {
+    const skills = await loadSkills();
+    return skills.map(toSkill);
   },
 
-  get(slug: string) {
-    return request<CourseDetail>("GET", `/courses/${slug}`, undefined, () => {
-      const u = currentUser();
-      const c = courseBySlug(slug);
-      if (!c || (c.status !== "published" && !(u && canManageCourse(u, c)))) throw new ApiError(404, "NOT_FOUND", "Course not found.");
-      const e = u ? enrollmentOf(u.id, c.id) : undefined;
-      const instr = db().users.find((x) => x.id === c.instructorId);
-      return {
-        course: summarize(c, u?.id), instructor: { name: instr?.name ?? "Instructor", bio: instr?.bio }, sections: syllabus(c, e).map(({ skill, lessons }) => ({ skill, lessons })),
-        enrollment: e ?? null, canEnroll: u ? (u.role === "learner" ? prerequisiteMet(u, c) : { ok: false, reason: "Only learner accounts can enroll." }) : { ok: true },
-        learners: db().enrollments.filter((x) => x.courseId === c.id && x.status !== "left").length,
-      };
-    });
+  async get(courseId: string): Promise<CourseDetail> {
+    const [course, lessons, categories] = await Promise.all([loadCourse(courseId), loadLessons(courseId), loadCategories()]);
+    return {
+      course: summarize(course, lessons, categories),
+      sections: syllabusSections(lessons, categories),
+      enrollment: course.isEnrolled ? toEnrollment({ courseId: course.courseId, lessons }) : null,
+      // The backend only sends `isEnrolled` to learners, so its absence means a staff account
+      canEnroll: course.isEnrolled === undefined ? { ok: false, reason: "Only learner accounts can enroll." } : { ok: true },
+    };
   },
 
-  enroll(courseId: string, override = false) {
-    return request<Enrollment>("POST", `/courses/${courseId}/enroll`, { override }, () => {
-      const u = requireUser(["learner"]);
-      const c = courseById(courseId);
-      if (!c || c.status !== "published") throw new ApiError(404, "NOT_FOUND", "Course not found.");
-      const existing = db().enrollments.find((e) => e.userId === u.id && e.courseId === courseId);
-      if (existing && existing.status !== "left") return existing;
-      const pre = prerequisiteMet(u, c);
-      if (!pre.ok && !override) throw new ApiError(409, "PREREQUISITE_NOT_MET", pre.reason ?? "Prerequisite not met.");
-      const ls = lessonsOf(c.id);
-      if (existing) {
-        existing.status = "active";
-        existing.enrolledAt = nowIso();
-        commit();
-        return existing;
-      }
-      const e: Enrollment = { id: uid("enr"), userId: u.id, courseId, status: "active", enrolledAt: nowIso(), completedLessonIds: [], lastLessonId: ls[0]?.id };
-      db().enrollments.push(e);
-      notify(u.id, { type: "new_content", title: `Enrolled in ${c.title}`, body: `Start with ${ls[0]?.title ?? "the first lesson"}. Your progress is saved as you go.`, link: `/learn/${c.slug}/${ls[0]?.id}` });
-      commit();
-      return e;
-    });
-  },
-
-  leave(courseId: string) {
-    return request<{ ok: true }>("POST", `/courses/${courseId}/leave`, {}, () => {
-      const u = requireUser(["learner"]);
-      const e = enrollmentOf(u.id, courseId);
-      if (!e) throw new ApiError(404, "NOT_ENROLLED", "You are not enrolled in this course.");
-      e.status = "left";
-      commit();
-      return { ok: true as const };
-    });
+  async enroll(courseId: string): Promise<Enrollment> {
+    const res = await backendRequest<{ enrollment: BackendEnrollment }>("POST", `/courses/${courseId}/enroll`);
+    const e = res.enrollment;
+    // Lesson progress isn't part of the enrolment response; pages reload the course after enrolling
+    return toEnrollment({ courseId: e.course.courseId, lessons: [], enrolledAt: e.enrolledAt, completedAt: e.completedAt });
   },
 };
 
 /* ───────── Lessons ───────── */
 
 export const lessonApi = {
-  get(courseSlug: string, lessonId: string) {
-    return request<LessonView>("GET", `/courses/${courseSlug}/lessons/${lessonId}`, undefined, () => {
-      const u = currentUser();
-      const c = courseBySlug(courseSlug);
-      const l = db().lessons.find((x) => x.id === lessonId && x.courseId === c?.id);
-      if (!c || !l) throw new ApiError(404, "NOT_FOUND", "Lesson not found.");
-      const manager = !!u && canManageCourse(u, c);
-      if (l.status !== "published" && !manager) throw new ApiError(404, "NOT_FOUND", "This lesson is not available.");
-      const e = u ? enrollmentOf(u.id, c.id) : undefined;
-      if (!e && !l.freePreview && !manager) throw new ApiError(403, "NOT_ENROLLED", "Enroll in this course to open this lesson.");
-      const all = lessonsOf(c.id);
-      const idx = all.findIndex((x) => x.id === l.id);
-      const set = setOf(l.practiceSetId);
-      const gate = (e?.remediation ?? []).find((g) => g.beforeLessonId === l.id && !g.clearedAt);
-      const mastery = u ? masteryMap(u.id) : {};
-      const assignment = db().assignments.find((a) => a.lessonId === l.id);
-      return {
-        course: c, lesson: l, sections: syllabus(c, e), enrollment: e ?? null, progress: e ? progressOf(e) : { done: 0, total: all.length, pct: 0 },
-        practice: set ? { id: set.id, code: set.code, title: set.title, questions: set.questions.length, minutes: set.minutes, kind: set.passage.kind } : null,
-        unlocked: manager || isLessonUnlocked(l, e), previewOnly: !e && !manager,
-        gate: gate ? { ...gate, skillName: db().skills.find((s) => s.id === gate.skillId)?.name ?? gate.skillId, mastery: mastery[gate.skillId] ?? 0, attemptId: db().attempts.filter((a) => a.userId === u?.id && a.quizId === gate.fromSetId && a.status === "submitted").sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""))[0]?.id } : null,
-        prevId: all[idx - 1]?.id, nextId: all[idx + 1]?.id,
-        note: (u && db().notes.find((n) => n.userId === u.id && n.lessonId === l.id)?.text) ?? "",
-        assignment,
-        postCount: db().posts.filter((p) => p.lessonId === l.id && (!p.hidden || manager)).length,
-      };
-    });
+  /**
+   * The lesson page: the lesson itself (`GET /lessons/:id`), the course and its lesson
+   * list for the sidebar. A learner opening a lesson for the first time is marked as
+   * started (`in_progress`). It is never sent again, because that would undo `completed`.
+   */
+  async get(courseId: string, lessonId: string): Promise<LessonView> {
+    const [detail, course, lessons, categories] = await Promise.all([
+      backendRequest<{ lesson: BackendLessonDetail }>("GET", `/lessons/${lessonId}`).then((r) => r.lesson),
+      loadCourse(courseId),
+      loadLessons(courseId),
+      loadCategories(),
+    ]);
+
+    if (course.isEnrolled && detail.progress === null) {
+      await backendRequest("PUT", `/lessons/${lessonId}/progress`, { status: "in_progress" }).catch(() => {});
+    }
+
+    const sections = syllabusSections(lessons, categories);
+    const flat = sections.flatMap((s) => s.lessons);
+    const index = flat.findIndex((l) => l.id === lessonId);
+    // Remedial lessons are not in the syllabus, so they have no position
+    const order = index >= 0 ? flat[index].order : 1;
+    const passages: LessonPassage[] = detail.passages.map((p) => ({ id: String(p.passageId), type: p.type, title: p.title, content: p.content, mediaUrl: p.mediaUrl }));
+    const quiz = detail.quizzes[0];
+
+    return {
+      course: toCourse(course),
+      lesson: toLesson(detail, lessonCategory(detail, categories), order),
+      passages,
+      sections,
+      enrollment: course.isEnrolled ? toEnrollment({ courseId: course.courseId, lessons }) : null,
+      progress: coreProgress(lessons),
+      practice: quiz ? { id: String(quiz.quizId), title: quiz.title, questions: quiz.questionCount, minutes: quiz.timeLimitSeconds ? Math.round(quiz.timeLimitSeconds / 60) : 0 } : null,
+      unlocked: !detail.locked,
+      prevId: index > 0 ? flat[index - 1].id : undefined,
+      nextId: index >= 0 && index < flat.length - 1 ? flat[index + 1].id : undefined,
+    };
   },
 
-  /** Printable lesson resource (slides, vocabulary list, checklist). */
-  resource(courseSlug: string, lessonId: string, resourceId: string) {
-    return request<{ course: Course; lesson: Lesson; resource: Lesson["resources"][number]; passage: { title: string; text: string[] } | null }>("GET", `/courses/${courseSlug}/lessons/${lessonId}/resources/${resourceId}`, undefined, () => {
-      const u = currentUser();
-      const c = courseBySlug(courseSlug);
-      const l = db().lessons.find((x) => x.id === lessonId && x.courseId === c?.id);
-      const r = l?.resources.find((x) => x.id === resourceId);
-      if (!c || !l || !r) throw new ApiError(404, "NOT_FOUND", "Resource not found.");
-      if (!l.freePreview && !(u && (enrollmentOf(u.id, c.id) || canManageCourse(u, c)))) throw new ApiError(403, "NOT_ENROLLED", "Enroll in this course to download resources.");
-      const set = setOf(l.practiceSetId);
-      const text = set ? [...set.passage.paragraphs.map((p) => p.text), ...(set.passage.audioScript ?? []).map((a) => a.text)] : [];
-      return { course: c, lesson: l, resource: r, passage: set ? { title: set.passage.title, text } : null };
-    });
-  },
-
-  complete(lessonId: string) {
-    return request<{ enrollment: Enrollment; courseCompleted: boolean; nextLessonId?: string }>("POST", `/lessons/${lessonId}/complete`, {}, () => {
-      const u = requireUser(["learner"]);
-      const l = db().lessons.find((x) => x.id === lessonId);
-      if (!l) throw new ApiError(404, "NOT_FOUND", "Lesson not found.");
-      const e = enrollmentOf(u.id, l.courseId);
-      if (!e) throw new ApiError(403, "NOT_ENROLLED", "Enroll in this course to track progress.");
-      if (!isLessonUnlocked(l, e)) throw new ApiError(409, "LESSON_LOCKED", "Complete the previous lessons in this skill first.");
-      if (!e.completedLessonIds.includes(l.id)) e.completedLessonIds.push(l.id);
-      const all = lessonsOf(l.courseId);
-      const next = all.find((x) => !e.completedLessonIds.includes(x.id) && isLessonUnlocked(x, e) && x.skill === l.skill) ?? all.find((x) => !e.completedLessonIds.includes(x.id) && isLessonUnlocked(x, e));
-      e.lastLessonId = next?.id ?? l.id;
-      // a completed remediation lesson clears gates that recommended it
-      for (const g of e.remediation ?? []) if (!g.clearedAt && g.recommendationTargets.includes(l.id)) { g.clearedAt = nowIso(); g.clearedBy = "remediation"; }
-      let courseCompleted = false;
-      if (all.every((x) => e.completedLessonIds.includes(x.id)) && e.status !== "completed") {
-        e.status = "completed";
-        e.completedAt = nowIso();
-        courseCompleted = true;
-        const c = courseById(l.courseId)!;
-        notify(u.id, { type: "result", title: `You completed ${c.title}!`, body: "Your next level is now unlocked.", link: "/courses" });
-      }
-      commit();
-      return { enrollment: e, courseCompleted, nextLessonId: next?.id };
-    });
-  },
-
-  savePosition(lessonId: string, seconds: number) {
-    return request<{ ok: true }>("PUT", `/lessons/${lessonId}/position`, { seconds }, () => {
-      const u = currentUser();
-      const l = db().lessons.find((x) => x.id === lessonId);
-      if (!u || !l) return { ok: true as const };
-      const e = enrollmentOf(u.id, l.courseId);
-      if (e) {
-        e.lastPositionSeconds = { ...(e.lastPositionSeconds ?? {}), [lessonId]: Math.round(seconds) };
-        if (!e.completedLessonIds.includes(lessonId)) e.lastLessonId = lessonId;
-        commit();
-      }
-      return { ok: true as const };
-    });
-  },
-
-  overrideGate(gateId: string) {
-    return request<{ ok: true }>("POST", `/remediation/${gateId}/override`, {}, () => {
-      const u = requireUser(["learner"]);
-      for (const e of db().enrollments.filter((x) => x.userId === u.id)) for (const g of e.remediation ?? []) if (g.id === gateId) { g.clearedAt = nowIso(); g.clearedBy = "override"; }
-      commit();
-      return { ok: true as const };
-    });
-  },
-
-  saveNote(lessonId: string, text: string) {
-    return request<{ ok: true; updatedAt: string }>("PUT", `/lessons/${lessonId}/notes`, { text }, () => {
-      const u = requireUser();
-      validate({ text: text.length > 5000 && "Notes are limited to 5,000 characters." });
-      const n = db().notes.find((x) => x.userId === u.id && x.lessonId === lessonId);
-      const at = nowIso();
-      if (n) { n.text = text; n.updatedAt = at; } else db().notes.push({ userId: u.id, lessonId, text, updatedAt: at });
-      commit();
-      return { ok: true as const, updatedAt: at };
-    });
-  },
-
-  posts(lessonId: string) {
-    return request<DiscussionPost[]>("GET", `/lessons/${lessonId}/posts`, undefined, () => {
-      const u = currentUser();
-      const canModerate = !!u && u.role !== "learner";
-      return db().posts.filter((p) => p.lessonId === lessonId && (!p.hidden || canModerate)).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-    });
-  },
-
-  addPost(lessonId: string, body: string, parentId?: string) {
-    return request<DiscussionPost>("POST", `/lessons/${lessonId}/posts`, { body, parentId }, () => {
-      const u = requireUser();
-      validate({ body: body.trim().length < 2 ? "Write a message first." : body.length > 2000 && "Keep posts under 2,000 characters." });
-      const l = db().lessons.find((x) => x.id === lessonId);
-      if (!l) throw new ApiError(404, "NOT_FOUND", "Lesson not found.");
-      if (u.role === "learner" && !enrollmentOf(u.id, l.courseId)) throw new ApiError(403, "NOT_ENROLLED", "Enroll to join the discussion.");
-      const p: DiscussionPost = { id: uid("post"), lessonId, userId: u.id, authorName: u.name, authorRole: u.role, body: body.trim(), parentId, createdAt: nowIso() };
-      db().posts.push(p);
-      if (parentId) {
-        const parent = db().posts.find((x) => x.id === parentId);
-        if (parent && parent.userId !== u.id) notify(parent.userId, { type: "review", title: `${u.name} replied in a discussion`, body: `New reply on ${l.title}.`, link: `/learn/${courseById(l.courseId)?.slug}/${l.id}?tab=discussion` });
-      } else {
-        const c = courseById(l.courseId);
-        if (c && c.instructorId !== u.id) notify(c.instructorId, { type: "review", title: "New question in a lesson discussion", body: `${u.name} posted on ${l.title}.`, link: `/learn/${c.slug}/${l.id}?tab=discussion` });
-      }
-      commit();
-      return p;
-    });
-  },
-
-  report(input: { targetType: ContentReport["targetType"]; targetId: string; targetPreview: string; reason: string; details?: string }) {
-    return request<ContentReport>("POST", "/reports", input, () => {
-      const u = requireUser();
-      validate({ reason: !input.reason && "Choose a reason." });
-      const r: ContentReport = { ...input, id: uid("rep"), reporterId: u.id, reporterName: u.name, status: "open", createdAt: nowIso() };
-      db().reports.unshift(r);
-      for (const a of db().users.filter((x) => x.role === "admin")) notify(a.id, { type: "system", title: "New content report", body: `${input.reason}: “${input.targetPreview.slice(0, 60)}”`, link: "/admin/reports" });
-      commit();
-      return r;
-    });
+  async complete(lessonId: string, courseId: string) {
+    await backendRequest("PUT", `/lessons/${lessonId}/progress`, { status: "completed" });
+    const enrollment = toEnrollment({ courseId: Number(courseId), lessons: await loadLessons(courseId) });
+    return { enrollment, courseCompleted: enrollment.status === "completed" };
   },
 };
 
-/* ───────── Dashboard / My learning ───────── */
+/* ───────── Dashboard ───────── */
 
 export const meApi = {
-  dashboard() {
-    return request<DashboardData>("GET", "/me/dashboard", undefined, () => {
-      const u = requireUser(["learner"]);
-      const d = db();
-      const mine = d.enrollments.filter((e) => e.userId === u.id && e.status !== "left");
-      const mastery = masteryMap(u.id);
-      const { bands, overall } = bandsBySkill(mastery, d.skills);
-      const t0 = performance.now();
-      const upNext = recommendNext({ mastery, skills: d.skills, courses: d.courses, lessons: d.lessons, sets: d.practiceSets, enrollments: mine, k: 3 });
-      const recLatencyMs = performance.now() - t0;
-      for (const r of upNext) d.recEvents.push({ id: uid("ev"), userId: u.id, recId: r.id, targetId: r.targetId, action: "shown", at: nowIso() });
+  async dashboard(): Promise<DashboardData> {
+    const [user, enrollmentsRes, attemptsRes, categories] = await Promise.all([
+      authApi.me(),
+      backendRequest<{ enrollments: BackendEnrollment[] }>("GET", "/me/enrollments"),
+      backendRequest<{ attempts: BackendAttemptSummary[] }>("GET", "/me/attempts"),
+      loadCategories(),
+    ]);
+    if (!user) throw new ApiError(401, "HTTP_401", "Please log in");
+    const upNext = await loadRecommendations(categories);
 
-      const active = mine.filter((e) => e.status === "active").sort((a, b) => b.enrolledAt.localeCompare(a.enrolledAt));
-      let cont: DashboardData["continue"] = null;
-      const e0 = active[0];
-      if (e0) {
-        const c = courseById(e0.courseId)!;
-        const l = d.lessons.find((x) => x.id === e0.lastLessonId) ?? lessonsOf(c.id).find((x) => !e0.completedLessonIds.includes(x.id));
-        if (l) cont = { courseSlug: c.slug, courseTitle: c.title, lessonId: l.id, lessonTitle: l.title, skill: l.skill, order: l.order, skillTotal: lessonsOf(c.id).filter((x) => x.skill === l.skill).length, pct: progressOf(e0).pct };
+    const enrollments = enrollmentsRes.enrollments;
+    const lessonLists = await Promise.all(enrollments.map((e) => loadLessons(e.course.courseId)));
+
+    const courses: DashboardData["courses"] = [];
+    for (let i = 0; i < enrollments.length; i++) {
+      const perSkill = syllabusSections(lessonLists[i], categories).map((s) => ({ skill: s.skill, done: s.done, total: s.total }));
+      courses.push({
+        course: toCourse(enrollments[i].course),
+        status: enrollments[i].completedAt ? "completed" : "active",
+        perSkill,
+        pct: Math.round(enrollments[i].progressPercent),
+      });
+    }
+    // Courses in progress first, then the highest level
+    courses.sort((a, b) => (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1) || b.course.level - a.course.level);
+
+    // "Continue learning": the most recent unfinished course, at its first unfinished lesson
+    let cont: DashboardData["continue"] = null;
+    let newest = -1;
+    for (let i = 0; i < enrollments.length; i++) {
+      if (enrollments[i].completedAt) continue;
+      if (newest === -1 || enrollments[i].enrolledAt > enrollments[newest].enrolledAt) newest = i;
+    }
+    if (newest >= 0) {
+      const e = enrollments[newest];
+      for (const section of syllabusSections(lessonLists[newest], categories)) {
+        const next = section.lessons.find((l) => !l.completed);
+        if (next) {
+          cont = {
+            courseId: String(e.course.courseId),
+            courseTitle: e.course.title,
+            lessonId: next.id,
+            lessonTitle: next.title,
+            skill: section.skill,
+            order: next.order,
+            skillTotal: section.total,
+            pct: Math.round(e.progressPercent),
+          };
+          break;
+        }
       }
-      const courses = mine
-        .map((e) => ({ course: courseById(e.courseId)!, status: e.status, perSkill: perSkillProgress(e), pct: progressOf(e).pct }))
-        .filter((x) => x.course)
-        .sort((a, b) => (a.status === "active" ? -1 : 1) - (b.status === "active" ? -1 : 1) || b.course.level - a.course.level);
+    }
 
-      const recent = d.attempts
-        .filter((a) => a.userId === u.id && a.status === "submitted" && a.kind === "practice")
-        .sort((a, b) => (b.completedAt ?? "").localeCompare(a.completedAt ?? ""))
-        .slice(0, 4)
-        .map((a) => { const s = setOf(a.quizId)!; return { attemptId: a.id, setId: s.id, setCode: s.code, setTitle: s.title, skill: s.skill, score: a.totalScore, max: a.maxScore, completedAt: a.completedAt! }; });
+    // `/me/attempts` is newest first. The diagnostic has its own page, so it is left out here.
+    const practiceAttempts = attemptsRes.attempts.filter((a) => a.quiz.kind !== "diagnostic");
+    const recent: DashboardData["recent"] = [];
+    for (const a of practiceAttempts) {
+      if (a.status !== "completed" || recent.length === 4) continue;
+      recent.push({ attemptId: String(a.attemptId), quizId: String(a.quizId), title: a.quiz.title, score: a.totalScore ?? 0, max: a.maxScore, completedAt: a.completedAt ?? a.startedAt });
+    }
+    const live = practiceAttempts.find((a) => a.status === "in_progress");
 
-      const courseIds = new Set(mine.map((e) => e.courseId));
-      const deadlines = d.assignments
-        .filter((a) => courseIds.has(a.courseId) && Date.parse(a.dueAt) > Date.now() - 86400000)
-        .map((a) => ({ assignment: a, submitted: d.submissions.some((s) => s.assignmentId === a.id && s.userId === u.id) }))
-        .sort((a, b) => a.assignment.dueAt.localeCompare(b.assignment.dueAt));
-
-      const live = d.attempts.find((a) => a.userId === u.id && a.status === "in_progress" && a.kind === "practice");
-      const liveSet = live ? setOf(live.quizId) : undefined;
-      commit();
-      return {
-        user: publicUser(u), continue: cont, bands, overall, courses, upNext, recLatencyMs, recent, deadlines,
-        inProgressAttempt: live && liveSet ? { setId: liveSet.id, code: liveSet.code, answered: Object.values(live.answers).filter(Boolean).length, total: liveSet.questions.length } : undefined,
-      };
-    });
+    return {
+      user,
+      continue: cont,
+      bands: null,
+      overall: null,
+      courses,
+      upNext,
+      recent,
+      inProgressAttempt: live ? { quizId: String(live.quizId), total: live.maxScore } : undefined,
+    };
   },
 
-  recommendationFeedback(rec: Recommendation, action: "clicked" | "helpful" | "not_helpful") {
-    return request<{ ok: true }>("POST", "/recommendations/feedback", { recId: rec.id, action }, () => {
-      const u = requireUser();
-      db().recEvents.push({ id: uid("ev"), userId: u.id, recId: rec.id, targetId: rec.targetId, action, at: nowIso() });
-      commit();
-      return { ok: true as const };
-    });
-  },
-
-  notifications() {
-    return request<AppNotification[]>("GET", "/me/notifications", undefined, () => {
-      const u = requireUser();
-      ensureDeadlineReminders(u.id);
-      return db().notifications.filter((n) => n.userId === u.id).sort((a, b) => b.createdAt.localeCompare(a.createdAt));
-    });
-  },
-
-  markRead(ids: string[] | "all") {
-    return request<{ ok: true }>("POST", "/me/notifications/read", { ids }, () => {
-      const u = requireUser();
-      for (const n of db().notifications) if (n.userId === u.id && (ids === "all" || ids.includes(n.id))) n.read = true;
-      commit();
-      return { ok: true as const };
-    });
-  },
-
-  assignment(id: string) {
-    return request<{ assignment: Assignment; course: Course; lesson: Lesson; submission: Submission | null }>("GET", `/assignments/${id}`, undefined, () => {
-      const u = requireUser();
-      const a = db().assignments.find((x) => x.id === id);
-      if (!a) throw new ApiError(404, "NOT_FOUND", "Assignment not found.");
-      const c = courseById(a.courseId)!;
-      if (u.role === "learner" && !enrollmentOf(u.id, c.id)) throw new ApiError(403, "NOT_ENROLLED", "Enroll in this course to see this task.");
-      return { assignment: a, course: c, lesson: db().lessons.find((l) => l.id === a.lessonId)!, submission: db().submissions.find((s) => s.assignmentId === id && s.userId === u.id) ?? null };
-    });
-  },
-
-  submitAssignment(id: string, input: { text: string; fileName?: string; fileSize?: number }) {
-    return request<Submission>("POST", `/assignments/${id}/submissions`, input, () => {
-      const u = requireUser(["learner"]);
-      const a = db().assignments.find((x) => x.id === id);
-      if (!a) throw new ApiError(404, "NOT_FOUND", "Assignment not found.");
-      if (!enrollmentOf(u.id, a.courseId)) throw new ApiError(403, "NOT_ENROLLED", "Enroll in this course first.");
-      const wordCount = input.text.trim() ? input.text.trim().split(/\s+/).length : 0;
-      validate({ text: !input.text.trim() && !input.fileName && "Paste your answer or attach a file.", fileSize: (input.fileSize ?? 0) > 10 * 1024 * 1024 && "Files must be 10 MB or smaller." });
-      const existing = db().submissions.find((s) => s.assignmentId === id && s.userId === u.id);
-      if (existing?.status === "graded") throw new ApiError(409, "ALREADY_GRADED", "This task has already been graded.");
-      const sub: Submission = { id: existing?.id ?? uid("sub"), assignmentId: id, userId: u.id, userName: u.name, fileName: input.fileName, fileSize: input.fileSize, text: input.text, wordCount, submittedAt: nowIso(), late: Date.now() > Date.parse(a.dueAt), status: "submitted" };
-      if (existing) Object.assign(existing, sub); else db().submissions.push(sub);
-      const c = courseById(a.courseId)!;
-      notify(c.instructorId, { type: "system", title: "New writing submission", body: `${u.name} submitted “${a.title}”.`, link: "/instructor/grading" });
-      commit();
-      return sub;
-    });
+  /** Records that I opened a recommendation (used for the Precision@3 / MRR evaluation). */
+  async clickRecommendation(recommendationId: string) {
+    await backendRequest("POST", `/recommendations/${recommendationId}/click`);
   },
 };
-
-/** Creates one deadline reminder per assignment due within 5 days that the learner hasn't submitted. */
-function ensureDeadlineReminders(userId: string) {
-  const d = db();
-  const mine = new Set(d.enrollments.filter((e) => e.userId === userId && e.status === "active").map((e) => e.courseId));
-  for (const a of d.assignments) {
-    const due = Date.parse(a.dueAt);
-    if (!mine.has(a.courseId) || due < Date.now() || due - Date.now() > 5 * 86400000) continue;
-    if (d.submissions.some((s) => s.assignmentId === a.id && s.userId === userId)) continue;
-    if (d.notifications.some((n) => n.userId === userId && n.type === "deadline" && n.link === `/assignments/${a.id}`)) continue;
-    notify(userId, { type: "deadline", title: "Writing task due soon", body: `${a.title} is due ${new Date(a.dueAt).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "short" })}.`, link: `/assignments/${a.id}` });
-  }
-  commit();
-}

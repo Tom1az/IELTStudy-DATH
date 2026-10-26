@@ -3,12 +3,11 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState, type ReactNode } from "react";
-import { Bell, ExternalLink, LogOut, Menu, X } from "lucide-react";
+import { ExternalLink, LogOut, Menu, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { Logo } from "./Logo";
-import { useUnreadCount } from "./SiteHeader";
 
 export interface NavItem {
   href: string;
@@ -24,7 +23,6 @@ export function AppShell({ section, nav, children }: { section: string; nav: Nav
   const router = useRouter();
   const { user, logout } = useAuth();
   const [open, setOpen] = useState(false);
-  const unread = useUnreadCount();
   useEffect(() => setOpen(false), [pathname]);
 
   const active = (n: NavItem) => (n.exact ? pathname === n.href : pathname === n.href || pathname.startsWith(n.href + "/"));
@@ -65,10 +63,6 @@ export function AppShell({ section, nav, children }: { section: string; nav: Nav
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-cream/95 px-4 backdrop-blur md:px-8">
           <button className="rounded-lg p-2 hover:bg-sand lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
           <div className="ml-auto flex items-center gap-3">
-            <Link href="/notifications" className="relative rounded-full p-2 hover:bg-sand" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
-              <Bell className="h-5 w-5" />
-              {unread > 0 && <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">{unread}</span>}
-            </Link>
             {user && (
               <Link href="/profile" className="flex items-center gap-2.5">
                 <span className="hidden text-right sm:block"><span className="block text-sm font-semibold leading-tight">{user.name}</span><span className="block text-xs capitalize text-ink-muted">{user.role}</span></span>

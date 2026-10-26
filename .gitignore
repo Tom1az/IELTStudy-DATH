@@ -2,8 +2,12 @@ node_modules/
 yarn.lock
 .env
 dist/
-src/prisma/contract.d.ts
-src/prisma/contract.json
 .vscode/
+.venv/
 .idea/
 qodana.yaml
+CLAUDE.local.md
+.claude/
+# .claude/settings.local.json
+backend/src/prisma/contract.d.ts
+backend/src/prisma/contract.json

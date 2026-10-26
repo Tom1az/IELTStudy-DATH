@@ -16,8 +16,8 @@ export function AuthShell({ title, subtitle, children, aside }: { title: string;
             <p className="text-[11px] font-semibold uppercase tracking-eyebrow text-brand-soft">Adaptive IELTS learning</p>
             <p className="mt-3 font-serif text-[28px] font-bold leading-tight">Climb from Band 4 to Band 7, one skill at a time.</p>
             <ul className="mt-6 space-y-3 text-sm text-white/85">
-              <li>• A 15-minute placement quiz sets your starting level.</li>
-              <li>• Every lesson ends with an IELTS-style practice set.</li>
+              <li>• A placement quiz sets your starting point.</li>
+              <li>• Lessons come with IELTS-style quizzes.</li>
               <li>• Your skill map updates after every answer and picks what to review next.</li>
             </ul>
           </>

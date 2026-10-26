@@ -1,6 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
-const PORT = Number(process.env.PORT ?? 3000);
+// Not PORT: loading backend/.env (for SEED_PASSWORD) sets PORT to the backend's port
+const PORT = Number(process.env.E2E_PORT ?? 3001);
 const BASE_URL = process.env.BASE_URL ?? `http://localhost:${PORT}`;
 
 export default defineConfig({

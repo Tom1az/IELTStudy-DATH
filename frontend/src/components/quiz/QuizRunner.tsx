@@ -8,8 +8,6 @@ import { ConfirmDialog, Spinner } from "@/components/ui";
 import { PassagePane } from "./PassagePane";
 import { QuestionView } from "./QuestionView";
 
-const escapeHtml = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-
 export interface QuizRunnerProps {
   title: string;
   skill?: SkillCategory;
@@ -26,7 +24,8 @@ export interface QuizRunnerProps {
 export function QuizRunner({ title, skill, sections, initialAnswers = {}, initialSeconds, onSave, onSubmit, onExit, allowUntimed = true }: QuizRunnerProps) {
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const [remaining, setRemaining] = useState(initialSeconds);
-  const [timed, setTimed] = useState(true);
+  // A quiz without a time limit (initialSeconds 0) starts untimed
+  const [timed, setTimed] = useState(initialSeconds > 0);
   const [sectionIdx, setSectionIdx] = useState(0);
   const [confirm, setConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -140,7 +139,7 @@ export function QuizRunner({ title, skill, sections, initialAnswers = {}, initia
             const done = s.questions.filter((q) => answers[q.id]).length;
             return (
               <button key={s.id} role="tab" aria-selected={i === sectionIdx} onClick={() => setSectionIdx(i)} className={cx("tab whitespace-nowrap px-3 pt-3", i === sectionIdx && "tab-active")}>
-                {SKILL_META[s.skill].label} <span className="text-xs text-ink-soft">{done}/{s.questions.length}</span>
+                {s.title} <span className="text-xs text-ink-soft">{done}/{s.questions.length}</span>
               </button>
             );
           })}
@@ -155,30 +154,15 @@ export function QuizRunner({ title, skill, sections, initialAnswers = {}, initia
           <PassagePane key={section.id} passage={section.passage} />
         </section>
         <section ref={qPane} className="px-5 py-6 lg:w-1/2 lg:overflow-y-auto lg:px-11 lg:py-9" aria-label="Questions">
-          {(() => {
-            const blocks: JSX.Element[] = [];
-            section.questions.forEach((q, i) => {
-              const n = offsets[sectionIdx] + i + 1;
-              if (q.groupLabel || (i === 0 && q.groupInstruction)) {
-                blocks.push(
-                  <div key={`g-${q.id}`} className={cx(i > 0 && "pt-4")}>
-                    {q.groupLabel && <h2 className="font-serif text-[22px] font-bold">{q.groupLabel}</h2>}
-                    {!q.groupLabel && <h2 className="font-serif text-[22px] font-bold">Questions {n}–{offsets[sectionIdx] + section.questions.length}</h2>}
-                    {q.groupInstruction && (
-                      <p className="mt-1 text-[13.5px] leading-relaxed text-ink-muted" dangerouslySetInnerHTML={{ __html: escapeHtml(q.groupInstruction).replace(/\b(TRUE|FALSE|NOT GIVEN|YES|NO)\b/g, "<strong class='text-ink'>$1</strong>") }} />
-                    )}
-                  </div>,
-                );
-              } else if (q.groupInstruction) {
-                blocks.push(<p key={`gi-${q.id}`} className="pt-2 text-[13.5px] leading-relaxed text-ink-muted">{q.groupInstruction}</p>);
-              }
-              blocks.push(<QuestionView key={q.id} q={q} number={n} value={answers[q.id] ?? ""} onChange={(v) => set(q.id, v)} disabled={submitting} />);
-            });
-            return <div className="space-y-6">{blocks}</div>;
-          })()}
+          <h2 className="font-serif text-[22px] font-bold">Questions {offsets[sectionIdx] + 1}–{offsets[sectionIdx] + section.questions.length}</h2>
+          <div className="mt-6 space-y-6">
+            {section.questions.map((q, i) => (
+              <QuestionView key={q.id} q={q} number={offsets[sectionIdx] + i + 1} value={answers[q.id] ?? ""} onChange={(v) => set(q.id, v)} disabled={submitting} />
+            ))}
+          </div>
           {sectionIdx < sections.length - 1 && (
             <button className="btn-dark mt-8" onClick={() => { setSectionIdx(sectionIdx + 1); qPane.current?.scrollTo({ top: 0 }); }}>
-              Next section: {SKILL_META[sections[sectionIdx + 1].skill].label} →
+              Next section: {sections[sectionIdx + 1].title} →
             </button>
           )}
         </section>

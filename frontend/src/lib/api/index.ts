@@ -1,9 +1,9 @@
 export { authApi } from "./auth";
 export { catalogApi, lessonApi, meApi } from "./learning";
 export { practiceApi } from "./practice";
-export { instructorApi } from "./instructor";
+export { instructorApi, isEditable } from "./instructor";
 export { adminApi } from "./admin";
-export { ApiError, USING_MOCK } from "./client";
+export { ApiError } from "./client";
 export type * from "./learning";
 export type * from "./practice";
 export type * from "./instructor";

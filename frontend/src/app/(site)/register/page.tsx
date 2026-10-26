@@ -53,7 +53,7 @@ function RegisterInner() {
         </label>
         {fields.agree && <p className="-mt-2 text-xs font-medium text-danger">{fields.agree}</p>}
         <button className="btn-primary w-full py-3" disabled={pending}>{pending && <Spinner className="h-4 w-4" />}Create account</button>
-        <p className="text-center text-xs text-ink-soft">Next, a 15-minute placement quiz sets up your skill map.</p>
+        <p className="text-center text-xs text-ink-soft">Next, a placement quiz sets up your skill map.</p>
       </form>
     </AuthShell>
   );

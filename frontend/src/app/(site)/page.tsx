@@ -4,7 +4,7 @@ import Link from "next/link";
 import { catalogApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { useAuth } from "@/lib/auth-context";
-import { LEVEL_THEME, cx, isCoreCourse } from "@/lib/format";
+import { LEVEL_THEME, cx } from "@/lib/format";
 import { SKILL_CATEGORIES } from "@/lib/types";
 import { SkillChip, Skeleton } from "@/components/ui";
 import { SkillTile } from "@/components/SkillIcon";
@@ -32,7 +32,7 @@ const BARS = [
 export default function LandingPage() {
   const { user } = useAuth();
   const { data } = useAsync(() => catalogApi.list(), []);
-  const courses = data ? ([1, 2, 3].map((lv) => data.courses.find((c) => c.level === lv && isCoreCourse(c)) ?? data.courses.find((c) => c.level === lv)).filter(Boolean) as typeof data.courses) : undefined;
+  const courses = data ? ([1, 2, 3].map((lv) => data.courses.find((c) => c.level === lv)).filter(Boolean) as typeof data.courses) : undefined;
 
   return (
     <>
@@ -44,7 +44,7 @@ export default function LandingPage() {
             Climb from Band 4 to Band 7, one skill at a time.
           </h1>
           <p className="mt-6 max-w-[580px] text-[17px] leading-relaxed text-ink-muted">
-            Enroll in the level that fits you today. Every level trains Listening, Reading, Writing and Speaking, and every lesson ends with an IELTS-style practice set.
+            Enroll in the level that fits you today. Every level trains Listening, Reading, Writing and Speaking, and lessons come with IELTS-style quizzes.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Link href="/courses" className="btn-primary px-6 py-3">Browse courses</Link>
@@ -70,7 +70,7 @@ export default function LandingPage() {
       <section className="container pb-0 pt-16 md:pt-20" aria-labelledby="levels-h">
         <div className="mb-6 flex flex-col justify-between gap-2 md:flex-row md:items-end">
           <h2 id="levels-h" className="font-serif text-[28px] font-bold text-navy md:text-[34px]">Choose the level that fits you today</h2>
-          <Link href={user ? "/placement" : "/register?next=/placement"} className="text-sm font-semibold text-brand hover:underline">Not sure? Take the 15-minute placement quiz →</Link>
+          <Link href={user ? "/placement" : "/register?next=/placement"} className="text-sm font-semibold text-brand hover:underline">Not sure? Take the placement quiz →</Link>
         </div>
         <div className="grid gap-4 pb-1 md:grid-cols-3 md:gap-5">
           {!courses
@@ -78,18 +78,22 @@ export default function LandingPage() {
             : courses.map((c) => (
                 <article key={c.id} className="flex min-h-[300px] flex-col rounded-2xl border border-line bg-white p-6 md:min-h-[340px]">
                   <span className={cx("pill w-fit px-2.5 py-1 text-[11px]", LEVEL_THEME[c.level].badge)}>Level {c.level}</span>
-                  <h3 className="mt-3 font-serif text-[26px] font-bold text-navy">{c.levelName}</h3>
-                  <p className="mt-1 text-sm font-semibold text-brand">{c.bandRange}</p>
-                  <p className="mt-3 text-sm leading-relaxed text-ink-muted">{c.tagline}</p>
+                  <h3 className="mt-3 font-serif text-[26px] font-bold text-navy">{c.title}</h3>
+                  <p className="mt-3 text-sm leading-relaxed text-ink-muted">{c.description}</p>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     {SKILL_CATEGORIES.map((s) => <SkillChip key={s} skill={s} />)}
                   </div>
                   <div className="mt-auto flex items-center justify-between pt-8 text-sm">
-                    <span className="text-ink-muted">{c.lessonCount} lessons · ≈ {c.hours} hours</span>
-                    <Link href={`/courses/${c.slug}`} className="font-semibold text-brand hover:underline" aria-label={`View ${c.title}`}>View course →</Link>
+                    <span className="text-ink-muted">{c.lessonCount} lessons</span>
+                    <Link href={`/courses/${c.id}`} className="font-semibold text-brand hover:underline" aria-label={`View ${c.title}`}>View course →</Link>
                   </div>
                 </article>
               ))}
+          {!user && courses && courses.length === 0 && (
+            <p className="text-sm text-ink-muted md:col-span-3">
+              <Link href="/login" className="link">Log in</Link> or <Link href="/register" className="link">create an account</Link> to see the courses.
+            </p>
+          )}
         </div>
       </section>
 

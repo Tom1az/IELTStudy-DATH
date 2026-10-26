@@ -101,7 +101,11 @@ export function ListeningPlayer({ passage, showScript }: { passage: Passage; sho
 
 export function PassagePane({ passage, revealScript = false }: { passage: Passage; revealScript?: boolean }) {
   const [showScript, setShowScript] = useState(revealScript);
-  const label = { reading: "Reading passage", listening: "Listening", writing: "Writing task", speaking: "Speaking task" }[passage.kind];
+  const label = passage.kind === "listening" ? "Listening" : "Reading passage";
+  // Questions without a passage (grammar, vocabulary...) come with an empty one
+  if (passage.kind !== "listening" && passage.paragraphs.length === 0 && !passage.audioScript) {
+    return <p className="text-sm text-ink-muted">These questions don&apos;t use a passage. Answer them on the right.</p>;
+  }
   return (
     <div>
       <p className="eyebrow-muted">{label}</p>
@@ -124,7 +128,6 @@ export function PassagePane({ passage, revealScript = false }: { passage: Passag
               <p className="text-[15.5px] leading-[1.75] text-ink">{p.text}</p>
             </div>
           ))}
-          {passage.audioScript && passage.kind === "speaking" && <ListeningPlayer passage={passage} showScript={false} />}
         </div>
       )}
     </div>

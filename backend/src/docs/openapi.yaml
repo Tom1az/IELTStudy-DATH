@@ -1,0 +1,2403 @@
+openapi: 3.1.0
+info:
+  title: IELTStudy API
+  version: 0.2.6
+  description: |
+    REST API for IELTStudy, an adaptive IELTS learning platform (see `specs.md`).
+    Contract-first: add or change an endpoint here in the same change as its code.
+
+    **Auth.** Send `Authorization: Bearer <token>`, using the token from `/auth/register` or `/auth/login`.
+    Tokens last 1 day. Every endpoint needs a token unless it says otherwise.
+
+    **Roles.** Each endpoint says who may call it: learner, instructor, admin.
+    "Owner" means the instructor who created the resource. Admins act only where an endpoint lists them:
+    they review and archive courses and edit passages, questions and quizzes, but they don't edit or submit an instructor's course or lessons.
+
+    **Locked content.** Content inside a course (lessons, passages, quizzes, and the questions those quizzes use)
+    can only change while the course is `draft` or `rejected`. To change an approved course, the owner withdraws it first.
+    Questions learners have answered and quizzes they have attempted can't be edited or deleted at all, so past grades
+    and the response logs that BKT learns from stay consistent. Both rules return 409.
+
+    **Responses.** Success: `{ <resource>, message }`. Errors: `{ error: { message, details? } }`.
+    - 400: invalid input
+    - 401: no token, or a bad or expired token
+    - 403: wrong role, or not the owner
+    - 404: not found, or not visible to you
+    - 409: the request conflicts with the current state
+
+    **Phases.** Endpoints marked *Phase 3* are part of the contract now, so the frontend can mock them,
+    but their behaviour (BKT mastery and recommendations) is built in Phase 3.
+servers:
+  - url: /api/v1
+security:
+  - bearerAuth: []
+tags:
+  - name: Auth
+    description: Register and log in. These are the only public endpoints.
+  - name: Profile
+    description: The logged-in user.
+  - name: Admin
+    description: User roles and access, the course review queue, usage statistics.
+  - name: Skills
+    description: The micro-skill taxonomy used for tagging and mastery.
+  - name: Courses
+    description: Course catalog, instructor authoring and the review flow (draft → pending_review → approved | rejected).
+  - name: Lessons
+    description: Lessons inside a course, and learner progress.
+  - name: Content
+    description: Reading passages, listening audio and video, and file uploads to Supabase Storage.
+  - name: Questions
+    description: The instructor question bank, tagged with skills (the Q-matrix).
+  - name: Quizzes
+    description: Lesson quizzes, practice quizzes and the 30-question diagnostic.
+  - name: Attempts
+    description: Taking a quiz, submitting answers and reviewing the result.
+  - name: Dashboard
+    description: Learner progress, skill mastery and recommendations.
+
+paths:
+  # ---------------------------------------------------------------------------
+  # Auth and profile
+  # ---------------------------------------------------------------------------
+  /auth/register:
+    post:
+      tags: [Auth]
+      operationId: register
+      summary: Create a learner account
+      description: Always creates a **learner**. Admins promote instructors with `PATCH /admin/users/{userId}`.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RegisterInput" }
+      responses:
+        "201":
+          description: Account created and logged in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      operationId: login
+      summary: Log in
+      description: |
+        A wrong password and an unknown email both return the same 401, so the API never reveals which emails exist.
+        A deactivated account gets 403.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LoginInput" }
+      responses:
+        "200":
+          description: Logged in
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/AuthResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /me:
+    get:
+      tags: [Profile]
+      operationId: getMe
+      summary: Get my profile
+      description: |
+        Roles: learner, instructor, admin. Every protected endpoint reloads the user from the database,
+        so a deactivated account's token gets 401 at once, and a role change applies to the next request.
+      responses:
+        "200":
+          description: The logged-in user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, message]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    patch:
+      tags: [Profile]
+      operationId: updateMe
+      summary: Update my name or target band
+      description: "Roles: learner, instructor, admin. Onboarding sets `targetBand` here."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProfileUpdate" }
+      responses:
+        "200":
+          description: Updated profile
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, message]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------------------
+  # Admin
+  # ---------------------------------------------------------------------------
+  /admin/users:
+    get:
+      tags: [Admin]
+      operationId: listUsers
+      summary: List users
+      description: "Roles: admin. Ordered by `userId`, oldest account first."
+      parameters:
+        - name: role
+          in: query
+          schema: { $ref: "#/components/schemas/UserRole" }
+        - name: isActive
+          in: query
+          schema: { type: boolean }
+      responses:
+        "200":
+          description: Users matching the filters
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [users, message]
+                properties:
+                  users:
+                    type: array
+                    items: { $ref: "#/components/schemas/User" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/users/{userId}:
+    parameters:
+      - $ref: "#/components/parameters/UserId"
+    patch:
+      tags: [Admin]
+      operationId: updateUserAccess
+      summary: Change a user's role or deactivate them
+      description: |
+        Roles: admin. A deactivated user can't log in, and their existing token stops working at once.
+        Admins can't use this on their own account (409), even for a change that does nothing. Only an admin can demote an admin, so there is always at least one admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/AdminUserUpdate" }
+      responses:
+        "200":
+          description: Updated user
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [user, message]
+                properties:
+                  user: { $ref: "#/components/schemas/User" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /admin/courses:
+    get:
+      tags: [Admin]
+      operationId: listAllCourses
+      summary: List all courses (the review queue)
+      description: "Roles: admin. Use `?status=pending_review` for the courses waiting for review. With `status`, the oldest submission comes first."
+      parameters:
+        - name: status
+          in: query
+          schema: { $ref: "#/components/schemas/CourseStatus" }
+      responses:
+        "200":
+          description: Courses matching the filter
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /admin/stats:
+    get:
+      tags: [Admin]
+      operationId: getStats
+      summary: Platform usage statistics
+      description: "Roles: admin."
+      responses:
+        "200":
+          description: Current statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [stats, message]
+                properties:
+                  stats: { $ref: "#/components/schemas/AdminStats" }
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # ---------------------------------------------------------------------------
+  # Skills
+  # ---------------------------------------------------------------------------
+  /skills:
+    get:
+      tags: [Skills]
+      operationId: listSkills
+      summary: List the skill taxonomy
+      description: "Roles: learner, instructor, admin. Read-only: `skillCode` is the fixed key the BKT parameters use."
+      parameters:
+        - name: category
+          in: query
+          schema: { $ref: "#/components/schemas/SkillCategory" }
+      responses:
+        "200":
+          description: All skills, or the skills in one category
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [skills, message]
+                properties:
+                  skills:
+                    type: array
+                    items: { $ref: "#/components/schemas/Skill" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+
+  # ---------------------------------------------------------------------------
+  # Courses
+  # ---------------------------------------------------------------------------
+  /courses:
+    get:
+      tags: [Courses]
+      operationId: listCatalog
+      summary: The course catalog (approved courses)
+      description: "Roles: learner, instructor, admin. `isEnrolled` tells a learner whether they are enrolled."
+      parameters:
+        - name: level
+          in: query
+          schema: { $ref: "#/components/schemas/CourseLevel" }
+      responses:
+        "200":
+          description: Approved courses
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseList" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+    post:
+      tags: [Courses]
+      operationId: createCourse
+      summary: Create a course (as a draft)
+      description: "Roles: instructor."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseInput" }
+      responses:
+        "201":
+          description: Draft course created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /instructor/courses:
+    get:
+      tags: [Courses]
+      operationId: listMyCourses
+      summary: My courses, in every status
+      description: "Roles: instructor. Includes `reviewFeedback` from the last review."
+      responses:
+        "200":
+          description: Courses I teach
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseList" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /courses/{courseId}:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    get:
+      tags: [Courses]
+      operationId: getCourse
+      summary: Get a course
+      description: |
+        Roles: learner, instructor, admin. Anyone can see an approved course.
+        Courses in other statuses are visible only to their owner and admins (404 for everyone else).
+      responses:
+        "200":
+          description: The course
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Courses]
+      operationId: updateCourse
+      summary: Edit a course
+      description: |
+        Roles: owner. Only while the course is `draft` or `rejected` (409 otherwise).
+        To change an approved course, withdraw it first.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/CourseUpdate" }
+      responses:
+        "200":
+          description: Updated course
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Courses]
+      operationId: deleteCourse
+      summary: Delete a draft course
+      description: "Roles: owner. Only a `draft` that no learner has enrolled in (409 otherwise). Archive a course that learners have used."
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /courses/{courseId}/submit:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    post:
+      tags: [Courses]
+      operationId: submitCourse
+      summary: Submit a course for review
+      description: "Roles: owner. `draft` or `rejected` → `pending_review`. The course needs at least one core lesson (409 otherwise)."
+      responses:
+        "200":
+          description: Course is waiting for review
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /courses/{courseId}/withdraw:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    post:
+      tags: [Courses]
+      operationId: withdrawCourse
+      summary: Withdraw a course back to draft
+      description: |
+        Roles: owner. `pending_review` or `approved` → `draft`, so the course can be edited and resubmitted.
+        Enrolled learners keep their enrolment but can't open lessons until the course is approved again.
+      responses:
+        "200":
+          description: Course is a draft again
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /courses/{courseId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    post:
+      tags: [Courses]
+      operationId: approveCourse
+      summary: Approve a course
+      description: "Roles: admin. `pending_review` → `approved`. Learners can then see and enrol in it."
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ApproveInput" }
+      responses:
+        "200":
+          description: Course approved
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /courses/{courseId}/reject:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    post:
+      tags: [Courses]
+      operationId: rejectCourse
+      summary: Reject a course with feedback
+      description: "Roles: admin. `pending_review` → `rejected`. Feedback is required, so the instructor knows what to fix."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RejectInput" }
+      responses:
+        "200":
+          description: Course rejected
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /courses/{courseId}/archive:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    post:
+      tags: [Courses]
+      operationId: archiveCourse
+      summary: Archive a course
+      description: "Roles: owner, admin. Any status → `archived`. This retires a course that has learner history."
+      responses:
+        "200":
+          description: Course archived
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CourseResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /courses/{courseId}/enroll:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    post:
+      tags: [Courses]
+      operationId: enrollInCourse
+      summary: Enrol in a course
+      description: "Roles: learner. Approved courses only. Enrolling twice is harmless: the second call returns 200 with the existing enrolment."
+      responses:
+        "200":
+          description: Already enrolled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnrollmentResult" }
+        "201":
+          description: Enrolled
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/EnrollmentResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------------------
+  # Lessons
+  # ---------------------------------------------------------------------------
+  /courses/{courseId}/lessons:
+    parameters:
+      - $ref: "#/components/parameters/CourseId"
+    get:
+      tags: [Lessons]
+      operationId: listLessons
+      summary: List a course's lessons
+      description: |
+        Roles: learner, instructor, admin (same visibility as the course).
+        Core lessons come first in `orderIndex` order, then remedial lessons.
+        For learners, each lesson also has `progress` and `locked`.
+      responses:
+        "200":
+          description: The course's lessons
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [lessons, message]
+                properties:
+                  lessons:
+                    type: array
+                    items: { $ref: "#/components/schemas/Lesson" }
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    post:
+      tags: [Lessons]
+      operationId: createLesson
+      summary: Add a lesson to a course
+      description: "Roles: owner. Only while the course is `draft` or `rejected` (409 otherwise)."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LessonInput" }
+      responses:
+        "201":
+          description: Lesson created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LessonResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /lessons/{lessonId}:
+    parameters:
+      - $ref: "#/components/parameters/LessonId"
+    get:
+      tags: [Lessons]
+      operationId: getLesson
+      summary: Open a lesson
+      description: |
+        Roles: learner, instructor, admin. Returns the lesson with its passages and media, quizzes and skill tags.
+        A learner must be enrolled in the (approved) course, and the lesson must not be `locked` (403 otherwise).
+      responses:
+        "200":
+          description: The lesson
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LessonResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Lessons]
+      operationId: updateLesson
+      summary: Edit a lesson
+      description: "Roles: owner. Only while the course is `draft` or `rejected` (409 otherwise). `skills` replaces the whole tag list."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LessonUpdate" }
+      responses:
+        "200":
+          description: Updated lesson
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LessonResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Lessons]
+      operationId: deleteLesson
+      summary: Delete a lesson
+      description: "Roles: owner. Only while the course is `draft` or `rejected`, and only if no learner has attempted its quizzes (409 otherwise)."
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /lessons/{lessonId}/progress:
+    parameters:
+      - $ref: "#/components/parameters/LessonId"
+    put:
+      tags: [Lessons]
+      operationId: setLessonProgress
+      summary: Mark a lesson as started or completed
+      description: "Roles: learner (enrolled). Creates or updates my progress; `completedAt` is set when the status is `completed`."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ProgressInput" }
+      responses:
+        "200":
+          description: My progress on this lesson
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [progress, message]
+                properties:
+                  progress: { $ref: "#/components/schemas/LessonProgress" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  # ---------------------------------------------------------------------------
+  # Content: passages, media and uploads
+  # ---------------------------------------------------------------------------
+  /uploads:
+    post:
+      tags: [Content]
+      operationId: createUpload
+      summary: Get a signed URL to upload a media file
+      description: |
+        Roles: instructor, admin.
+        1. Call this to get `uploadUrl` and `path`.
+        2. `PUT` the file straight to `uploadUrl`, with the same `Content-Type`. The file never passes through this API.
+        3. Create or update a passage with `mediaPath: path`.
+
+        The Storage bucket is private: files are read only through the signed `mediaUrl` of a passage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/UploadRequest" }
+      responses:
+        "201":
+          description: Signed upload URL
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [upload, message]
+                properties:
+                  upload: { $ref: "#/components/schemas/UploadTicket" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /passages:
+    post:
+      tags: [Content]
+      operationId: createPassage
+      summary: Add a reading passage, audio or video
+      description: |
+        Roles: instructor, admin.
+        - `reading_text` needs `content`. `listening_audio` and `video` need `mediaPath` (from `/uploads`); their `content` is an optional transcript.
+        - Instructors must attach the passage to a lesson of their own course while it is `draft` or `rejected`.
+          Only admins may leave `lessonId` empty (passages for the diagnostic).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassageInput" }
+      responses:
+        "201":
+          description: Passage created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PassageResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /passages/{passageId}:
+    parameters:
+      - $ref: "#/components/parameters/PassageId"
+    get:
+      tags: [Content]
+      operationId: getPassage
+      summary: Get a passage (author view)
+      description: "Roles: owner, admin. Learners see passages inside lessons and quizzes instead."
+      responses:
+        "200":
+          description: The passage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PassageResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Content]
+      operationId: updatePassage
+      summary: Edit a passage
+      description: "Roles: owner, admin. Same course-status rule as creating one."
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PassageUpdate" }
+      responses:
+        "200":
+          description: Updated passage
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PassageResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Content]
+      operationId: deletePassage
+      summary: Delete a passage
+      description: |
+        Roles: owner, admin. Same course-status rule as creating one.
+        Deleting a passage also deletes its questions, so it fails (409) once learners have answered them.
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  # ---------------------------------------------------------------------------
+  # Questions
+  # ---------------------------------------------------------------------------
+  /questions:
+    get:
+      tags: [Questions]
+      operationId: listQuestions
+      summary: Browse the question bank
+      description: "Roles: instructor (my questions), admin (all questions)."
+      parameters:
+        - name: skillId
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: passageId
+          in: query
+          schema: { type: integer, minimum: 1 }
+        - name: type
+          in: query
+          schema: { $ref: "#/components/schemas/QuestionType" }
+      responses:
+        "200":
+          description: Questions matching the filters
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [questions, message]
+                properties:
+                  questions:
+                    type: array
+                    items: { $ref: "#/components/schemas/Question" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+    post:
+      tags: [Questions]
+      operationId: createQuestion
+      summary: Write a question and tag it with skills
+      description: |
+        Roles: instructor, admin.
+        - `skills` is the question's row of the Q-matrix: the weights must **sum to 1** (400 otherwise). An unknown skill id is a 400.
+        - `options` and `answerKey` must match `questionType`; see the `QuestionInput` schema.
+        - `passageId`, if given, must be a passage I created (403 otherwise; admins may use any passage). A missing passage is a 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionInput" }
+      responses:
+        "201":
+          description: Question created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuestionResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /questions/{questionId}:
+    parameters:
+      - $ref: "#/components/parameters/QuestionId"
+    get:
+      tags: [Questions]
+      operationId: getQuestion
+      summary: Get a question (author view, with the answer)
+      description: "Roles: owner, admin."
+      responses:
+        "200":
+          description: The question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuestionResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Questions]
+      operationId: updateQuestion
+      summary: Edit a question
+      description: |
+        Roles: owner, admin. `skills` replaces the whole list, and its weights must sum to 1.
+        The `options` / `answerKey` rule is checked on the question as it will be after the edit, so changing `questionType` usually needs new `options` and `answerKey` too.
+        The same `passageId` rule as creating.
+        Fails (409) once learners have answered the question, or while a quiz in a course that isn't `draft` or `rejected` uses it.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuestionUpdate" }
+      responses:
+        "200":
+          description: Updated question
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuestionResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Questions]
+      operationId: deleteQuestion
+      summary: Delete a question
+      description: |
+        Roles: owner, admin. The same rules as editing: fails (409) once learners have answered it,
+        or while a quiz in a course that isn't `draft` or `rejected` uses it.
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  # ---------------------------------------------------------------------------
+  # Quizzes
+  # ---------------------------------------------------------------------------
+  /quizzes:
+    post:
+      tags: [Quizzes]
+      operationId: createQuiz
+      summary: Build a quiz from questions
+      description: |
+        Roles: instructor, admin.
+        - `lesson` and `practice` quizzes need a `lessonId` (400 otherwise). Instructors must use a lesson of their own course (403);
+          admins may use any lesson. Either way the course must be `draft` or `rejected` (409).
+        - `diagnostic`: admins only (403), with no lesson (400), and there can be only one (409).
+        - Only questions I created (or any question, for admins) can be used (403). An unknown question id is a 400.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuizInput" }
+      responses:
+        "201":
+          description: Quiz created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuizResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /quizzes/{quizId}:
+    parameters:
+      - $ref: "#/components/parameters/QuizId"
+    get:
+      tags: [Quizzes]
+      operationId: getQuiz
+      summary: Get a quiz
+      description: |
+        Roles: learner, instructor, admin.
+        - The quiz's creator, the instructor who owns its course, and admins get the author view (questions with answers).
+        - Everyone else gets the learner view (no answers, explanations or skill weights), with the same access rule as the quiz's lesson:
+          learners must be enrolled in its approved course (403 otherwise), and a course the caller can't see is a 404.
+          Anyone may see the learner view of the diagnostic.
+      responses:
+        "200":
+          description: The quiz
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [quiz, message]
+                properties:
+                  quiz:
+                    oneOf:
+                      - $ref: "#/components/schemas/Quiz"
+                      - $ref: "#/components/schemas/QuizForLearner"
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+    patch:
+      tags: [Quizzes]
+      operationId: updateQuiz
+      summary: Edit a quiz
+      description: |
+        Roles: owner, admin. `questionIds` replaces the whole list, with the same question rules as creating a quiz.
+        Fails (409) once learners have attempted the quiz, or if its course isn't `draft` or `rejected`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/QuizUpdate" }
+      responses:
+        "200":
+          description: Updated quiz
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/QuizResult" }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+    delete:
+      tags: [Quizzes]
+      operationId: deleteQuiz
+      summary: Delete a quiz
+      description: |
+        Roles: owner, admin. The same rules as editing: fails (409) once learners have attempted it,
+        or if its course isn't `draft` or `rejected`.
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /diagnostic:
+    get:
+      tags: [Quizzes]
+      operationId: getDiagnostic
+      summary: Get the 30-question placement test
+      description: "Roles: learner. `completedAttemptId` is set once I have finished it; the diagnostic can only be taken once."
+      responses:
+        "200":
+          description: The diagnostic quiz, learner view
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [quiz, completedAttemptId, message]
+                properties:
+                  quiz: { $ref: "#/components/schemas/QuizForLearner" }
+                  completedAttemptId:
+                    type: [integer, "null"]
+                    description: My finished diagnostic attempt, or null if I haven't taken it.
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404":
+          description: No diagnostic has been created yet.
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Error" }
+
+  # ---------------------------------------------------------------------------
+  # Attempts
+  # ---------------------------------------------------------------------------
+  /quizzes/{quizId}/attempts:
+    parameters:
+      - $ref: "#/components/parameters/QuizId"
+    post:
+      tags: [Attempts]
+      operationId: startAttempt
+      summary: Start (or resume) a quiz attempt
+      description: |
+        Roles: learner, with access to the quiz (the same rule as its lesson: enrolled in an approved course).
+        Any learner may take the diagnostic. Instructors and admins get 403.
+        - If I already have an unfinished attempt on this quiz, it is returned (200) instead of starting a new one (201).
+          Two starts at the same moment get the same attempt.
+        - `quiz` is the learner view: no answers.
+        - 403 if I'm not enrolled in the quiz's course; 404 if the quiz doesn't exist or its course isn't visible.
+        - 409 if I already completed the diagnostic, or the quiz has no questions.
+      responses:
+        "200":
+          description: Resumed my unfinished attempt
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StartAttemptResult" }
+        "201":
+          description: New attempt started
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StartAttemptResult" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /attempts/{attemptId}:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    get:
+      tags: [Attempts]
+      operationId: getAttempt
+      summary: Review an attempt
+      description: |
+        Roles: the learner who made it, admin. Another learner, or an instructor, gets 403.
+        After submitting, this is the full graded result for the post-quiz review screen.
+        Before submitting, `responses` is empty and no answers are revealed.
+      responses:
+        "200":
+          description: The attempt
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [result, message]
+                properties:
+                  result: { $ref: "#/components/schemas/AttemptResult" }
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+  /attempts/{attemptId}/submit:
+    parameters:
+      - $ref: "#/components/parameters/AttemptId"
+    post:
+      tags: [Attempts]
+      operationId: submitAttempt
+      summary: Submit my answers
+      description: |
+        Roles: the learner who started the attempt.
+        - Send all answers at once. The array order is the order I answered in (`attemptOrder`).
+        - Each `questionId` must belong to the quiz and appear at most once (400 otherwise). Questions I skip count as wrong.
+        - Each answer must fit its question type: a string, or for `matching` an object of item id → choice id (400 otherwise).
+        - Grading: option ids and `true`/`false`/`not_given` must match exactly; gap-fill answers match any accepted answer,
+          ignoring case and extra spaces; `matching` is all or nothing (every item right, and no extra items).
+        - The server grades the answers; the client never sends `isCorrect`. Grading, logging and (Phase 3) the mastery update happen in one transaction.
+        - Submitting twice returns 409.
+
+        `masteryChanges` and `recommendations` are empty until Phase 3.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SubmitInput" }
+      responses:
+        "200":
+          description: Graded result
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [result, message]
+                properties:
+                  result: { $ref: "#/components/schemas/AttemptResult" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+        "409": { $ref: "#/components/responses/Conflict" }
+
+  /me/attempts:
+    get:
+      tags: [Attempts]
+      operationId: listMyAttempts
+      summary: My attempt history
+      description: "Roles: learner. Newest first. With `quizId`, only that quiz's attempts (an empty list if there are none)."
+      parameters:
+        - name: quizId
+          in: query
+          schema: { type: integer, minimum: 1 }
+      responses:
+        "200":
+          description: My attempts
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [attempts, message]
+                properties:
+                  attempts:
+                    type: array
+                    items: { $ref: "#/components/schemas/AttemptSummary" }
+                  message: { type: string }
+        "400": { $ref: "#/components/responses/ValidationError" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  # ---------------------------------------------------------------------------
+  # Dashboard
+  # ---------------------------------------------------------------------------
+  /me/enrollments:
+    get:
+      tags: [Dashboard]
+      operationId: listMyEnrollments
+      summary: My courses and progress
+      description: "Roles: learner."
+      responses:
+        "200":
+          description: My enrolments with progress
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [enrollments, message]
+                properties:
+                  enrollments:
+                    type: array
+                    items: { $ref: "#/components/schemas/Enrollment" }
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /me/mastery:
+    get:
+      tags: [Dashboard]
+      operationId: getMyMastery
+      summary: My skill mastery (radar chart)
+      description: "Roles: learner. One entry per skill I have evidence for; empty until I finish the diagnostic. *Phase 3* fills the values."
+      responses:
+        "200":
+          description: My mastery per skill
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [mastery, message]
+                properties:
+                  mastery:
+                    type: array
+                    items: { $ref: "#/components/schemas/Mastery" }
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /recommendations:
+    get:
+      tags: [Dashboard]
+      operationId: getRecommendations
+      summary: My next best steps (Phase 3)
+      description: |
+        Roles: learner. *Phase 3.* Up to 3 remedial lessons or quizzes for skills whose mastery is below 0.65,
+        each with a human-readable rationale. Target: p95 latency under 300 ms.
+      responses:
+        "200":
+          description: Ranked recommendations
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [recommendations, message]
+                properties:
+                  recommendations:
+                    type: array
+                    maxItems: 3
+                    items: { $ref: "#/components/schemas/Recommendation" }
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+
+  /recommendations/{recommendationId}/click:
+    parameters:
+      - $ref: "#/components/parameters/RecommendationId"
+    post:
+      tags: [Dashboard]
+      operationId: clickRecommendation
+      summary: Record that I opened a recommendation (Phase 3)
+      description: "Roles: the learner it was shown to. *Phase 3.* Sets `clickedAt`, used for the Precision@3 and MRR evaluation."
+      responses:
+        "200": { $ref: "#/components/responses/Message" }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    UserId:
+      name: userId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    CourseId:
+      name: courseId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    LessonId:
+      name: lessonId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    PassageId:
+      name: passageId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    QuestionId:
+      name: questionId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    QuizId:
+      name: quizId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    AttemptId:
+      name: attemptId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+    RecommendationId:
+      name: recommendationId
+      in: path
+      required: true
+      schema: { type: integer, minimum: 1 }
+
+  responses:
+    Message:
+      description: Done
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Message" }
+    ValidationError:
+      description: The input failed validation
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error:
+              message: Validation failed
+              details: ['"email" must be a valid email']
+    Unauthorized:
+      description: Not logged in, or a bad or expired token
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error: { message: Please log in }
+    Forbidden:
+      description: Your role or ownership doesn't allow this
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error: { message: You don't have permission to do this }
+    NotFound:
+      description: Not found, or not visible to you
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error: { message: Course not found }
+    Conflict:
+      description: The request conflicts with the current state
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/Error" }
+          example:
+            error: { message: Only draft or rejected courses can be edited }
+
+  schemas:
+    # ----- Shared -----
+    Message:
+      type: object
+      required: [message]
+      properties:
+        message: { type: string }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [message]
+          properties:
+            message: { type: string }
+            details:
+              type: array
+              items: { type: string }
+              description: One message per invalid field (400 only).
+
+    # ----- Enums (same values as schema.prisma) -----
+    UserRole:
+      type: string
+      enum: [learner, instructor, admin]
+    CourseLevel:
+      type: string
+      enum: [beginner, intermediate, advanced]
+    CourseStatus:
+      type: string
+      enum: [draft, pending_review, approved, rejected, archived]
+    LessonKind:
+      type: string
+      enum: [core, remedial]
+    MediaType:
+      type: string
+      enum: [reading_text, listening_audio, video]
+    SkillCategory:
+      type: string
+      enum: [listening, reading, writing, speaking]
+    QuestionType:
+      type: string
+      enum: [multiple_choice, true_false_not_given, gap_fill, matching, error_identification]
+    QuizKind:
+      type: string
+      enum: [diagnostic, lesson, practice]
+    ProgressStatus:
+      type: string
+      enum: [in_progress, completed]
+
+    # ----- Users and auth -----
+    User:
+      type: object
+      required: [userId, email, fullName, role, targetBand, isActive, createdAt]
+      properties:
+        userId: { type: integer }
+        email: { type: string, format: email }
+        fullName: { type: string }
+        role: { $ref: "#/components/schemas/UserRole" }
+        targetBand:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 9
+          multipleOf: 0.5
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+      example:
+        userId: 3
+        email: learner@ieltstudy.dev
+        fullName: Lena Learner
+        role: learner
+        targetBand: 6.5
+        isActive: true
+        createdAt: "2026-10-23T19:10:10.868Z"
+    RegisterInput:
+      type: object
+      required: [email, fullName, password]
+      properties:
+        email: { type: string, format: email, maxLength: 255 }
+        fullName: { type: string, minLength: 3, maxLength: 30 }
+        password:
+          type: string
+          minLength: 8
+          maxLength: 72
+          description: bcrypt only uses the first 72 bytes, so longer passwords are rejected.
+      example:
+        email: new.learner@example.com
+        fullName: Minh Anh
+        password: correct-horse-battery
+    LoginInput:
+      type: object
+      required: [email, password]
+      properties:
+        email: { type: string, format: email }
+        password: { type: string }
+      example:
+        email: learner@ieltstudy.dev
+        password: your-seed-password
+    AuthResult:
+      type: object
+      required: [user, token, message]
+      properties:
+        user: { $ref: "#/components/schemas/User" }
+        token:
+          type: string
+          description: "JWT, valid for 1 day. Send it as `Authorization: Bearer <token>`."
+        message: { type: string }
+      example:
+        user:
+          userId: 3
+          email: learner@ieltstudy.dev
+          fullName: Lena Learner
+          role: learner
+          targetBand: 6.5
+          isActive: true
+          createdAt: "2026-10-23T19:10:10.868Z"
+        token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIzIn0.signature
+        message: Logged in
+    ProfileUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        fullName: { type: string, minLength: 3, maxLength: 30 }
+        targetBand:
+          type: [number, "null"]
+          minimum: 0
+          maximum: 9
+          multipleOf: 0.5
+      example:
+        targetBand: 7
+    AdminUserUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        role: { $ref: "#/components/schemas/UserRole" }
+        isActive: { type: boolean }
+      example:
+        role: instructor
+
+    # ----- Skills -----
+    Skill:
+      type: object
+      required: [skillId, skillCode, name, category, description]
+      properties:
+        skillId: { type: integer }
+        skillCode: { type: string, pattern: "^[A-Z][A-Z0-9_]*$" }
+        name: { type: string }
+        category: { $ref: "#/components/schemas/SkillCategory" }
+        description: { type: [string, "null"] }
+      example:
+        skillId: 12
+        skillCode: W_CONDITIONALS
+        name: "Grammar: conditionals"
+        category: writing
+        description: Forming zero to third and mixed conditionals.
+    SkillTag:
+      description: A skill attached to a lesson or question, with its weight.
+      type: object
+      required: [skillId, skillCode, name, weight]
+      properties:
+        skillId: { type: integer }
+        skillCode: { type: string }
+        name: { type: string }
+        weight: { type: number, exclusiveMinimum: 0, maximum: 1 }
+      example:
+        skillId: 13
+        skillCode: W_INVERSION
+        name: "Grammar: inversion"
+        weight: 1
+    SkillWeight:
+      description: Input form of a skill tag.
+      type: object
+      required: [skillId, weight]
+      properties:
+        skillId: { type: integer, minimum: 1 }
+        weight: { type: number, exclusiveMinimum: 0, maximum: 1 }
+      example:
+        skillId: 13
+        weight: 1
+
+    # ----- Courses -----
+    Course:
+      type: object
+      required:
+        [
+          courseId,
+          instructor,
+          title,
+          description,
+          targetLevel,
+          status,
+          reviewFeedback,
+          submittedAt,
+          reviewedAt,
+          lessonCount,
+          createdAt,
+          updatedAt,
+        ]
+      properties:
+        courseId: { type: integer }
+        instructor:
+          type: object
+          required: [userId, fullName]
+          properties:
+            userId: { type: integer }
+            fullName: { type: string }
+        title: { type: string }
+        description: { type: [string, "null"] }
+        targetLevel: { $ref: "#/components/schemas/CourseLevel" }
+        status: { $ref: "#/components/schemas/CourseStatus" }
+        reviewFeedback:
+          type: [string, "null"]
+          description: The admin's feedback from the last review. Shown to the owner and admins only (null for learners).
+        submittedAt: { type: [string, "null"], format: date-time }
+        reviewedAt: { type: [string, "null"], format: date-time }
+        lessonCount: { type: integer, description: Number of core lessons. }
+        isEnrolled:
+          type: boolean
+          description: Learners only. Whether I am enrolled.
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+      example:
+        courseId: 3
+        instructor: { userId: 2, fullName: Ian Instructor }
+        title: Band 7+ Mastery
+        description: Advanced grammar, vocabulary and inference for learners aiming at Band 7 and above.
+        targetLevel: advanced
+        status: approved
+        reviewFeedback: null
+        submittedAt: "2026-10-23T19:10:11.000Z"
+        reviewedAt: "2026-10-23T19:10:11.000Z"
+        lessonCount: 3
+        isEnrolled: false
+        createdAt: "2026-10-23T19:10:11.000Z"
+        updatedAt: "2026-10-23T19:10:11.000Z"
+    CourseList:
+      type: object
+      required: [courses, message]
+      properties:
+        courses:
+          type: array
+          items: { $ref: "#/components/schemas/Course" }
+        message: { type: string }
+    CourseResult:
+      type: object
+      required: [course, message]
+      properties:
+        course: { $ref: "#/components/schemas/Course" }
+        message: { type: string }
+    CourseInput:
+      type: object
+      required: [title, targetLevel]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 5000 }
+        targetLevel: { $ref: "#/components/schemas/CourseLevel" }
+      example:
+        title: Listening Essentials
+        description: Strategies for all four parts of the Listening test.
+        targetLevel: intermediate
+    CourseUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 3, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 5000 }
+        targetLevel: { $ref: "#/components/schemas/CourseLevel" }
+    ApproveInput:
+      type: object
+      properties:
+        feedback: { type: string, maxLength: 5000 }
+    RejectInput:
+      type: object
+      required: [feedback]
+      properties:
+        feedback: { type: string, minLength: 1, maxLength: 5000 }
+      example:
+        feedback: Lesson 2 needs a skill tag, and the quiz has only one question.
+    Enrollment:
+      type: object
+      required:
+        [course, enrolledAt, completedAt, completedLessons, totalCoreLessons, progressPercent]
+      properties:
+        course: { $ref: "#/components/schemas/Course" }
+        enrolledAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        completedLessons: { type: integer, description: Core lessons I have completed. }
+        totalCoreLessons: { type: integer }
+        progressPercent: { type: number, minimum: 0, maximum: 100 }
+    EnrollmentResult:
+      type: object
+      required: [enrollment, message]
+      properties:
+        enrollment: { $ref: "#/components/schemas/Enrollment" }
+        message: { type: string }
+
+    # ----- Lessons -----
+    Lesson:
+      type: object
+      required: [lessonId, courseId, title, kind, orderIndex, skills]
+      properties:
+        lessonId: { type: integer }
+        courseId: { type: integer }
+        title: { type: string }
+        kind: { $ref: "#/components/schemas/LessonKind" }
+        orderIndex:
+          { type: integer, minimum: 0, description: Position among lessons of the same kind. }
+        skills:
+          type: array
+          items: { $ref: "#/components/schemas/SkillTag" }
+        progress:
+          description: Learners only. My progress, or null if I haven't started.
+          oneOf:
+            - $ref: "#/components/schemas/LessonProgress"
+            - type: "null"
+        locked:
+          type: boolean
+          description: Learners only. True until the previous core lesson is mastered (the rule is set in Phase 3; until then always false).
+      example:
+        lessonId: 13
+        courseId: 3
+        title: Inversion for emphasis
+        kind: core
+        orderIndex: 0
+        skills:
+          - { skillId: 13, skillCode: W_INVERSION, name: "Grammar: inversion", weight: 1 }
+        progress: null
+        locked: false
+    LessonDetail:
+      description: A lesson with everything needed to study it.
+      allOf:
+        - $ref: "#/components/schemas/Lesson"
+        - type: object
+          required: [content, passages, quizzes]
+          properties:
+            content: { type: [string, "null"], description: Lesson body in Markdown. }
+            passages:
+              type: array
+              items: { $ref: "#/components/schemas/Passage" }
+            quizzes:
+              type: array
+              items: { $ref: "#/components/schemas/QuizSummary" }
+    LessonResult:
+      type: object
+      required: [lesson, message]
+      properties:
+        lesson: { $ref: "#/components/schemas/LessonDetail" }
+        message: { type: string }
+    LessonInput:
+      type: object
+      required: [title, kind, orderIndex, skills]
+      properties:
+        title: { type: string, minLength: 3, maxLength: 255 }
+        content: { type: [string, "null"], maxLength: 50000 }
+        kind: { $ref: "#/components/schemas/LessonKind" }
+        orderIndex: { type: integer, minimum: 0 }
+        skills:
+          type: array
+          minItems: 1
+          description: At least one skill, so the recommender can match the lesson to weak skills. No skill twice.
+          items: { $ref: "#/components/schemas/SkillWeight" }
+      example:
+        title: Third conditional drill
+        content: "If + past perfect, would have + past participle."
+        kind: remedial
+        orderIndex: 0
+        skills:
+          - { skillId: 12, weight: 1 }
+    LessonUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 3, maxLength: 255 }
+        content: { type: [string, "null"], maxLength: 50000 }
+        kind: { $ref: "#/components/schemas/LessonKind" }
+        orderIndex: { type: integer, minimum: 0 }
+        skills:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SkillWeight" }
+    LessonProgress:
+      type: object
+      required: [lessonId, status, startedAt, completedAt]
+      properties:
+        lessonId: { type: integer }
+        status: { $ref: "#/components/schemas/ProgressStatus" }
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+    ProgressInput:
+      type: object
+      required: [status]
+      properties:
+        status: { $ref: "#/components/schemas/ProgressStatus" }
+      example:
+        status: completed
+
+    # ----- Content -----
+    Passage:
+      type: object
+      required: [passageId, lessonId, type, title, content, mediaPath, mediaUrl, orderIndex]
+      properties:
+        passageId: { type: integer }
+        lessonId: { type: [integer, "null"], description: Null for diagnostic passages. }
+        type: { $ref: "#/components/schemas/MediaType" }
+        title: { type: [string, "null"] }
+        content:
+          type: [string, "null"]
+          description: Reading text, or the transcript of audio or video.
+        mediaPath: { type: [string, "null"], description: Storage object path. }
+        mediaUrl:
+          type: [string, "null"]
+          format: uri
+          description: Signed URL to play the media, valid for 1 hour. Generated on every read. Null for reading text, or when the file can't be signed (for example it was never uploaded).
+        orderIndex: { type: integer }
+      example:
+        passageId: 1
+        lessonId: null
+        type: listening_audio
+        title: Joining a sports centre
+        content: "Receptionist: Good morning, Riverside Sports Centre. How can I help?"
+        mediaPath: seed/diagnostic/listening-1.mp3
+        mediaUrl: https://example.supabase.co/storage/v1/object/sign/media/seed/diagnostic/listening-1.mp3?token=abc
+        orderIndex: 0
+    PassageResult:
+      type: object
+      required: [passage, message]
+      properties:
+        passage: { $ref: "#/components/schemas/Passage" }
+        message: { type: string }
+    PassageInput:
+      type: object
+      required: [type]
+      description: "`reading_text` needs `content`; `listening_audio` and `video` need `mediaPath`."
+      properties:
+        lessonId: { type: [integer, "null"], minimum: 1 }
+        type: { $ref: "#/components/schemas/MediaType" }
+        title: { type: [string, "null"], maxLength: 255 }
+        content: { type: [string, "null"], maxLength: 50000 }
+        mediaPath: { type: [string, "null"], maxLength: 1024 }
+        orderIndex: { type: integer, minimum: 0, default: 0 }
+      example:
+        lessonId: 13
+        type: reading_text
+        title: The first coffee houses
+        content: Coffee was first cultivated in Yemen in the fifteenth century.
+        orderIndex: 0
+    PassageUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        type: { $ref: "#/components/schemas/MediaType" }
+        title: { type: [string, "null"], maxLength: 255 }
+        content: { type: [string, "null"], maxLength: 50000 }
+        mediaPath: { type: [string, "null"], maxLength: 1024 }
+        orderIndex: { type: integer, minimum: 0 }
+    UploadRequest:
+      type: object
+      required: [fileName, contentType]
+      properties:
+        fileName: { type: string, minLength: 1, maxLength: 255 }
+        contentType:
+          type: string
+          enum: [audio/mpeg, audio/mp4, audio/wav, video/mp4, video/webm, image/png, image/jpeg]
+      example:
+        fileName: part1-booking.mp3
+        contentType: audio/mpeg
+    UploadTicket:
+      type: object
+      required: [uploadUrl, path]
+      properties:
+        uploadUrl:
+          type: string
+          format: uri
+          description: "`PUT` the file here. Valid for 2 hours."
+        path:
+          type: string
+          description: Send this as `mediaPath` when creating the passage.
+      example:
+        uploadUrl: https://example.supabase.co/storage/v1/object/upload/sign/media/2/8f3c-part1-booking.mp3?token=abc
+        path: 2/8f3c-part1-booking.mp3
+
+    # ----- Questions -----
+    ChoiceOption:
+      type: object
+      required: [id, text]
+      properties:
+        id: { type: string, description: "A, B, C, ..." }
+        text: { type: string }
+    MatchingOptions:
+      type: object
+      required: [items, choices]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ChoiceOption" }
+        choices:
+          type: array
+          items: { $ref: "#/components/schemas/ChoiceOption" }
+    QuestionOptions:
+      description: |
+        Depends on `questionType`:
+        - `multiple_choice`, `error_identification`: a list of `{ id, text }`
+        - `matching`: `{ items, choices }`
+        - `true_false_not_given`, `gap_fill`: null
+      oneOf:
+        - type: array
+          items: { $ref: "#/components/schemas/ChoiceOption" }
+        - $ref: "#/components/schemas/MatchingOptions"
+        - type: "null"
+    AnswerKey:
+      description: |
+        Depends on `questionType`:
+        - `multiple_choice`, `error_identification`: the option id, e.g. `"B"`
+        - `true_false_not_given`: `"true"`, `"false"` or `"not_given"`
+        - `gap_fill`: the accepted answers, e.g. `["colour", "color"]` (compared ignoring case and extra spaces)
+        - `matching`: item id → choice id, e.g. `{ "B": "ii" }`
+      oneOf:
+        - type: string
+        - type: array
+          minItems: 1
+          items: { type: string }
+        - type: object
+          additionalProperties: { type: string }
+    Answer:
+      description: |
+        A learner's answer: a string (option id, `true`/`false`/`not_given`, or the gap-fill text),
+        or for `matching` an object of item id → choice id.
+      oneOf:
+        - type: string
+          maxLength: 500
+        - type: object
+          additionalProperties: { type: string }
+    Question:
+      description: Author view, with the answer.
+      type: object
+      required:
+        [
+          questionId,
+          passageId,
+          questionType,
+          questionText,
+          options,
+          answerKey,
+          explanation,
+          difficulty,
+          skills,
+          createdById,
+        ]
+      properties:
+        questionId: { type: integer }
+        passageId: { type: [integer, "null"] }
+        questionType: { $ref: "#/components/schemas/QuestionType" }
+        questionText: { type: string }
+        options: { $ref: "#/components/schemas/QuestionOptions" }
+        answerKey: { $ref: "#/components/schemas/AnswerKey" }
+        explanation: { type: [string, "null"] }
+        difficulty: { type: integer, minimum: 1, maximum: 5 }
+        skills:
+          type: array
+          items: { $ref: "#/components/schemas/SkillTag" }
+        createdById: { type: integer }
+      example:
+        questionId: 3
+        passageId: 1
+        questionType: multiple_choice
+        questionText: When do classes start?
+        options:
+          - { id: A, text: 12 March }
+          - { id: B, text: 14 March }
+          - { id: C, text: 4 March }
+        answerKey: B
+        explanation: "The receptionist corrects herself: the 12th is a holiday."
+        difficulty: 3
+        skills:
+          - { skillId: 5, skillCode: L_DISTRACTORS, name: Handling distractors, weight: 1 }
+        createdById: 1
+    QuestionForLearner:
+      description: Learner view, before submitting. No answer, explanation or skill weights.
+      type: object
+      required: [questionId, passageId, questionType, questionText, options]
+      properties:
+        questionId: { type: integer }
+        passageId: { type: [integer, "null"] }
+        questionType: { $ref: "#/components/schemas/QuestionType" }
+        questionText: { type: string }
+        options: { $ref: "#/components/schemas/QuestionOptions" }
+      example:
+        questionId: 3
+        passageId: 1
+        questionType: multiple_choice
+        questionText: When do classes start?
+        options:
+          - { id: A, text: 12 March }
+          - { id: B, text: 14 March }
+          - { id: C, text: 4 March }
+    QuestionResult:
+      type: object
+      required: [question, message]
+      properties:
+        question: { $ref: "#/components/schemas/Question" }
+        message: { type: string }
+    QuestionInput:
+      description: |
+        `options` and `answerKey` must fit `questionType` (400 otherwise):
+        - `multiple_choice`, `error_identification`: at least 2 options with different ids; `answerKey` is one of those ids.
+        - `true_false_not_given`: no `options` (null); `answerKey` is `"true"`, `"false"` or `"not_given"`.
+        - `gap_fill`: no `options` (null); `answerKey` is the list of accepted answers.
+        - `matching`: `{ items, choices }`, ids different within each list; `answerKey` maps **every** item id to a choice id, and nothing else.
+      type: object
+      required: [questionType, questionText, answerKey, skills]
+      properties:
+        passageId: { type: [integer, "null"], minimum: 1 }
+        questionType: { $ref: "#/components/schemas/QuestionType" }
+        questionText: { type: string, minLength: 1, maxLength: 2000 }
+        options: { $ref: "#/components/schemas/QuestionOptions" }
+        answerKey: { $ref: "#/components/schemas/AnswerKey" }
+        explanation: { type: [string, "null"], maxLength: 2000 }
+        difficulty: { type: integer, minimum: 1, maximum: 5, default: 3 }
+        skills:
+          type: array
+          minItems: 1
+          description: The question's Q-matrix row. Weights must sum to 1, and no skill may appear twice.
+          items: { $ref: "#/components/schemas/SkillWeight" }
+      example:
+        passageId: null
+        questionType: multiple_choice
+        questionText: "If she ______ harder last year, she would have passed the exam."
+        options:
+          - { id: A, text: studied }
+          - { id: B, text: had studied }
+          - { id: C, text: has studied }
+        answerKey: B
+        explanation: Third conditional uses the past perfect after 'if'.
+        difficulty: 3
+        skills:
+          - { skillId: 12, weight: 1 }
+    QuestionUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        passageId: { type: [integer, "null"], minimum: 1 }
+        questionType: { $ref: "#/components/schemas/QuestionType" }
+        questionText: { type: string, minLength: 1, maxLength: 2000 }
+        options: { $ref: "#/components/schemas/QuestionOptions" }
+        answerKey: { $ref: "#/components/schemas/AnswerKey" }
+        explanation: { type: [string, "null"], maxLength: 2000 }
+        difficulty: { type: integer, minimum: 1, maximum: 5 }
+        skills:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/SkillWeight" }
+
+    # ----- Quizzes -----
+    QuizSummary:
+      type: object
+      required: [quizId, kind, title, questionCount, timeLimitSeconds]
+      properties:
+        quizId: { type: integer }
+        kind: { $ref: "#/components/schemas/QuizKind" }
+        title: { type: string }
+        questionCount: { type: integer }
+        timeLimitSeconds: { type: [integer, "null"] }
+      example:
+        quizId: 1
+        kind: diagnostic
+        title: IELTS placement test
+        questionCount: 30
+        timeLimitSeconds: 2700
+    Quiz:
+      description: Author view, with full questions and answers.
+      allOf:
+        - $ref: "#/components/schemas/QuizSummary"
+        - type: object
+          required: [lessonId, description, createdById, passages, questions]
+          properties:
+            lessonId: { type: [integer, "null"] }
+            description: { type: [string, "null"] }
+            createdById: { type: integer }
+            passages:
+              type: array
+              description: The passages the questions refer to, each listed once.
+              items: { $ref: "#/components/schemas/Passage" }
+            questions:
+              type: array
+              description: In quiz order.
+              items: { $ref: "#/components/schemas/Question" }
+    QuizForLearner:
+      description: Learner view. Questions have no answers.
+      allOf:
+        - $ref: "#/components/schemas/QuizSummary"
+        - type: object
+          required: [lessonId, description, passages, questions]
+          properties:
+            lessonId: { type: [integer, "null"] }
+            description: { type: [string, "null"] }
+            passages:
+              type: array
+              description: The passages the questions refer to, each listed once.
+              items: { $ref: "#/components/schemas/Passage" }
+            questions:
+              type: array
+              description: In quiz order.
+              items: { $ref: "#/components/schemas/QuestionForLearner" }
+    QuizResult:
+      type: object
+      required: [quiz, message]
+      properties:
+        quiz: { $ref: "#/components/schemas/Quiz" }
+        message: { type: string }
+    QuizInput:
+      type: object
+      required: [kind, title, questionIds]
+      properties:
+        kind: { $ref: "#/components/schemas/QuizKind" }
+        lessonId:
+          type: [integer, "null"]
+          minimum: 1
+          description: Required for `lesson` and `practice` quizzes; must be null for the diagnostic.
+        title: { type: string, minLength: 3, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 5000 }
+        timeLimitSeconds: { type: [integer, "null"], minimum: 1 }
+        questionIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          description: In the order learners will see them.
+          items: { type: integer, minimum: 1 }
+      example:
+        kind: lesson
+        lessonId: 13
+        title: Inversion check
+        timeLimitSeconds: null
+        questionIds: [39, 40, 41, 42]
+    QuizUpdate:
+      type: object
+      minProperties: 1
+      properties:
+        title: { type: string, minLength: 3, maxLength: 255 }
+        description: { type: [string, "null"], maxLength: 5000 }
+        timeLimitSeconds: { type: [integer, "null"], minimum: 1 }
+        questionIds:
+          type: array
+          minItems: 1
+          uniqueItems: true
+          items: { type: integer, minimum: 1 }
+
+    # ----- Attempts -----
+    Attempt:
+      type: object
+      required: [attemptId, quizId, status, startedAt, completedAt, totalScore, maxScore]
+      properties:
+        attemptId: { type: integer }
+        quizId: { type: integer }
+        status:
+          type: string
+          enum: [in_progress, completed]
+        startedAt: { type: string, format: date-time }
+        completedAt: { type: [string, "null"], format: date-time }
+        totalScore:
+          { type: [integer, "null"], description: "Number of correct answers, once completed." }
+        maxScore: { type: integer, description: Number of questions. }
+      example:
+        attemptId: 7
+        quizId: 1
+        status: completed
+        startedAt: "2026-10-24T08:00:00.000Z"
+        completedAt: "2026-10-24T08:38:12.000Z"
+        totalScore: 21
+        maxScore: 30
+    AttemptSummary:
+      allOf:
+        - $ref: "#/components/schemas/Attempt"
+        - type: object
+          required: [quiz]
+          properties:
+            quiz: { $ref: "#/components/schemas/QuizSummary" }
+    StartAttemptResult:
+      type: object
+      required: [attempt, quiz, message]
+      properties:
+        attempt: { $ref: "#/components/schemas/Attempt" }
+        quiz: { $ref: "#/components/schemas/QuizForLearner" }
+        message: { type: string }
+    SubmitInput:
+      type: object
+      required: [responses]
+      properties:
+        responses:
+          type: array
+          maxItems: 200
+          description: In the order I answered. Leave out questions I skipped.
+          items:
+            type: object
+            required: [questionId, answer]
+            properties:
+              questionId: { type: integer, minimum: 1 }
+              answer: { $ref: "#/components/schemas/Answer" }
+              responseTimeSeconds: { type: number, minimum: 0 }
+      example:
+        responses:
+          - { questionId: 1, answer: Hartley, responseTimeSeconds: 14.2 }
+          - { questionId: 3, answer: A, responseTimeSeconds: 9.8 }
+    ResponseResult:
+      description: One question in a graded attempt.
+      type: object
+      required:
+        [
+          questionId,
+          questionText,
+          questionType,
+          userAnswer,
+          isCorrect,
+          correctAnswer,
+          explanation,
+          attemptOrder,
+          responseTimeSeconds,
+          skills,
+        ]
+      properties:
+        questionId: { type: integer }
+        questionText: { type: string }
+        questionType: { $ref: "#/components/schemas/QuestionType" }
+        userAnswer:
+          description: My answer, or null if I skipped the question.
+          oneOf:
+            - $ref: "#/components/schemas/Answer"
+            - type: "null"
+        isCorrect: { type: boolean }
+        correctAnswer: { $ref: "#/components/schemas/AnswerKey" }
+        explanation: { type: [string, "null"] }
+        attemptOrder:
+          { type: [integer, "null"], description: "1 = answered first. Null if skipped." }
+        responseTimeSeconds: { type: [number, "null"] }
+        skills:
+          type: array
+          items: { $ref: "#/components/schemas/SkillTag" }
+    MasteryChange:
+      type: object
+      required: [skillId, skillCode, name, before, after]
+      properties:
+        skillId: { type: integer }
+        skillCode: { type: string }
+        name: { type: string }
+        before:
+          {
+            type: [number, "null"],
+            minimum: 0,
+            maximum: 1,
+            description: Null the first time this skill is measured.,
+          }
+        after: { type: number, minimum: 0, maximum: 1 }
+      example:
+        skillId: 5
+        skillCode: L_DISTRACTORS
+        name: Handling distractors
+        before: 0.71
+        after: 0.58
+    AttemptResult:
+      type: object
+      required: [attempt, quiz, scorePercent, responses, masteryChanges, recommendations]
+      properties:
+        attempt: { $ref: "#/components/schemas/Attempt" }
+        quiz: { $ref: "#/components/schemas/QuizSummary" }
+        scorePercent:
+          { type: [number, "null"], minimum: 0, maximum: 100, description: Null until completed. }
+        responses:
+          type: array
+          description: Every question in quiz order. Empty before submitting.
+          items: { $ref: "#/components/schemas/ResponseResult" }
+        masteryChanges:
+          type: array
+          description: "*Phase 3.* How each measured skill's mastery moved. Empty until then."
+          items: { $ref: "#/components/schemas/MasteryChange" }
+        recommendations:
+          type: array
+          maxItems: 3
+          description: "*Phase 3.* What to study next. Empty until then."
+          items: { $ref: "#/components/schemas/Recommendation" }
+      example:
+        attempt:
+          attemptId: 7
+          quizId: 1
+          status: completed
+          startedAt: "2026-10-24T08:00:00.000Z"
+          completedAt: "2026-10-24T08:38:12.000Z"
+          totalScore: 21
+          maxScore: 30
+        quiz:
+          {
+            quizId: 1,
+            kind: diagnostic,
+            title: IELTS placement test,
+            questionCount: 30,
+            timeLimitSeconds: 2700,
+          }
+        scorePercent: 70
+        responses:
+          - questionId: 3
+            questionText: When do classes start?
+            questionType: multiple_choice
+            userAnswer: A
+            isCorrect: false
+            correctAnswer: B
+            explanation: "The receptionist corrects herself: the 12th is a holiday."
+            attemptOrder: 3
+            responseTimeSeconds: 9.8
+            skills:
+              - { skillId: 5, skillCode: L_DISTRACTORS, name: Handling distractors, weight: 1 }
+        masteryChanges:
+          - {
+              skillId: 5,
+              skillCode: L_DISTRACTORS,
+              name: Handling distractors,
+              before: 0.71,
+              after: 0.58,
+            }
+        recommendations:
+          - recommendationId: 42
+            type: lesson
+            lesson:
+              {
+                lessonId: 20,
+                title: "Catching distractors and the speaker's main point",
+                courseId: 3,
+                courseTitle: Band 7+ Mastery,
+              }
+            quiz: null
+            skill: { skillId: 5, skillCode: L_DISTRACTORS, name: Handling distractors }
+            masteryProb: 0.58
+            rank: 1
+            score: 0.91
+            rationale: "Recommended because your mastery of 'Handling distractors' is 0.58, below 0.65."
+            createdAt: "2026-10-24T08:38:12.000Z"
+            clickedAt: null
+
+    # ----- Dashboard -----
+    Mastery:
+      type: object
+      required: [skillId, skillCode, name, category, masteryProb, observations, updatedAt]
+      properties:
+        skillId: { type: integer }
+        skillCode: { type: string }
+        name: { type: string }
+        category: { $ref: "#/components/schemas/SkillCategory" }
+        masteryProb: { type: number, minimum: 0, maximum: 1 }
+        observations: { type: integer, description: How many answers have updated this skill. }
+        updatedAt: { type: string, format: date-time }
+      example:
+        skillId: 12
+        skillCode: W_CONDITIONALS
+        name: "Grammar: conditionals"
+        category: writing
+        masteryProb: 0.48
+        observations: 3
+        updatedAt: "2026-10-24T08:38:12.000Z"
+    Recommendation:
+      type: object
+      required:
+        [
+          recommendationId,
+          type,
+          lesson,
+          quiz,
+          skill,
+          masteryProb,
+          rank,
+          score,
+          rationale,
+          createdAt,
+          clickedAt,
+        ]
+      properties:
+        recommendationId: { type: integer }
+        type:
+          type: string
+          enum: [lesson, quiz]
+          description: Which of `lesson` or `quiz` is set (exactly one).
+        lesson:
+          oneOf:
+            - type: object
+              required: [lessonId, title, courseId, courseTitle]
+              properties:
+                lessonId: { type: integer }
+                title: { type: string }
+                courseId: { type: integer }
+                courseTitle: { type: string }
+            - type: "null"
+        quiz:
+          oneOf:
+            - type: object
+              required: [quizId, title]
+              properties:
+                quizId: { type: integer }
+                title: { type: string }
+            - type: "null"
+        skill:
+          description: The weak skill this addresses.
+          type: object
+          required: [skillId, skillCode, name]
+          properties:
+            skillId: { type: integer }
+            skillCode: { type: string }
+            name: { type: string }
+        masteryProb:
+          {
+            type: number,
+            minimum: 0,
+            maximum: 1,
+            description: My mastery of the skill when recommended.,
+          }
+        rank: { type: integer, minimum: 1, description: "1 = best match." }
+        score: { type: number, description: Ranking score (formula decided in Phase 3). }
+        rationale: { type: string, description: "Why this was recommended, in plain words." }
+        createdAt: { type: string, format: date-time }
+        clickedAt: { type: [string, "null"], format: date-time }
+      example:
+        recommendationId: 42
+        type: lesson
+        lesson:
+          {
+            lessonId: 20,
+            title: "Catching distractors and the speaker's main point",
+            courseId: 3,
+            courseTitle: Band 7+ Mastery,
+          }
+        quiz: null
+        skill: { skillId: 5, skillCode: L_DISTRACTORS, name: Handling distractors }
+        masteryProb: 0.58
+        rank: 1
+        score: 0.91
+        rationale: "Recommended because your mastery of 'Handling distractors' is 0.58, below 0.65."
+        createdAt: "2026-10-24T08:38:12.000Z"
+        clickedAt: null
+    AdminStats:
+      type: object
+      required: [users, courses, enrollments, attempts, activeLearnersLast7Days]
+      properties:
+        users:
+          type: object
+          required: [total, active, inactive, byRole]
+          properties:
+            total: { type: integer }
+            active: { type: integer }
+            inactive: { type: integer }
+            byRole:
+              type: object
+              required: [learner, instructor, admin]
+              properties:
+                learner: { type: integer }
+                instructor: { type: integer }
+                admin: { type: integer }
+        courses:
+          type: object
+          required: [total, byStatus]
+          properties:
+            total: { type: integer }
+            byStatus:
+              type: object
+              required: [draft, pending_review, approved, rejected, archived]
+              properties:
+                draft: { type: integer }
+                pending_review: { type: integer }
+                approved: { type: integer }
+                rejected: { type: integer }
+                archived: { type: integer }
+        enrollments: { type: integer }
+        attempts:
+          type: object
+          required: [completed, completedLast7Days]
+          properties:
+            completed: { type: integer }
+            completedLast7Days: { type: integer }
+        activeLearnersLast7Days:
+          type: integer
+          description: Learners who completed at least one attempt in the last 7 days.
+      example:
+        users:
+          { total: 42, active: 41, inactive: 1, byRole: { learner: 38, instructor: 3, admin: 1 } }
+        courses:
+          {
+            total: 5,
+            byStatus: { draft: 1, pending_review: 1, approved: 3, rejected: 0, archived: 0 },
+          }
+        enrollments: 57
+        attempts: { completed: 212, completedLast7Days: 64 }
+        activeLearnersLast7Days: 19

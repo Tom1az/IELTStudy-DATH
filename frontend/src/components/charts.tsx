@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import { cx } from "@/lib/format";
 
 /** Radar chart of mastery (0–1) per axis with an optional target ring. */
@@ -29,26 +28,6 @@ export function RadarChart({ axes, values, target, size = 300, color = "#0E5C5C"
   );
 }
 
-/** Simple vertical bar chart (weeks, counts). */
-export function BarChart({ data, color = "#0E5C5C", height = 160, format = (v: number) => String(v) }: { data: { label: string; value: number }[]; color?: string; height?: number; format?: (v: number) => string }) {
-  const max = Math.max(1, ...data.map((d) => d.value));
-  const [hover, setHover] = useState<number | null>(null);
-  return (
-    <div>
-      <div className="flex items-end gap-2" style={{ height }} role="img" aria-label={data.map((d) => `${d.label}: ${format(d.value)}`).join(", ")}>
-        {data.map((d, i) => (
-          <div key={d.label} className="relative flex h-full flex-1 flex-col justify-end" onMouseEnter={() => setHover(i)} onMouseLeave={() => setHover(null)}>
-            {hover === i && <span className="absolute -top-6 left-1/2 -translate-x-1/2 whitespace-nowrap rounded bg-navy px-1.5 py-0.5 text-[11px] font-semibold text-white">{format(d.value)}</span>}
-            <div className="w-full rounded-t-md transition-[height]" style={{ height: `${(d.value / max) * 100}%`, minHeight: d.value ? 3 : 0, background: color, opacity: hover === null || hover === i ? 1 : 0.55 }} />
-          </div>
-        ))}
-      </div>
-      <div className="mt-2 flex gap-2">
-        {data.map((d) => <span key={d.label} className="flex-1 truncate text-center text-[10.5px] text-ink-soft">{d.label}</span>)}
-      </div>
-    </div>
-  );
-}
 
 /** Multi-series line chart, values 0–1. */
 export function LineChart({ series, labels, height = 200 }: { series: { name: string; color: string; values: number[] }[]; labels?: string[]; height?: number }) {

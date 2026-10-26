@@ -4,9 +4,9 @@
   "private": true,
   "description": "IELTStudy \u2013 adaptive IELTS learning platform (Next.js frontend)",
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev -p 3001",
     "build": "next build",
-    "start": "next start",
+    "start": "next start -p 3001",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",

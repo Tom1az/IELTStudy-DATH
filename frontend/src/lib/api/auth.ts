@@ -1,56 +1,67 @@
 import type { User } from "@/lib/types";
-import { ApiError, request, setToken } from "./client";
-import { audit, commit, currentUser, db, hashPassword, isEmail, issueToken, nowIso, passwordProblem, publicUser, requireUser, uid, validate, verifyPassword } from "./mock-db";
+import type { BackendAuthResponse, BackendUser } from "./backend-types";
+import { ApiError, backendRequest, setToken } from "./client";
+import { toUser } from "./mappers";
 
 export interface AuthResult {
   token: string;
   user: User;
 }
 
+/**
+ * The backend does not store "placement done" on the user. A learner has done it when
+ * `GET /diagnostic` reports a completed attempt. Staff never take the placement quiz.
+ */
+async function isPlacementDone(user: BackendUser): Promise<boolean> {
+  if (user.role !== "learner") return true;
+  try {
+    const res = await backendRequest<{ completedAttemptId: number | null }>("GET", "/diagnostic");
+    return res.completedAttemptId !== null;
+  } catch {
+    // No diagnostic quiz seeded yet, or the call failed: treat placement as not done
+    return false;
+  }
+}
+
+async function toAuthResult(res: BackendAuthResponse): Promise<AuthResult> {
+  setToken(res.token);
+  return { token: res.token, user: toUser(res.user, await isPlacementDone(res.user)) };
+}
+
+/** The form's field is called `name`, the backend's is `fullName`. */
+function renameFullNameError(e: unknown) {
+  if (e instanceof ApiError && e.fields?.fullName) e.fields.name = e.fields.fullName;
+}
+
 export const authApi = {
   async login(email: string, password: string): Promise<AuthResult> {
-    const res = await request<AuthResult>("POST", "/auth/login", { email, password }, () => {
-      validate({ email: !isEmail(email) && "Enter a valid email address.", password: !password && "Enter your password." });
-      const u = db().users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
-      if (!u || !verifyPassword(password, u.passwordHash)) throw new ApiError(401, "INVALID_CREDENTIALS", "Email or password is incorrect.");
-      if (u.status === "suspended") throw new ApiError(403, "ACCOUNT_SUSPENDED", "This account has been suspended. Contact support.");
-      u.lastActiveAt = nowIso();
-      commit();
-      return { token: issueToken(u), user: publicUser(u) };
-    });
-    setToken(res.token);
-    return res;
+    return toAuthResult(await backendRequest<BackendAuthResponse>("POST", "/auth/login", { email, password }));
   },
 
-  async register(input: { name: string; email: string; password: string; targetBand: number; role?: "learner" }): Promise<AuthResult> {
-    const res = await request<AuthResult>("POST", "/auth/register", input, () => {
-      const email = input.email.trim().toLowerCase();
-      validate({
-        name: input.name.trim().length < 2 && "Enter your full name.",
-        email: !isEmail(email) ? "Enter a valid email address." : db().users.some((u) => u.email.toLowerCase() === email) && "An account with this email already exists.",
-        password: passwordProblem(input.password),
-        targetBand: (input.targetBand < 4 || input.targetBand > 9) && "Choose a band between 4.0 and 9.0.",
+  async register(input: { name: string; email: string; password: string; targetBand: number }): Promise<AuthResult> {
+    let res: BackendAuthResponse;
+    try {
+      // The backend only accepts these three fields at sign-up and always creates a learner
+      res = await backendRequest<BackendAuthResponse>("POST", "/auth/register", {
+        email: input.email,
+        fullName: input.name,
+        password: input.password,
       });
-      const u = {
-        id: uid("u"), email, name: input.name.trim(), role: "learner" as const, status: "active" as const, targetBand: input.targetBand,
-        createdAt: nowIso(), lastActiveAt: nowIso(), placementDone: false, passwordHash: hashPassword(input.password),
-        notificationPrefs: { newContent: true, deadlines: true, results: true, email: false },
-      };
-      db().users.push(u);
-      db().notifications.unshift({ id: uid("n"), userId: u.id, type: "system", title: "Welcome to IELTStudy", body: "Take the 15-minute placement quiz so we can recommend a level and build your learning path.", link: "/placement", read: false, createdAt: nowIso() });
-      commit();
-      return { token: issueToken(u), user: publicUser(u) };
-    });
-    setToken(res.token);
-    return res;
+    } catch (e) {
+      renameFullNameError(e);
+      throw e;
+    }
+    const result = await toAuthResult(res);
+    // The target band is set right after sign-up, through PATCH /me
+    const patched = await backendRequest<{ user: BackendUser }>("PATCH", "/me", { targetBand: input.targetBand });
+    return { token: result.token, user: toUser(patched.user, result.user.placementDone) };
   },
 
+  /** The logged-in user, or null when there is no valid token. */
   async me(): Promise<User | null> {
     try {
-      return await request<User | null>("GET", "/auth/me", undefined, () => {
-        const u = currentUser();
-        return u ? publicUser(u) : null;
-      });
+      const res = await backendRequest<{ user: BackendUser }>("GET", "/me");
+      return toUser(res.user, await isPlacementDone(res.user));
     } catch (e) {
       if (e instanceof ApiError && e.status === 401) return null;
       throw e;
@@ -61,57 +72,17 @@ export const authApi = {
     setToken(null);
   },
 
-  /** Mock: returns the reset link that the backend would email, so it can be shown in the demo. */
-  forgotPassword(email: string) {
-    return request<{ sent: true; demoResetLink?: string }>("POST", "/auth/forgot-password", { email }, () => {
-      validate({ email: !isEmail(email) && "Enter a valid email address." });
-      const u = db().users.find((x) => x.email.toLowerCase() === email.trim().toLowerCase());
-      if (!u) return { sent: true as const }; // never reveal whether an account exists
-      const token = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-      db().resetTokens.push({ email: u.email, token, expiresAt: new Date(Date.now() + 30 * 60000).toISOString() });
-      commit();
-      return { sent: true as const, demoResetLink: `/reset-password?token=${token}` };
-    });
-  },
-
-  resetPassword(token: string, password: string) {
-    return request<{ ok: true }>("POST", "/auth/reset-password", { token, password }, () => {
-      const t = db().resetTokens.find((x) => x.token === token);
-      if (!t || Date.parse(t.expiresAt) < Date.now()) throw new ApiError(400, "INVALID_TOKEN", "This reset link is invalid or has expired. Request a new one.");
-      validate({ password: passwordProblem(password) });
-      const u = db().users.find((x) => x.email === t.email)!;
-      u.passwordHash = hashPassword(password);
-      db().resetTokens = db().resetTokens.filter((x) => x.token !== token);
-      commit();
-      return { ok: true as const };
-    });
-  },
-
-  changePassword(current: string, next: string) {
-    return request<{ ok: true }>("POST", "/auth/change-password", { current, next }, () => {
-      const u = requireUser();
-      if (!verifyPassword(current, u.passwordHash)) throw new ApiError(422, "VALIDATION_ERROR", "Please check the highlighted fields.", { current: "Current password is incorrect." });
-      validate({ next: passwordProblem(next) });
-      u.passwordHash = hashPassword(next);
-      commit();
-      return { ok: true as const };
-    });
-  },
-
-  updateProfile(patch: Partial<Pick<User, "name" | "targetBand" | "bio" | "notificationPrefs">>) {
-    return request<User>("PATCH", "/users/me", patch, () => {
-      const u = requireUser();
-      validate({
-        name: patch.name !== undefined && patch.name.trim().length < 2 && "Enter your full name.",
-        targetBand: patch.targetBand !== undefined && (patch.targetBand < 4 || patch.targetBand > 9) && "Choose a band between 4.0 and 9.0.",
-      });
-      if (patch.name !== undefined) u.name = patch.name.trim();
-      if (patch.targetBand !== undefined) u.targetBand = patch.targetBand;
-      if (patch.bio !== undefined) u.bio = patch.bio;
-      if (patch.notificationPrefs) u.notificationPrefs = { ...u.notificationPrefs, ...patch.notificationPrefs };
-      if (u.role === "admin") audit(u, "user.update_self", u.email);
-      commit();
-      return publicUser(u);
-    });
+  /** The backend profile has a name and a target band. */
+  async updateProfile(patch: { name?: string; targetBand?: number }): Promise<User> {
+    const body: { fullName?: string; targetBand?: number } = {};
+    if (patch.name !== undefined) body.fullName = patch.name;
+    if (patch.targetBand !== undefined) body.targetBand = patch.targetBand;
+    try {
+      const res = await backendRequest<{ user: BackendUser }>("PATCH", "/me", body);
+      return toUser(res.user, await isPlacementDone(res.user));
+    } catch (e) {
+      renameFullNameError(e);
+      throw e;
+    }
   },
 };

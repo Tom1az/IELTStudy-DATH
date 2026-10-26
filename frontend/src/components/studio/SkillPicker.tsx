@@ -1,27 +1,25 @@
 "use client";
 
-import { SKILLS as SEED_SKILLS } from "@/data/skills";
 import { catalogApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
-import type { QuestionSkill, SkillCategory } from "@/lib/types";
+import type { QuestionSkill } from "@/lib/types";
 import { SKILL_CATEGORIES } from "@/lib/types";
 import { SKILL_META, cx } from "@/lib/format";
 
 function useSkills() {
   const { data } = useAsync(() => catalogApi.skills(), []);
-  return data ?? SEED_SKILLS;
+  return data ?? [];
 }
 
-/** Multi-select of micro-skill tags; the first selected tag is the lesson's primary skill. */
-export function SkillPicker({ value, onChange, prefer, error }: { value: string[]; onChange: (v: string[]) => void; prefer?: SkillCategory; error?: string }) {
+/** Multi-select of the micro-skills a lesson teaches. The recommender matches weak skills to these tags. */
+export function SkillPicker({ value, onChange, error }: { value: string[]; onChange: (v: string[]) => void; error?: string }) {
   const SKILLS = useSkills();
-  const cats = prefer ? [prefer, ...SKILL_CATEGORIES.filter((c) => c !== prefer)] : SKILL_CATEGORIES;
   const toggle = (id: string) => onChange(value.includes(id) ? value.filter((x) => x !== id) : [...value, id]);
   return (
     <fieldset>
-      <legend className="label">Micro-skill tags <span className="font-normal text-ink-soft">(first = primary; used by the recommender)</span></legend>
+      <legend className="label">Micro-skill tags <span className="font-normal text-ink-soft">(used by the recommender)</span></legend>
       <div className="space-y-2.5 rounded-xl border border-line p-3">
-        {cats.map((c) => (
+        {SKILL_CATEGORIES.map((c) => (
           <div key={c}>
             <p className={cx("mb-1.5 text-[11px] font-semibold uppercase tracking-eyebrow", SKILL_META[c].text)}>{SKILL_META[c].label}</p>
             <div className="flex flex-wrap gap-1.5">
@@ -30,7 +28,7 @@ export function SkillPicker({ value, onChange, prefer, error }: { value: string[
                 return (
                   <button type="button" key={s.id} onClick={() => toggle(s.id)} aria-pressed={i >= 0}
                     className={cx("rounded-full border px-2.5 py-1 text-xs font-medium transition-colors", i >= 0 ? "border-navy bg-navy text-white" : "border-line bg-white text-ink hover:border-navy/40")}>
-                    {i === 0 && "★ "}{s.name}
+                    {s.name}
                   </button>
                 );
               })}

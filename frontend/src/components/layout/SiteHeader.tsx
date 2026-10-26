@@ -3,9 +3,8 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { Bell, ChevronDown, LayoutDashboard, LogOut, Menu, Settings, Shield, User as UserIcon, X } from "lucide-react";
+import { ChevronDown, LayoutDashboard, LogOut, Menu, Settings, Shield, User as UserIcon, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
-import { meApi } from "@/lib/api";
 import { Avatar } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { Logo } from "./Logo";
@@ -13,19 +12,8 @@ import { Logo } from "./Logo";
 const NAV = [
   { href: "/courses", label: "Courses" },
   { href: "/my-learning", label: "My learning" },
-  { href: "/practice", label: "Practice sets" },
+  { href: "/practice", label: "Practice" },
 ];
-
-export function useUnreadCount() {
-  const { user } = useAuth();
-  const [n, setN] = useState(0);
-  const pathname = usePathname();
-  useEffect(() => {
-    if (!user) return setN(0);
-    meApi.notifications().then((list) => setN(list.filter((x) => !x.read).length)).catch(() => setN(0));
-  }, [user, pathname]);
-  return n;
-}
 
 export function SiteHeader() {
   const { user, logout } = useAuth();
@@ -33,7 +21,6 @@ export function SiteHeader() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [menu, setMenu] = useState(false);
-  const unread = useUnreadCount();
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { setOpen(false); setMenu(false); }, [pathname]);
@@ -69,10 +56,6 @@ export function SiteHeader() {
             </>
           ) : (
             <>
-              <Link href="/notifications" className="relative rounded-full p-2 text-navy hover:bg-sand" aria-label={`Notifications${unread ? `, ${unread} unread` : ""}`}>
-                <Bell className="h-5 w-5" />
-                {unread > 0 && <span className="absolute right-1 top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-brand px-1 text-[10px] font-bold text-white">{unread}</span>}
-              </Link>
               <div className="relative" ref={menuRef}>
                 <button className="flex items-center gap-1 rounded-full" onClick={() => setMenu((m) => !m)} aria-haspopup="menu" aria-expanded={menu} aria-label="Account menu">
                   <Avatar name={user.name} size={40} />
