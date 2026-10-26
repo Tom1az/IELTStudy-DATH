@@ -22,7 +22,7 @@ This is a 3rd-year CS integration school project, and the code is built mostly w
 | Path | What |
 | --- | --- |
 | `backend/` | Express 5 + TypeScript REST API, Prisma 8, Joi validation. See `backend/CLAUDE.md`. |
-| `frontend/` | Next.js + Tailwind (Phase 4, not scaffolded yet) |
+| `frontend/` | Next.js 14 + Tailwind, on the real backend through a `/api/v1` proxy (Phase 4). See `frontend/README.md`. |
 | `ml/` | Offline pyBKT fitting and A/B simulation (Phase 3/6). Python venv lives at the repo root `.venv/`. |
 | `docs/ROADMAP.md` | **Source of truth for progress.** Phases, tasks and approval gates. |
 | `docs/ERD.md` | Data model: diagram, delete rules, JSONB shapes, invariants the app must enforce |

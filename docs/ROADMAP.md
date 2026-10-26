@@ -63,6 +63,8 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 
 ## Phase 3 — BKT and recommender
 
+Owned by another team member, so Phase 4 work goes ahead without it. Until it lands, the frontend shows "not available yet" for mastery, recommendations and locked lessons.
+
 - [ ] `ml/`: fit pyBKT parameters → `ml/output/bkt_params.json`
 - [ ] `services/bkt.ts`: per-response update, Q-matrix weighted split, upsert mastery inside the submit transaction
 - [ ] Diagnostic sets the starting mastery (cold start)
@@ -74,10 +76,10 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 ## Phase 4 — Frontend (parallel, against Prism mocks)
 
 - [ ] **Gate:** Figma or wireframes approved
-- [ ] Auth pages
+- [x] Auth pages (plan and outcome in `docs/plans/phase-4-frontend.md`)
 - [ ] Learner: onboarding, diagnostic, dashboard (radar chart, next best step), lesson viewer, quiz player, post-quiz review
-- [ ] Instructor Studio: course/lesson/media editor, question authoring with skill tags
-- [ ] Admin panel: review queue, user roles, stats
+- [x] Instructor Studio: course/lesson/media editor, question authoring with skill tags (plan and outcome in `docs/plans/phase-4-frontend.md`)
+- [x] Admin panel: review queue, user roles, stats (plan and outcome in `docs/plans/phase-4-frontend.md`)
 
 ## Phase 5 — Interim milestone (week 44)
 
