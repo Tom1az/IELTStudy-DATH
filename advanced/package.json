@@ -1,0 +1,14 @@
+{
+  "name": "ielstudy-adaptive-module",
+  "version": "1.0.0",
+  "description": "IELTStudy – Personalized Learning Paths & Progress Tracking (BKT + Content-Based Filtering)",
+  "main": "src/index.js",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "simulate": "node sim/simulate.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "pg": "^8.12.0"
+  }
+}

@@ -1,0 +1,7 @@
+{
+  "_comment": "Tham số mặc định. File này được ghi đè bởi scripts/pybkt_export.py sau khi fit pyBKT trên EdNet. Khoá = skill_code, 'default' dùng khi skill chưa có tham số.",
+  "threshold": 0.65,
+  "masteredAt": 0.85,
+  "default": { "pL0": 0.3, "pT": 0.12, "pS": 0.1, "pG": 0.2 },
+  "skills": {}
+}
