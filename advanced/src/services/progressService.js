@@ -1,49 +1,98 @@
 'use strict';
-/**
- * Theo dõi tiến độ: tổng hợp dữ liệu cho Learner Dashboard (radar chart, trend, completion).
- * Hàm thuần – nhận dữ liệu đã query từ DB.
- */
-const { THRESHOLD, MASTERED_AT } = require('./bkt');
+const { round, mean } = require('../utils/math');
+const { notFound } = require('../utils/errors');
 
 const CATEGORIES = ['Listening', 'Reading', 'Writing', 'Speaking'];
-const status = (m) => (m >= MASTERED_AT ? 'mastered' : m >= THRESHOLD ? 'proficient' : 'weak');
 
 /**
- * @param {object} p
- * @param {Array<{skillId,code,category,description,mastery}>} p.skills
- * @param {Array<{skillId,mastery,at:Date}>} p.history  lịch sử mastery (để tính trend)
- * @param {{total:number, completed:number}} p.lessons
- * @param {number} [p.targetBand]
- * @param {Date} [p.now]
+ * Theo dõi tiến độ: dữ liệu cho Learner Dashboard (radar chart, completion, trend).
  */
-function buildProgress({ skills, history = [], lessons, targetBand = null, now = new Date(), trendDays = 7 }) {
-  const cutoff = now.getTime() - trendDays * 864e5;
-  const oldest = {}; // mastery cũ nhất trong cửa sổ trend
-  for (const h of [...history].sort((a, b) => new Date(a.at) - new Date(b.at))) {
-    if (new Date(h.at).getTime() >= cutoff && !(h.skillId in oldest)) oldest[h.skillId] = h.mastery;
+function createProgressService({ repository, config, catalogProvider }) {
+  const th = config.masteryThreshold;
+
+  async function getProgress({ userId, historyLimit }) {
+    const limit = historyLimit || config.progress.defaultHistoryLimit;
+    const [mastery, completed, enrolled, { catalog, skills }, history] = await Promise.all([
+      repository.getMastery(userId),
+      repository.getCompletedLessonIds(userId),
+      repository.getEnrolledCourseIds(userId),
+      catalogProvider(),
+      repository.getMasteryHistory(userId, limit)
+    ]);
+
+    const skillsById = new Map(skills.map((s) => [s.id, s]));
+
+    // Radar: mastery từng skill + trung bình 4 kỹ năng IELTS
+    const radar = skills.filter((s) => mastery.has(s.id)).map((s) => ({
+      skillId: s.id, skillCode: s.skillCode, category: s.skillCategory,
+      label: s.description || s.skillCode, mastery: round(mastery.get(s.id)), threshold: th
+    }));
+    const categories = CATEGORIES.map((c) => {
+      const vals = radar.filter((r) => r.category === c).map((r) => r.mastery);
+      return { category: c, mastery: round(mean(vals)), skillCount: vals.length };
+    });
+
+    const weak = radar.filter((r) => r.mastery < th).sort((a, b) => a.mastery - b.mastery);
+    const strong = radar.filter((r) => r.mastery >= th).sort((a, b) => b.mastery - a.mastery);
+
+    // Completion theo khoá đã đăng ký (không tính micro-lesson remedial)
+    const courses = [];
+    for (const courseId of enrolled) {
+      const lessons = catalog.filter((l) => l.courseId === courseId && !l.isRemedial);
+      if (!lessons.length) continue;
+      const done = lessons.filter((l) => completed.has(l.id)).length;
+      courses.push({
+        courseId, title: lessons[0].courseTitle, totalLessons: lessons.length,
+        completedLessons: done, percent: round((done / lessons.length) * 100, 1)
+      });
+    }
+
+    return {
+      userId,
+      threshold: th,
+      summary: {
+        overallMastery: round(mean(radar.map((r) => r.mastery))),
+        weakSkillCount: weak.length,
+        masteredSkillCount: strong.length,
+        lessonsCompleted: completed.size
+      },
+      radar, categories, weakSkills: weak, strongSkills: strong, courses,
+      trend: buildTrend(history, skillsById)
+    };
   }
 
-  const detail = skills.map((s) => ({
-    skillId: s.skillId, code: s.code, category: s.category,
-    mastery: +s.mastery.toFixed(3), status: status(s.mastery),
-    gapToThreshold: +Math.max(0, THRESHOLD - s.mastery).toFixed(3),
-    trend: s.skillId in oldest ? +(s.mastery - oldest[s.skillId]).toFixed(3) : null,
-  }));
+  /** Replay history theo thứ tự thời gian -> trung bình mastery từng category sau mỗi attempt. */
+  function buildTrend(history, skillsById) {
+    const state = new Map();
+    const points = [];
+    let currentAttempt = null;
+    let at = null;
+    const flush = () => {
+      if (currentAttempt === null) return;
+      const point = { attemptId: currentAttempt, at };
+      for (const c of CATEGORIES) {
+        const vals = [...state].filter(([id]) => skillsById.get(id)?.skillCategory === c).map(([, v]) => v);
+        point[c] = vals.length ? round(mean(vals)) : null;
+      }
+      points.push(point);
+    };
+    for (const h of history) {
+      if (h.attemptId !== currentAttempt) { flush(); currentAttempt = h.attemptId; }
+      state.set(h.skillId, h.masteryAfter);
+      at = h.createdAt;
+    }
+    flush();
+    return points;
+  }
 
-  // Radar 4 trục = trung bình mastery theo kỹ năng IELTS
-  const radar = CATEGORIES.map((c) => {
-    const xs = detail.filter((d) => d.category === c);
-    return { category: c, value: xs.length ? +(xs.reduce((a, d) => a + d.mastery, 0) / xs.length).toFixed(3) : null, skillCount: xs.length };
-  });
+  async function completeLesson({ userId, lessonId }) {
+    const { catalog } = await catalogProvider();
+    if (!catalog.some((l) => l.id === String(lessonId))) throw notFound('Lesson not found');
+    await repository.markLessonCompleted(userId, lessonId);
+    return { lessonId: String(lessonId), status: 'completed' };
+  }
 
-  const weak = detail.filter((d) => d.status === 'weak').sort((a, b) => a.mastery - b.mastery);
-  const overall = detail.length ? detail.reduce((a, d) => a + d.mastery, 0) / detail.length : 0;
-  return {
-    overallMastery: +overall.toFixed(3),
-    skillsAboveThresholdPct: detail.length ? +(100 * detail.filter((d) => d.mastery >= THRESHOLD).length / detail.length).toFixed(1) : 0,
-    completion: { ...lessons, pct: lessons.total ? +(100 * lessons.completed / lessons.total).toFixed(1) : 0 },
-    targetBand, threshold: THRESHOLD, radar, skills: detail, weakSkills: weak.slice(0, 5),
-  };
+  return { getProgress, completeLesson };
 }
 
-module.exports = { buildProgress, CATEGORIES };
+module.exports = { createProgressService };

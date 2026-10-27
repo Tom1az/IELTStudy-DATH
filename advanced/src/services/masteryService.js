@@ -1,64 +1,92 @@
 'use strict';
+const { applyResponses } = require('../bkt/bktModel');
+const { buildBaseline } = require('../bkt/placement');
+const { notFound, forbidden, badRequest, conflict } = require('../utils/errors');
+const { round } = require('../utils/math');
+
 /**
- * Nối BKT với PostgreSQL: xử lý một quiz attempt -> cập nhật user_skill_mastery (+ history).
- * placement=true: dùng initFromPlacement để khởi tạo vector kỹ năng (cold-start).
+ * Cập nhật latent mastery sau placement test / quiz.
+ * Người gọi: route POST /mastery/... HOẶC trực tiếp từ handler nộp quiz của backend
+ * (gọi masteryService.processAttempt(...) ngay sau khi chấm điểm).
  */
-const bkt = require('./bkt');
+function createMasteryService({ repository, paramStore, config }) {
+  const th = config.masteryThreshold;
 
-async function processAttempt(pool, attemptId, { placement = false } = {}) {
-  const client = await pool.connect();
-  try {
-    await client.query('BEGIN');
-    const att = (await client.query('SELECT user_id, mastery_processed_at FROM quiz_attempts WHERE id=$1 FOR UPDATE', [attemptId])).rows[0];
-    if (!att) { const e = new Error('Attempt not found'); e.status = 404; throw e; }
-    if (att.mastery_processed_at) { await client.query('ROLLBACK'); return { alreadyProcessed: true }; }
-    const userId = att.user_id;
-
-    const { rows } = await client.query(
-      `SELECT qr.question_id, qr.is_correct, qs.skill_id, qs.weight, s.skill_code
-         FROM question_responses qr
-         JOIN question_skills qs ON qs.question_id = qr.question_id
-         JOIN skills s ON s.id = qs.skill_id
-        WHERE qr.attempt_id = $1
-        ORDER BY qr.attempt_order, qs.skill_id`, [attemptId]);
-
-    const skillIds = [...new Set(rows.map((r) => String(r.skill_id)))];
-    const pr = await client.query('SELECT skill_id, p_l0, p_t, p_s, p_g FROM skill_bkt_params WHERE skill_id = ANY($1)', [skillIds]);
-    const dbParams = Object.fromEntries(pr.rows.map((r) => [String(r.skill_id), { pL0: r.p_l0, pT: r.p_t, pS: r.p_s, pG: r.p_g }]));
-    const paramsOf = (skillId, code) => ({ ...bkt.getParams(code), ...dbParams[String(skillId)] });
-
-    // gom theo câu hỏi
-    const byQ = new Map();
-    for (const r of rows) {
-      if (!byQ.has(r.question_id)) byQ.set(r.question_id, { correct: r.is_correct, skills: [] });
-      byQ.get(r.question_id).skills.push({ skillId: String(r.skill_id), weight: r.weight, params: paramsOf(r.skill_id, r.skill_code) });
+  async function loadAttempt({ attemptId, requester }) {
+    const attempt = await repository.getAttempt(attemptId);
+    if (!attempt) throw notFound('Attempt not found');
+    if (attempt.userId !== String(requester.id) && requester.role !== 'admin') {
+      throw forbidden('Attempt does not belong to you');
     }
-    const responses = [...byQ.values()];
-
-    let mastery;
-    if (placement) {
-      mastery = bkt.initFromPlacement(responses);
-    } else {
-      const cur = await client.query('SELECT skill_id, mastery_prob FROM user_skill_mastery WHERE user_id=$1 AND skill_id = ANY($2) FOR UPDATE', [userId, skillIds]);
-      mastery = Object.fromEntries(cur.rows.map((r) => [String(r.skill_id), r.mastery_prob]));
-      for (const r of responses) bkt.applyResponse(mastery, r.correct, r.skills);
-    }
-
-    for (const [skillId, m] of Object.entries(mastery)) {
-      await client.query(
-        `INSERT INTO user_skill_mastery (user_id, skill_id, mastery_prob, updated_at) VALUES ($1,$2,$3,now())
-         ON CONFLICT (user_id, skill_id) DO UPDATE SET mastery_prob = EXCLUDED.mastery_prob, updated_at = now()`, [userId, skillId, m]);
-      await client.query('INSERT INTO user_skill_mastery_history (user_id, skill_id, mastery_prob, source_attempt_id) VALUES ($1,$2,$3,$4)', [userId, skillId, m, attemptId]);
-    }
-    await client.query('UPDATE quiz_attempts SET mastery_processed_at = now() WHERE id=$1', [attemptId]);
-    await client.query('COMMIT');
-    return { userId, mastery, weakSkills: Object.keys(mastery).filter((s) => mastery[s] < bkt.THRESHOLD) };
-  } catch (e) {
-    await client.query('ROLLBACK').catch(() => {});
-    throw e;
-  } finally {
-    client.release();
+    if (!attempt.completedAt) throw badRequest('Attempt is not completed yet');
+    const responses = await repository.getAttemptResponses(attemptId);
+    if (!responses.length) throw badRequest('Attempt has no responses');
+    const questionSkills = await repository.getQuestionSkills([...new Set(responses.map((r) => r.questionId))]);
+    return { attempt, responses, questionSkills };
   }
+
+  function summarize(entries, skillsById) {
+    return entries.map((e) => ({
+      skillId: e.skillId,
+      skillCode: skillsById.get(e.skillId)?.skillCode,
+      before: e.before == null ? null : round(e.before),
+      after: round(e.after),
+      belowThreshold: e.after < th,
+      crossedBelowThreshold: e.before != null && e.before >= th && e.after < th,
+      crossedAboveThreshold: e.before != null && e.before < th && e.after >= th
+    }));
+  }
+
+  /** Placement 30 câu: khởi tạo toàn bộ skill vector (chỉ chạy 1 lần / người học). */
+  async function initPlacement({ attemptId, requester }) {
+    const existing = await repository.getMastery(requester.id);
+    if (existing.size) throw conflict('Skill profile already initialized');
+
+    const { attempt, responses, questionSkills } = await loadAttempt({ attemptId, requester });
+    const skills = await repository.getSkills();
+    const skillsById = new Map(skills.map((s) => [s.id, s]));
+
+    const { state } = buildBaseline({ skills, responses, questionSkills, paramStore, bktConfig: config.bkt });
+    const entries = [...state].map(([skillId, after]) => ({ skillId, before: null, after }));
+    await repository.saveMasteryUpdate({ userId: attempt.userId, attemptId, source: 'placement', entries });
+    return { source: 'placement', updates: summarize(entries, skillsById) };
+  }
+
+  /** Quiz thường: cập nhật mastery từ giá trị hiện tại. Idempotent theo attemptId. */
+  async function processAttempt({ attemptId, requester }) {
+    const { attempt, responses, questionSkills } = await loadAttempt({ attemptId, requester });
+    const prior = await repository.getMastery(attempt.userId);
+    if (!prior.size) throw badRequest('Complete the placement test first');
+
+    if (await repository.hasProcessedAttempt(attemptId)) {
+      return { source: 'quiz', alreadyProcessed: true, updates: [] };
+    }
+
+    const skills = await repository.getSkills();
+    const skillsById = new Map(skills.map((s) => [s.id, s]));
+    const { state, evidence } = applyResponses({
+      prior, responses, questionSkills, skillsById, paramStore, bktConfig: config.bkt
+    });
+
+    const entries = [...evidence.keys()].map((skillId) => ({
+      skillId, before: prior.get(skillId) ?? null, after: state.get(skillId)
+    }));
+    await repository.saveMasteryUpdate({ userId: attempt.userId, attemptId, source: 'quiz', entries });
+    return { source: 'quiz', alreadyProcessed: false, updates: summarize(entries, skillsById) };
+  }
+
+  async function getMastery(userId) {
+    const [mastery, skills] = await Promise.all([repository.getMastery(userId), repository.getSkills()]);
+    return skills
+      .filter((s) => mastery.has(s.id))
+      .map((s) => ({
+        skillId: s.id, skillCode: s.skillCode, category: s.skillCategory,
+        label: s.description || s.skillCode,
+        mastery: round(mastery.get(s.id)), belowThreshold: mastery.get(s.id) < th
+      }));
+  }
+
+  return { initPlacement, processAttempt, getMastery };
 }
 
-module.exports = { processAttempt };
+module.exports = { createMasteryService };

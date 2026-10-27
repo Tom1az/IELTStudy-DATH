@@ -1,14 +1,17 @@
 {
-  "name": "ielstudy-adaptive-module",
+  "name": "ielstudy-advanced",
   "version": "1.0.0",
-  "description": "IELTStudy – Personalized Learning Paths & Progress Tracking (BKT + Content-Based Filtering)",
+  "description": "IELTStudy – Personalized Learning Paths & Recommendations (BKT + Content-Based Filtering)",
   "main": "src/index.js",
+  "private": true,
   "scripts": {
+    "dev": "node src/server.js",
     "test": "node --test test/*.test.js",
-    "simulate": "node sim/simulate.js"
+    "eval": "node scripts/runEvaluation.js"
   },
+  "engines": { "node": ">=18" },
   "dependencies": {
     "express": "^4.19.2",
-    "pg": "^8.12.0"
+    "pg": "^8.11.5"
   }
 }
