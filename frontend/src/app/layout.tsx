@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   description: "Climb from Band 4 to Band 7, one skill at a time. Adaptive IELTS Academic courses in Listening, Reading, Writing and Speaking.",
 };
 
-export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#FAF7F0" };
+export const viewport: Viewport = { width: "device-width", initialScale: 1, themeColor: "#FBFCEE" };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

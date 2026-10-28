@@ -34,24 +34,24 @@ export function SiteHeader() {
   const doLogout = () => { logout(); router.push("/"); };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-cream/95 backdrop-blur">
+    <header className="sticky top-0 z-40 border-b border-line bg-ivory/95 backdrop-blur">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-white focus:px-3 focus:py-2">Skip to content</a>
       <div className="container flex h-[70px] items-center gap-10">
         <Logo />
         <nav className="hidden items-center gap-8 md:flex" aria-label="Main">
           {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className={cx("text-[15px] transition-colors", active(n.href) ? "font-semibold text-brand" : "text-navy hover:text-brand")} aria-current={active(n.href) ? "page" : undefined}>
+            <Link key={n.href} href={n.href} className={cx("text-[15px] transition-colors", active(n.href) ? "font-semibold text-brand" : "text-ink hover:text-brand")} aria-current={active(n.href) ? "page" : undefined}>
               {n.label}
             </Link>
           ))}
-          {user?.role === "instructor" && <Link href="/instructor" className="text-[15px] text-navy hover:text-brand">Studio</Link>}
-          {user?.role === "admin" && <Link href="/admin" className="text-[15px] text-navy hover:text-brand">Admin</Link>}
+          {user?.role === "instructor" && <Link href="/instructor" className="text-[15px] text-ink hover:text-brand">Studio</Link>}
+          {user?.role === "admin" && <Link href="/admin" className="text-[15px] text-ink hover:text-brand">Admin</Link>}
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
           {!user ? (
             <>
-              <Link href="/login" className="hidden px-3 py-2 text-[15px] text-navy hover:text-brand sm:inline">Log in</Link>
+              <Link href="/login" className="hidden px-3 py-2 text-[15px] text-ink hover:text-brand sm:inline">Log in</Link>
               <Link href="/register" className="btn-dark hidden sm:inline-flex">Sign up</Link>
             </>
           ) : (
@@ -72,7 +72,7 @@ export function SiteHeader() {
                     {user.role === "instructor" && <MenuLink href="/instructor" icon={<LayoutDashboard className="h-4 w-4" />}>Instructor studio</MenuLink>}
                     {user.role === "admin" && <MenuLink href="/admin" icon={<Shield className="h-4 w-4" />}>Admin panel</MenuLink>}
                     <MenuLink href="/profile" icon={<UserIcon className="h-4 w-4" />}>Profile & settings</MenuLink>
-                    <button role="menuitem" onClick={doLogout} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-ink hover:bg-cream">
+                    <button role="menuitem" onClick={doLogout} className="flex w-full items-center gap-2.5 px-4 py-2.5 text-left text-sm text-ink hover:bg-ivory">
                       <LogOut className="h-4 w-4" /> Log out
                     </button>
                   </div>
@@ -80,18 +80,18 @@ export function SiteHeader() {
               </div>
             </>
           )}
-          <button className="rounded-lg p-2 text-navy hover:bg-sand md:hidden" onClick={() => setOpen((o) => !o)} aria-label="Open menu" aria-expanded={open}>
+          <button className="rounded-lg p-2 text-ink hover:bg-line/50 md:hidden" onClick={() => setOpen((o) => !o)} aria-label="Open menu" aria-expanded={open}>
             {open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </button>
         </div>
       </div>
       {open && (
-        <nav className="border-t border-line bg-cream px-4 pb-4 md:hidden" aria-label="Mobile">
+        <nav className="border-t border-line bg-ivory px-4 pb-4 md:hidden" aria-label="Mobile">
           {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className={cx("block rounded-lg px-3 py-3 text-base", active(n.href) ? "font-semibold text-brand" : "text-navy")}>{n.label}</Link>
+            <Link key={n.href} href={n.href} className={cx("block rounded-lg px-3 py-3 text-base", active(n.href) ? "font-semibold text-brand" : "text-ink")}>{n.label}</Link>
           ))}
-          {user?.role === "instructor" && <Link href="/instructor" className="block rounded-lg px-3 py-3 text-navy">Instructor studio</Link>}
-          {user?.role === "admin" && <Link href="/admin" className="block rounded-lg px-3 py-3 text-navy">Admin panel</Link>}
+          {user?.role === "instructor" && <Link href="/instructor" className="block rounded-lg px-3 py-3 text-ink">Instructor studio</Link>}
+          {user?.role === "admin" && <Link href="/admin" className="block rounded-lg px-3 py-3 text-ink">Admin panel</Link>}
           {!user && (
             <div className="mt-2 flex gap-2 px-3">
               <Link href="/login" className="btn-outline flex-1">Log in</Link>
@@ -106,7 +106,7 @@ export function SiteHeader() {
 
 function MenuLink({ href, icon, children }: { href: string; icon: React.ReactNode; children: React.ReactNode }) {
   return (
-    <Link role="menuitem" href={href} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink hover:bg-cream">
+    <Link role="menuitem" href={href} className="flex items-center gap-2.5 px-4 py-2.5 text-sm text-ink hover:bg-ivory">
       {icon}
       {children}
     </Link>
@@ -115,7 +115,7 @@ function MenuLink({ href, icon, children }: { href: string; icon: React.ReactNod
 
 export function SiteFooter({ withLogo }: { withLogo?: boolean }) {
   return (
-    <footer className="bg-navy text-white">
+    <footer className="bg-ink text-white">
       <div className={cx("container flex flex-col gap-4 py-10 md:flex-row md:items-center", withLogo ? "md:justify-between md:py-14" : "")}>
         {withLogo && <Logo light />}
         <p className={cx("text-xs leading-relaxed text-white/80", withLogo && "max-w-md")}>

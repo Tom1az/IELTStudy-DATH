@@ -119,12 +119,12 @@ function LessonRow({ lesson, label, canMoveUp, canMoveDown, onMove, onDelete, ed
       <div className="flex items-center gap-1">
         {editable && (
           <>
-            <button className="rounded-lg p-2 hover:bg-sand disabled:opacity-30" disabled={!canMoveUp || busy} onClick={() => onMove(-1)} aria-label="Move up"><ArrowUp className="h-4 w-4" /></button>
-            <button className="rounded-lg p-2 hover:bg-sand disabled:opacity-30" disabled={!canMoveDown || busy} onClick={() => onMove(1)} aria-label="Move down"><ArrowDown className="h-4 w-4" /></button>
+            <button className="rounded-lg p-2 hover:bg-line/50 disabled:opacity-30" disabled={!canMoveUp || busy} onClick={() => onMove(-1)} aria-label="Move up"><ArrowUp className="h-4 w-4" /></button>
+            <button className="rounded-lg p-2 hover:bg-line/50 disabled:opacity-30" disabled={!canMoveDown || busy} onClick={() => onMove(1)} aria-label="Move down"><ArrowDown className="h-4 w-4" /></button>
           </>
         )}
         <Link href={`/instructor/lessons/${lesson.lessonId}`} className="btn-outline btn-sm"><Pencil className="h-3.5 w-3.5" /> {editable ? "Edit" : "Open"}</Link>
-        {editable && <button className="rounded-lg p-2 text-ink-muted hover:bg-sand hover:text-danger" onClick={onDelete} aria-label="Delete lesson"><Trash2 className="h-4 w-4" /></button>}
+        {editable && <button className="rounded-lg p-2 text-ink-muted hover:bg-line/50 hover:text-danger" onClick={onDelete} aria-label="Delete lesson"><Trash2 className="h-4 w-4" /></button>}
       </div>
     </li>
   );
@@ -167,7 +167,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
           <div className="flex items-center gap-2"><CourseStatusPill status={toCourse(course).status} /><span className="text-sm capitalize text-ink-muted">{course.targetLevel}</span></div>
-          <h1 className="mt-2 font-serif text-[34px] font-bold leading-tight">{course.title}</h1>
+          <h1 className="mt-2 text-[34px] font-extrabold leading-tight">{course.title}</h1>
         </div>
         <div className="flex flex-wrap gap-2">
           <Link href={`/courses/${course.courseId}`} className="btn-outline"><Eye className="h-4 w-4" /> View as learner</Link>
@@ -204,7 +204,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
               <section key={section.skill} className="overflow-hidden rounded-2xl border border-line bg-white">
                 <div className="flex items-center gap-3 border-b border-line px-4 py-3">
                   <SkillTile skill={section.skill} size={32} />
-                  <h2 className="flex-1 font-serif text-lg font-bold">{SKILL_META[section.skill].label} <span className="text-sm font-normal text-ink-muted">· {section.entries.length} lessons</span></h2>
+                  <h2 className="flex-1 text-lg font-extrabold">{SKILL_META[section.skill].label} <span className="text-sm font-normal text-ink-muted">· {section.entries.length} lessons</span></h2>
                 </div>
                 <ul className="divide-y divide-line">
                   {section.entries.map((entry, i) => (
@@ -219,7 +219,7 @@ export function CourseEditor({ courseId }: { courseId: string }) {
             ))}
             <section className="overflow-hidden rounded-2xl border border-line bg-white">
               <div className="border-b border-line px-4 py-3">
-                <h2 className="font-serif text-lg font-bold">Remedial lessons <span className="text-sm font-normal text-ink-muted">· recommended to learners whose mastery of the tagged skills is below 0.65</span></h2>
+                <h2 className="text-lg font-extrabold">Remedial lessons <span className="text-sm font-normal text-ink-muted">· recommended to learners whose mastery of the tagged skills is below 0.65</span></h2>
               </div>
               {remedial.length === 0 ? <p className="px-4 py-5 text-sm text-ink-muted">No remedial lessons yet.</p> : (
                 <ul className="divide-y divide-line">

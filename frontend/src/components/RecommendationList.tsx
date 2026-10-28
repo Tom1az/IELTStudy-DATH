@@ -15,7 +15,7 @@ export function RecommendationList({ items, compact }: { items: Recommendation[]
     <ul className={cx(compact ? "space-y-2.5" : "space-y-3")}>
       {items.map((r) => (
         <li key={r.id} className="rounded-xl border border-line bg-white">
-          <Link href={recHref(r)} onClick={() => meApi.clickRecommendation(r.id).catch(() => {})} className={cx("flex hover:bg-cream", compact ? "items-center gap-3 px-3.5 py-3" : "flex-col gap-1.5 px-3.5 py-3")}>
+          <Link href={recHref(r)} onClick={() => meApi.clickRecommendation(r.id).catch(() => {})} className={cx("flex hover:bg-ivory", compact ? "items-center gap-3 px-3.5 py-3" : "flex-col gap-1.5 px-3.5 py-3")}>
             {compact ? (
               <>
                 <span className={cx("pill shrink-0", SKILL_META[r.skill].chip)}>{SKILL_META[r.skill].label}</span>

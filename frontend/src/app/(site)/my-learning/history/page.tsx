@@ -40,7 +40,7 @@ function HistoryInner() {
       </PageHeader>
       {series.length > 0 && (
         <section className="card mb-6 p-5">
-          <h2 className="font-serif text-lg font-bold">Accuracy trend by skill</h2>
+          <h2 className="text-lg font-extrabold">Accuracy trend by skill</h2>
           <p className="text-xs text-ink-muted">Rolling average of your last three attempts in each skill.</p>
           <div className="mt-4"><LineChart series={series} /></div>
         </section>

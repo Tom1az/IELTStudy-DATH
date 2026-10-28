@@ -48,7 +48,7 @@ function RegisterInner() {
           {BANDS.map((b) => <option key={b} value={b}>Band {b.toFixed(1)}</option>)}
         </Select>
         <label className="flex items-start gap-2.5 text-sm text-ink-muted">
-          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-navy" />
+          <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} className="mt-0.5 h-4 w-4 accent-brand" />
           <span>I agree that my practice data is used to personalise recommendations. IELTStudy is not affiliated with the owners of the IELTS test.</span>
         </label>
         {fields.agree && <p className="-mt-2 text-xs font-medium text-danger">{fields.agree}</p>}

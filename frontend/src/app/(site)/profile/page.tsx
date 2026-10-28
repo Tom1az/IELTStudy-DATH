@@ -38,15 +38,15 @@ function ProfileInner() {
       <div className="card mb-6 flex flex-wrap items-center gap-4 p-5">
         <Avatar name={u.name} size={56} />
         <div className="flex-1">
-          <p className="font-serif text-xl font-bold">{u.name}</p>
+          <p className="text-xl font-bold">{u.name}</p>
           <p className="text-sm text-ink-muted">{u.email} · Joined {fmtDate(u.createdAt)}</p>
         </div>
-        <StatusPill tone="navy">{u.role}</StatusPill>
+        <StatusPill tone="blue">{u.role}</StatusPill>
         {u.role === "learner" && u.placementDone && <StatusPill tone="green">Placement done</StatusPill>}
       </div>
 
       <section className="card p-6" aria-labelledby="p-h">
-        <h2 id="p-h" className="font-serif text-xl font-bold">Profile</h2>
+        <h2 id="p-h" className="text-xl font-extrabold">Profile</h2>
         <form className="mt-4 space-y-4" onSubmit={save}>
           <TextInput label="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} error={errs.name} />
           {u.role === "learner" && (

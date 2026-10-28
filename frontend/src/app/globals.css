@@ -1,9 +1,8 @@
-@import "@fontsource/dm-sans/400.css";
-@import "@fontsource/dm-sans/500.css";
-@import "@fontsource/dm-sans/600.css";
-@import "@fontsource/dm-sans/700.css";
-@import "@fontsource/fraunces/600.css";
-@import "@fontsource/fraunces/700.css";
+@import "@fontsource/plus-jakarta-sans/400.css";
+@import "@fontsource/plus-jakarta-sans/500.css";
+@import "@fontsource/plus-jakarta-sans/600.css";
+@import "@fontsource/plus-jakarta-sans/700.css";
+@import "@fontsource/plus-jakarta-sans/800.css";
 
 @tailwind base;
 @tailwind components;
@@ -12,40 +11,41 @@
 @layer base {
   html { -webkit-text-size-adjust: 100%; }
   body {
-    @apply bg-cream font-sans text-ink antialiased;
+    @apply bg-ivory font-sans text-ink antialiased;
   }
-  h1, h2, h3, .font-display { @apply font-serif; font-optical-sizing: auto; }
-  :focus-visible { @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-cream; }
-  ::selection { background: #fbe4d6; }
+  /* Figma headings: same font as the body, extra bold */
+  h1, h2, h3, .font-display { @apply font-extrabold tracking-[-0.01em]; }
+  :focus-visible { @apply outline-none ring-2 ring-brand ring-offset-2 ring-offset-ivory; }
+  ::selection { background: #f6e6a5; }
   /* A grid with no explicit columns gets one shrinkable column, so long content can't widen the page on phones. */
   .grid { grid-template-columns: minmax(0, 1fr); }
 }
 
 @layer components {
-  .eyebrow { @apply text-[11px] font-semibold uppercase tracking-eyebrow text-brand; }
-  .eyebrow-muted { @apply text-[11px] font-semibold uppercase tracking-eyebrow text-ink-soft; }
+  .eyebrow { @apply text-[11px] font-bold uppercase tracking-eyebrow text-brand; }
+  .eyebrow-muted { @apply text-[11px] font-bold uppercase tracking-eyebrow text-ink-muted; }
 
-  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-semibold transition-colors disabled:cursor-not-allowed disabled:opacity-50; }
+  .btn { @apply inline-flex items-center justify-center gap-2 rounded-lg px-5 py-2.5 text-sm font-bold transition-colors disabled:cursor-not-allowed disabled:opacity-50; }
   .btn-primary { @apply btn bg-brand text-white hover:bg-brand-hover; }
-  .btn-dark { @apply btn bg-navy text-white hover:bg-navy-700; }
-  .btn-outline { @apply btn border-[1.5px] border-navy bg-white text-navy hover:bg-cream; }
-  .btn-ghost { @apply btn text-navy hover:bg-sand/60; }
-  .btn-light { @apply btn bg-white text-navy hover:bg-cream; }
-  .btn-outline-light { @apply btn border-[1.5px] border-white/80 text-white hover:bg-white/10; }
+  .btn-dark { @apply btn bg-ink text-white hover:bg-ink/90; }
+  .btn-outline { @apply btn border border-line bg-white text-ink hover:border-brand/40 hover:bg-brand-tint; }
+  .btn-ghost { @apply btn text-ink hover:bg-brand-tint; }
+  .btn-light { @apply btn bg-white text-brand hover:bg-brand-tint; }
+  .btn-outline-light { @apply btn border border-white/70 text-white hover:bg-white/10; }
   .btn-sm { @apply px-3 py-1.5 text-xs; }
   .btn-danger { @apply btn bg-danger text-white hover:bg-red-800; }
 
   .card { @apply rounded-2xl border border-line bg-white shadow-card; }
-  .input { @apply w-full rounded-lg border border-[#D9D3C5] bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-navy focus:outline-none focus:ring-2 focus:ring-navy/15; }
-  .label { @apply mb-1.5 block text-sm font-medium text-ink; }
-  .link { @apply font-semibold text-brand hover:underline; }
+  .input { @apply w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-ink-soft focus:border-brand focus:outline-none focus:ring-2 focus:ring-brand/15; }
+  .label { @apply mb-1.5 block text-sm font-semibold text-ink; }
+  .link { @apply font-bold text-brand hover:underline; }
 
-  .pill { @apply inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold; }
+  .pill { @apply inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-bold; }
   .tab { @apply -mb-px border-b-2 border-transparent px-1 pb-3 text-sm text-ink-muted hover:text-ink; }
-  .tab-active { @apply border-brand font-semibold text-ink; }
+  .tab-active { @apply border-brand font-bold text-ink; }
 
   .table-base { @apply w-full text-left text-sm; }
-  .table-base th { @apply border-b border-line px-3 py-2.5 text-[11px] font-semibold uppercase tracking-eyebrow text-ink-soft; }
+  .table-base th { @apply border-b border-line px-3 py-2.5 text-[11px] font-bold uppercase tracking-eyebrow text-ink-muted; }
   .table-base td { @apply border-b border-line px-3 py-3 align-middle; }
   .table-base tr:last-child td { @apply border-b-0; }
 }

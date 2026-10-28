@@ -64,7 +64,7 @@ function Placement() {
   }
 
   return (
-    <div className="min-h-screen bg-cream">
+    <div className="min-h-screen bg-ivory">
       <header className="border-b border-line">
         <div className="container flex h-[70px] items-center justify-between">
           <Logo />
@@ -73,7 +73,7 @@ function Placement() {
       </header>
       <div className="container max-w-3xl py-12">
         <p className="eyebrow">Placement quiz</p>
-        <h1 className="mt-2 font-serif text-[36px] font-bold leading-tight md:text-[44px]">Find your starting point</h1>
+        <h1 className="mt-2 text-[36px] font-extrabold leading-tight md:text-[44px]">Find your starting point</h1>
         <p className="mt-3 text-[17px] leading-relaxed text-ink-muted">
           {data.totalQuestions} objective questions across the skills. Your answers set the starting point of your skill map, so recommendations fit you from your first lesson.
         </p>
