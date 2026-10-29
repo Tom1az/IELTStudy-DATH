@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Timer, X } from "lucide-react";
+import { ArrowRight, ChevronDown, Check, FileText, Timer, X } from "lucide-react";
 import type { PracticeSet, SkillCategory } from "@/lib/types";
-import { SKILL_META, cx, mmss } from "@/lib/format";
-import { ConfirmDialog, Spinner } from "@/components/ui";
+import { BRAND, SKILL_META, cx, mmss } from "@/lib/format";
+import { ConfirmDialog, ProgressBar, Spinner } from "@/components/ui";
+import { LogoMark } from "@/components/layout/Logo";
 import { PassagePane } from "./PassagePane";
 import { QuestionView } from "./QuestionView";
 
@@ -20,13 +21,15 @@ export interface QuizRunnerProps {
   allowUntimed?: boolean;
 }
 
-/** Figma "Practice set" screen: passage left, questions right, palette + actions at the bottom. */
+/** Figma "Reading practice" screen: passage card left, question card right, navigator + actions at the bottom. */
 export function QuizRunner({ title, skill, sections, initialAnswers = {}, initialSeconds, onSave, onSubmit, onExit, allowUntimed = true }: QuizRunnerProps) {
   const [answers, setAnswers] = useState<Record<string, string>>(initialAnswers);
   const [remaining, setRemaining] = useState(initialSeconds);
   // A quiz without a time limit (initialSeconds 0) starts untimed
   const [timed, setTimed] = useState(initialSeconds > 0);
   const [sectionIdx, setSectionIdx] = useState(0);
+  // Phones show the passage collapsed above the questions (Figma mobile frame)
+  const [passageOpen, setPassageOpen] = useState(false);
   const [confirm, setConfirm] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -112,33 +115,56 @@ export function QuizRunner({ title, skill, sections, initialAnswers = {}, initia
   };
 
   const low = timed && remaining <= 60;
+  const firstNumber = offsets[sectionIdx] + 1;
+  const lastNumber = offsets[sectionIdx] + section.questions.length;
+  const subtitle = [skill ? SKILL_META[skill].label : null, sections.length > 1 ? section.title : null].filter(Boolean).join(" · ");
 
   return (
-    <div className="flex h-[100dvh] flex-col bg-cream">
-      {/* top bar */}
-      <header className="flex h-14 shrink-0 items-center gap-3 bg-navy px-3 text-white md:h-[57px] md:px-6">
-        <button onClick={saveAndExit} className="flex items-center gap-2 text-sm font-semibold hover:underline" aria-label="Save and exit">
-          <X className="h-4 w-4" /> Exit
+    <div className="flex h-[100dvh] flex-col bg-ivory">
+      {/* top bar (Figma "Quiz header") */}
+      <header className="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-white px-4 md:h-[88px] md:gap-6 md:px-6">
+        <button onClick={saveAndExit} className="rounded-lg p-1.5 text-ink hover:bg-brand-tint md:hidden" aria-label="Save and exit">
+          <X className="h-5 w-5" />
         </button>
-        <span className="hidden h-6 w-px bg-white/25 sm:block" />
-        {skill && <span className={cx("pill hidden px-2.5 py-1 sm:inline-flex", SKILL_META[skill].chip)}>{SKILL_META[skill].label}</span>}
-        <h1 className="min-w-0 flex-1 truncate font-sans text-sm font-semibold md:text-[15px]">{title}</h1>
+        <span className="hidden items-center gap-2.5 md:flex">
+          <LogoMark />
+          <span className="text-[23px] font-extrabold">{BRAND.name}</span>
+        </span>
+        <span className="hidden h-8 w-px bg-line md:block" />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[15px] md:text-lg">{title}</h1>
+          {subtitle && <p className="mt-0.5 truncate text-[11px] text-ink-muted md:text-xs">{subtitle}</p>}
+        </div>
         <button
           onClick={() => allowUntimed && setTimed((t) => !t)}
-          className={cx("flex items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold tabular-nums", low ? "bg-brand text-white" : "bg-[#101B2C]")}
+          className={cx("flex h-9 items-center gap-2 rounded-lg px-3 tabular-nums md:h-11 md:px-4", low ? "bg-danger text-white" : "bg-brand-tint text-brand")}
           aria-label={timed ? `${mmss(remaining)} left. Click to switch to untimed mode` : "Untimed. Click to switch the timer back on"}
           title={allowUntimed ? "Switch timed / untimed" : undefined}
         >
-          <Timer className="h-4 w-4" /> {timed ? `${mmss(remaining)} left` : "Untimed"}
+          <Timer className="h-4 w-4 md:h-5 md:w-5" />
+          <span className="text-sm font-extrabold md:text-base">{timed ? mmss(remaining) : "Untimed"}</span>
+          {timed && <span className={cx("hidden text-xs sm:inline", low ? "text-white" : "text-ink")}>remaining</span>}
+        </button>
+        <button className="btn-outline hidden h-11 md:inline-flex" onClick={saveAndExit} disabled={saving || submitting} aria-label="Save and exit">
+          {saving ? <Spinner className="h-4 w-4" /> : null}Save &amp; exit <X className="h-4 w-4" />
         </button>
       </header>
 
+      {/* progress row */}
+      <div className="flex shrink-0 flex-col gap-2 px-4 py-3 md:flex-row md:items-center md:gap-6 md:px-6 md:py-5">
+        <div className="flex items-center justify-between gap-3 md:contents">
+          <p className="whitespace-nowrap text-[13px] font-bold" aria-live="polite">{answered} of {flat.length} answered</p>
+          {onSave && <p className="flex items-center gap-1.5 whitespace-nowrap text-[11px] text-ink-muted md:order-last"><Check className="h-4 w-4" /> Answers saved on this device</p>}
+        </div>
+        <div className="flex-1"><ProgressBar value={answered} max={flat.length} color="bg-brand" track="bg-brand-tint" height="h-1.5 md:h-[7px]" label="Questions answered" /></div>
+      </div>
+
       {sections.length > 1 && (
-        <div className="flex shrink-0 gap-1 overflow-x-auto border-b border-line bg-white px-3 md:px-6" role="tablist" aria-label="Sections">
+        <div className="mx-4 mb-3 flex shrink-0 gap-1 overflow-x-auto border-b border-line md:mx-6" role="tablist" aria-label="Sections">
           {sections.map((s, i) => {
             const done = s.questions.filter((q) => answers[q.id]).length;
             return (
-              <button key={s.id} role="tab" aria-selected={i === sectionIdx} onClick={() => setSectionIdx(i)} className={cx("tab whitespace-nowrap px-3 pt-3", i === sectionIdx && "tab-active")}>
+              <button key={s.id} role="tab" aria-selected={i === sectionIdx} onClick={() => { setSectionIdx(i); setPassageOpen(false); }} className={cx("tab whitespace-nowrap px-3", i === sectionIdx && "tab-active")}>
                 {s.title} <span className="text-xs text-ink-soft">{done}/{s.questions.length}</span>
               </button>
             );
@@ -146,49 +172,57 @@ export function QuizRunner({ title, skill, sections, initialAnswers = {}, initia
         </div>
       )}
 
-      {timeUp && <div className="shrink-0 bg-brand px-4 py-2 text-center text-sm font-semibold text-white" role="alert">Time is up — submitting your answers…</div>}
+      {timeUp && <div className="mx-4 mb-3 shrink-0 rounded-lg bg-danger px-4 py-2 text-center text-sm font-semibold text-white md:mx-6" role="alert">Time is up — submitting your answers…</div>}
 
-      {/* panes */}
-      <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <section className="border-line bg-white px-5 py-6 lg:w-1/2 lg:overflow-y-auto lg:border-r lg:px-11 lg:py-9" aria-label="Passage">
-          <PassagePane key={section.id} passage={section.passage} />
+      {/* passage | questions: two cards side by side on desktop, one scrolling column on phones */}
+      <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 pb-4 lg:flex-row lg:gap-6 lg:overflow-hidden lg:px-6 lg:pb-6">
+        <section className="card flex shrink-0 flex-col overflow-hidden lg:w-1/2 lg:shrink" aria-label="Passage">
+          <div className="flex h-16 shrink-0 items-center gap-2.5 border-line px-6 lg:border-b">
+            <FileText className="h-[18px] w-[18px] shrink-0 text-ink" aria-hidden />
+            <span className="truncate text-xs font-bold uppercase">{section.title}</span>
+            <span className="whitespace-nowrap text-[11px] text-ink-muted">Questions {firstNumber}–{lastNumber}</span>
+            <button type="button" onClick={() => setPassageOpen((o) => !o)} aria-expanded={passageOpen}
+              className="ml-auto flex items-center gap-1 whitespace-nowrap text-xs font-bold text-brand lg:hidden">
+              {passageOpen ? "Hide" : "Show"} passage <ChevronDown className={cx("h-4 w-4 transition-transform", passageOpen && "rotate-180")} aria-hidden />
+            </button>
+          </div>
+          <div className={cx("border-t border-line px-6 py-6 lg:block lg:overflow-y-auto lg:border-t-0", passageOpen ? "block" : "hidden")}>
+            <PassagePane key={section.id} passage={section.passage} />
+          </div>
         </section>
-        <section ref={qPane} className="px-5 py-6 lg:w-1/2 lg:overflow-y-auto lg:px-11 lg:py-9" aria-label="Questions">
-          <h2 className="font-serif text-[22px] font-bold">Questions {offsets[sectionIdx] + 1}–{offsets[sectionIdx] + section.questions.length}</h2>
-          <div className="mt-6 space-y-6">
+
+        <section ref={qPane} className="card shrink-0 p-6 lg:w-1/2 lg:shrink lg:overflow-y-auto" aria-label="Questions">
+          <h2 className="pill bg-brand-tint text-brand">Questions {firstNumber}–{lastNumber}</h2>
+          <div className="mt-6 space-y-8">
             {section.questions.map((q, i) => (
               <QuestionView key={q.id} q={q} number={offsets[sectionIdx] + i + 1} value={answers[q.id] ?? ""} onChange={(v) => set(q.id, v)} disabled={submitting} />
             ))}
           </div>
           {sectionIdx < sections.length - 1 && (
-            <button className="btn-dark mt-8" onClick={() => { setSectionIdx(sectionIdx + 1); qPane.current?.scrollTo({ top: 0 }); }}>
-              Next section: {sections[sectionIdx + 1].title} →
+            <button className="btn-outline mt-8" onClick={() => { setSectionIdx(sectionIdx + 1); setPassageOpen(false); qPane.current?.scrollTo({ top: 0 }); }}>
+              Next section: {sections[sectionIdx + 1].title} <ArrowRight className="h-4 w-4" />
             </button>
           )}
         </section>
       </div>
 
-      {/* bottom bar */}
-      <footer className="flex shrink-0 flex-col gap-3 border-t border-line bg-white px-3 py-3 md:flex-row md:items-center md:px-6">
-        <div className="flex min-w-0 flex-1 items-center gap-3">
-          <span className="hidden text-[13px] text-ink-muted sm:inline">Questions</span>
-          <div className="flex gap-1.5 overflow-x-auto py-0.5 scrollbar-thin" role="navigation" aria-label="Question navigator">
-            {flat.map(({ q }, i) => {
-              const done = (answers[q.id] ?? "").trim() !== "";
-              return (
-                <button key={q.id} onClick={() => jump(i + 1)} aria-label={`Question ${i + 1}${done ? ", answered" : ""}`}
-                  className={cx("h-9 w-9 shrink-0 rounded-lg border-[1.5px] text-sm font-semibold", done ? "border-teal bg-teal text-white" : "border-[#C9BFA9] bg-white text-ink hover:border-navy")}>
-                  {i + 1}
-                </button>
-              );
-            })}
-          </div>
-          <span className="whitespace-nowrap text-[13px] text-ink-muted" aria-live="polite">{answered} of {flat.length} answered</span>
+      {/* bottom bar: question navigator + actions */}
+      <footer className="flex shrink-0 flex-col gap-3 border-t border-line bg-white px-4 py-3 md:flex-row md:items-center md:px-6">
+        <div className="flex min-w-0 flex-1 gap-1.5 overflow-x-auto py-0.5 scrollbar-thin" role="navigation" aria-label="Question navigator">
+          {flat.map(({ q }, i) => {
+            const done = (answers[q.id] ?? "").trim() !== "";
+            return (
+              <button key={q.id} onClick={() => jump(i + 1)} aria-label={`Question ${i + 1}${done ? ", answered" : ""}`}
+                className={cx("h-9 w-9 shrink-0 rounded-lg border text-sm font-bold", done ? "border-brand bg-brand text-white" : "border-line bg-white text-ink hover:border-brand")}>
+                {i + 1}
+              </button>
+            );
+          })}
         </div>
         <div className="flex gap-2.5">
-          {onSave && <button className="btn-outline flex-1 px-5 md:flex-none" onClick={saveAndExit} disabled={saving || submitting}>{saving && <Spinner className="h-4 w-4" />}Save and exit</button>}
-          <button className="btn-primary flex-1 px-5 md:flex-none" onClick={() => (answered < flat.length ? setConfirm(true) : doSubmit())} disabled={submitting}>
-            {submitting && <Spinner className="h-4 w-4" />}Submit answers
+          {onSave && <button className="btn-outline h-12 flex-1 px-5 md:flex-none" onClick={saveAndExit} disabled={saving || submitting}>{saving && <Spinner className="h-4 w-4" />}Save and exit</button>}
+          <button className="btn-primary h-12 flex-1 px-5 md:flex-none" onClick={() => (answered < flat.length ? setConfirm(true) : doSubmit())} disabled={submitting}>
+            {submitting && <Spinner className="h-4 w-4" />}Submit answers <ArrowRight className="h-4 w-4" />
           </button>
         </div>
       </footer>

@@ -26,7 +26,7 @@ export default function InstructorHome() {
       </div>
 
       <section className="mt-8">
-        <h2 className="mb-3 font-serif text-2xl font-bold">Your courses</h2>
+        <h2 className="mb-3 text-2xl font-extrabold">Your courses</h2>
         <div className="overflow-x-auto rounded-2xl border border-line bg-white">
           <table className="table-base min-w-[560px]">
             <thead><tr><th>Course</th><th>Status</th><th>Core lessons</th><th /></tr></thead>

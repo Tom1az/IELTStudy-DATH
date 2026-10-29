@@ -47,7 +47,7 @@ On a Linux version Playwright doesn't support yet (e.g. Ubuntu 26.04), install t
 
 ```
 src/
-  app/(site)/        public + learner pages with the site header
+  app/(site)/        public + learner pages (site header, or the learner sidebar)
   app/(focus)/       full-screen lesson viewer, quiz player, placement quiz
   app/instructor/    instructor studio (sidebar layout)
   app/admin/         admin panel (sidebar layout)
@@ -56,6 +56,21 @@ src/
   lib/               UI types, auth context, hooks, formatting
 e2e/                 Playwright end-to-end tests
 ```
+
+## Design
+
+The look follows the team's Figma file "DATH". Colours, font and radii are Tailwind tokens in `tailwind.config.ts`, so use the token names, not hex values:
+
+| Token | Colour | Use |
+|---|---|---|
+| `brand` | Celtic Blue #3971B8 | buttons, active nav, progress, links, "correct" in review |
+| `ivory` | Ivory #FBFCEE | page background |
+| `ink` | Drab Dark Brown #343B1B | text, dark surfaces |
+| `vanilla` | Vanilla #F6E6A5 | accent cards, selected answer |
+| `tea` | Tea Green #C8D69B | used sparingly: the "below 65%" mastery badge (and, darker, the Writing skill colour) |
+| `line`, `danger` | #E0E5D4, #B42318 | borders, errors |
+
+Learners get the sidebar layout (`components/layout/LearnerShell.tsx`, a bottom bar on phones). Guests use `SiteHeader`, and instructors and admins use `AppShell`. The font is Plus Jakarta Sans (`@fontsource/plus-jakarta-sans`).
 
 ## Notes
 

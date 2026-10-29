@@ -28,11 +28,11 @@ function Sidebar({ view, onNavigate }: { view: LessonView; onNavigate?: () => vo
             <li key={s.skill}>
               <button
                 onClick={() => setOpenSkill(expanded ? null : s.skill)}
-                className={cx("flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[15px] font-semibold", isCurrent ? cx(SKILL_META[s.skill].tint, SKILL_META[s.skill].chip.split(" ")[1]) : "hover:bg-cream")}
+                className={cx("flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-[15px] font-semibold", isCurrent ? cx(SKILL_META[s.skill].tint, SKILL_META[s.skill].chip.split(" ")[1]) : "hover:bg-ivory")}
                 aria-expanded={expanded}
               >
                 {complete ? (
-                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-teal text-white"><Check className="h-3 w-3" strokeWidth={3} /></span>
+                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-brand text-white"><Check className="h-3 w-3" strokeWidth={3} /></span>
                 ) : (
                   <SkillIcon skill={s.skill} className={cx("h-[18px] w-[18px]", isCurrent ? "text-ink" : "text-ink-muted")} />
                 )}
@@ -46,9 +46,9 @@ function Sidebar({ view, onNavigate }: { view: LessonView; onNavigate?: () => vo
                     return (
                       <li key={l.id}>
                         <Link href={`/learn/${view.course.id}/${l.id}`} onClick={onNavigate} aria-current={current ? "page" : undefined}
-                          className={cx("flex items-start gap-3 rounded-lg px-2.5 py-2 text-sm", current ? "bg-sand font-semibold" : "hover:bg-cream", !l.unlocked && !current && "text-ink-soft")}>
+                          className={cx("flex items-start gap-3 rounded-lg px-2.5 py-2 text-sm", current ? "bg-line/50 font-semibold" : "hover:bg-ivory", !l.unlocked && !current && "text-ink-soft")}>
                           {l.completed ? (
-                            <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-teal text-white"><Check className="h-2.5 w-2.5" strokeWidth={3} /></span>
+                            <span className="mt-0.5 flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-brand text-white"><Check className="h-2.5 w-2.5" strokeWidth={3} /></span>
                           ) : current ? (
                             <span className="mt-0.5 h-[18px] w-[18px] shrink-0 rounded-full border-[5px] border-brand bg-brand" />
                           ) : (
@@ -75,7 +75,7 @@ function Passages({ passages }: { passages: LessonPassage[] }) {
     <div className="mt-6 space-y-4">
       {passages.map((p) => (
         <section key={p.id} className="rounded-2xl border border-line bg-white p-5">
-          {p.title && <h3 className="font-serif text-lg font-bold">{p.title}</h3>}
+          {p.title && <h3 className="text-lg font-extrabold">{p.title}</h3>}
           {p.type === "listening_audio" && (p.mediaUrl ? <audio controls src={p.mediaUrl} className="mt-3 w-full" /> : <p className="mt-2 text-sm text-ink-muted">The recording isn&apos;t available.</p>)}
           {p.type === "video" && (p.mediaUrl ? <video controls src={p.mediaUrl} className="mt-3 w-full rounded-lg bg-black" playsInline /> : <p className="mt-2 text-sm text-ink-muted">The video isn&apos;t available.</p>)}
           {p.content && (
@@ -100,8 +100,8 @@ export default function LessonPage() {
   if (loading && !view) return <PageLoader label="Loading lesson…" />;
   if (error || !view) {
     return (
-      <div className="min-h-screen bg-cream">
-        <div className="bg-navy px-4 py-4"><Link href={`/courses/${courseId}`} className="flex items-center gap-2 text-sm font-semibold text-white"><ChevronLeft className="h-4 w-4" /> Back to course</Link></div>
+      <div className="min-h-screen bg-ivory">
+        <div className="border-b border-line bg-white px-4 py-4"><Link href={`/courses/${courseId}`} className="flex items-center gap-2 text-sm font-semibold text-ink"><ChevronLeft className="h-4 w-4" /> Back to course</Link></div>
         <ErrorState error={error} onRetry={reload} />
       </div>
     );
@@ -125,31 +125,31 @@ export default function LessonPage() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col bg-cream">
-      <header className="sticky top-0 z-30 flex h-[52px] items-center gap-3 bg-navy px-4 text-white md:px-6">
-        <Link href={`/courses/${course.id}`} className="flex min-w-0 items-center gap-2 text-[15px] font-semibold hover:underline">
+    <div className="flex min-h-screen flex-col bg-ivory">
+      <header className="sticky top-0 z-30 flex h-[60px] items-center gap-3 border-b border-line bg-white px-4 text-ink md:px-6">
+        <Link href={`/courses/${course.id}`} className="flex min-w-0 items-center gap-2 text-[15px] font-bold hover:underline">
           <ChevronLeft className="h-4 w-4 shrink-0" /> <span className="truncate">{course.title}</span>
         </Link>
-        <button className="ml-2 rounded-md p-1.5 hover:bg-white/10 lg:hidden" onClick={() => setDrawer(true)} aria-label="Show course content"><ListTree className="h-4 w-4" /></button>
+        <button className="ml-2 rounded-md p-1.5 hover:bg-brand-tint lg:hidden" onClick={() => setDrawer(true)} aria-label="Show course content"><ListTree className="h-4 w-4" /></button>
         {enrollment && (
           <div className="ml-auto flex items-center gap-3 md:gap-4">
-            <div className="hidden w-[170px] sm:block"><ProgressBar value={view.progress.done} max={view.progress.total} color="bg-brand-soft" track="bg-navy-600" height="h-1.5" label="Course progress" /></div>
-            <span className="whitespace-nowrap text-xs md:text-[13px]">{view.progress.done} of {view.progress.total} lessons complete</span>
+            <div className="hidden w-[170px] sm:block"><ProgressBar value={view.progress.done} max={view.progress.total} color="bg-brand" track="bg-brand-tint" height="h-1.5" label="Course progress" /></div>
+            <span className="whitespace-nowrap text-xs font-semibold md:text-[13px]">{view.progress.done} of {view.progress.total} lessons complete</span>
           </div>
         )}
       </header>
 
       <div className="flex flex-1">
         <aside className="hidden w-[262px] shrink-0 border-r border-line bg-white lg:block">
-          <div className="sticky top-[52px] max-h-[calc(100vh-52px)] overflow-y-auto scrollbar-thin"><Sidebar view={view} /></div>
+          <div className="sticky top-[60px] max-h-[calc(100vh-60px)] overflow-y-auto scrollbar-thin"><Sidebar view={view} /></div>
         </aside>
         {drawer && (
           <div className="fixed inset-0 z-40 flex lg:hidden" role="dialog" aria-modal="true" aria-label="Course content">
             <div className="w-[290px] max-w-[85%] overflow-y-auto bg-white">
-              <div className="flex justify-end p-2"><button className="rounded-lg p-2 hover:bg-sand" onClick={() => setDrawer(false)} aria-label="Close"><X className="h-5 w-5" /></button></div>
+              <div className="flex justify-end p-2"><button className="rounded-lg p-2 hover:bg-line/50" onClick={() => setDrawer(false)} aria-label="Close"><X className="h-5 w-5" /></button></div>
               <Sidebar view={view} onNavigate={() => setDrawer(false)} />
             </div>
-            <button className="flex-1 bg-navy/40" onClick={() => setDrawer(false)} aria-label="Close course content" />
+            <button className="flex-1 bg-ink/40" onClick={() => setDrawer(false)} aria-label="Close course content" />
           </div>
         )}
 
@@ -159,12 +159,12 @@ export default function LessonPage() {
               <span className={cx("pill px-2.5 py-1", SKILL_META[lesson.skill].chip)}>{SKILL_META[lesson.skill].label}</span>
               {skillSection && <>Lesson {lesson.order} of {skillSection.total} · </>}Level {course.level}
             </div>
-            <h1 className="mt-2 font-serif text-[28px] font-bold leading-tight md:text-[34px]">{lesson.title}</h1>
+            <h1 className="mt-2 text-[28px] font-extrabold leading-tight md:text-[34px]">{lesson.title}</h1>
 
             {!view.unlocked ? (
               <div className="mt-8 rounded-2xl border border-line bg-white p-8 text-center">
                 <Lock className="mx-auto h-8 w-8 text-ink-soft" />
-                <h2 className="mt-3 font-serif text-xl font-semibold">Finish the earlier lessons first</h2>
+                <h2 className="mt-3 text-xl font-extrabold">Finish the earlier lessons first</h2>
                 <p className="mx-auto mt-2 max-w-md text-sm text-ink-muted">Lessons open in order, so each one builds on the last.</p>
               </div>
             ) : (
@@ -189,7 +189,7 @@ export default function LessonPage() {
                 </div>
                 <div className="flex flex-col gap-2.5 sm:flex-row">
                   {enrollment && (completed ? (
-                    <span className="btn border-[1.5px] border-teal bg-teal-tint text-teal-ink"><Check className="h-4 w-4" /> Lesson complete</span>
+                    <span className="btn border-[1.5px] border-brand bg-success-tint text-brand-ink"><Check className="h-4 w-4" /> Lesson complete</span>
                   ) : (
                     <button className="btn-outline" onClick={complete} disabled={completing}>{completing && <Spinner className="h-4 w-4" />}Mark lesson complete</button>
                   ))}

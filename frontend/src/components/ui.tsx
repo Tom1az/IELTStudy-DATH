@@ -15,14 +15,14 @@ export function SkillChip({ skill, className, size = "sm" }: { skill: SkillCateg
   );
 }
 
-export function StatusPill({ tone, children }: { tone: "green" | "amber" | "red" | "gray" | "navy" | "orange" | "violet"; children: ReactNode }) {
+export function StatusPill({ tone, children }: { tone: "green" | "amber" | "red" | "gray" | "blue" | "vanilla" | "violet"; children: ReactNode }) {
   const map = {
-    green: "bg-teal-tint text-teal-ink",
+    green: "bg-success-tint text-brand-ink",
     amber: "bg-skill-r-bg text-skill-r-ink",
-    red: "bg-skill-w-bg text-skill-w-ink",
-    gray: "bg-sand text-ink-muted",
-    navy: "bg-navy text-white",
-    orange: "bg-brand-tint text-peach-ink",
+    red: "bg-danger-tint text-danger",
+    gray: "bg-line/50 text-ink-muted",
+    blue: "bg-brand text-white",
+    vanilla: "bg-vanilla text-vanilla-ink",
     violet: "bg-skill-s-bg text-skill-s-ink",
   };
   return <span className={cx("pill whitespace-nowrap", map[tone])}>{children}</span>;
@@ -31,7 +31,7 @@ export function StatusPill({ tone, children }: { tone: "green" | "amber" | "red"
 export function Avatar({ name, size = 40, className }: { name: string; size?: number; className?: string }) {
   return (
     <span
-      className={cx("inline-flex shrink-0 items-center justify-center rounded-full bg-teal font-semibold text-white", className)}
+      className={cx("inline-flex shrink-0 items-center justify-center rounded-full bg-vanilla font-extrabold text-ink", className)}
       style={{ width: size, height: size, fontSize: size * 0.34 }}
       aria-hidden
     >
@@ -42,7 +42,7 @@ export function Avatar({ name, size = 40, className }: { name: string; size?: nu
 
 /* ───────── Progress ───────── */
 
-export function ProgressBar({ value, max = 100, color = "bg-teal", track = "bg-sand", height = "h-2", label }: { value: number; max?: number; color?: string; track?: string; height?: string; label?: string }) {
+export function ProgressBar({ value, max = 100, color = "bg-brand", track = "bg-line/50", height = "h-2", label }: { value: number; max?: number; color?: string; track?: string; height?: string; label?: string }) {
   const p = max ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   return (
     <div className={cx("w-full overflow-hidden rounded-full", track, height)} role="progressbar" aria-valuenow={Math.round(p)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
@@ -60,14 +60,14 @@ export function Spinner({ className }: { className?: string }) {
 export function PageLoader({ label = "Loading…" }: { label?: string }) {
   return (
     <div className="flex min-h-[40vh] items-center justify-center gap-3 text-ink-muted" role="status" aria-live="polite">
-      <Spinner className="text-navy" />
+      <Spinner className="text-ink" />
       <span className="text-sm">{label}</span>
     </div>
   );
 }
 
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx("animate-pulse rounded-xl bg-sand/70", className)} />;
+  return <div className={cx("animate-pulse rounded-xl bg-line/60", className)} />;
 }
 
 export function ErrorState({ error, onRetry }: { error: Error | null; onRetry?: () => void }) {
@@ -75,7 +75,7 @@ export function ErrorState({ error, onRetry }: { error: Error | null; onRetry?: 
   return (
     <div className="card mx-auto my-10 max-w-lg p-8 text-center" role="alert">
       <AlertCircle className="mx-auto mb-3 h-8 w-8 text-brand" aria-hidden />
-      <h2 className="font-serif text-xl font-semibold">{api?.status === 404 ? "Not found" : api?.status === 403 ? "No access" : "Something went wrong"}</h2>
+      <h2 className="text-xl font-extrabold">{api?.status === 404 ? "Not found" : api?.status === 403 ? "No access" : "Something went wrong"}</h2>
       <p className="mt-2 text-sm text-ink-muted">{error?.message ?? "Please try again."}</p>
       <div className="mt-5 flex justify-center gap-3">
         {onRetry && api?.status !== 404 && api?.status !== 403 && <button className="btn-outline" onClick={onRetry}>Try again</button>}
@@ -89,7 +89,7 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
   return (
     <div className="flex flex-col items-center px-6 py-12 text-center">
       {icon && <div className="mb-3 text-ink-soft">{icon}</div>}
-      <p className="font-serif text-lg font-semibold">{title}</p>
+      <p className="text-lg font-semibold">{title}</p>
       {children && <div className="mt-1 max-w-md text-sm text-ink-muted">{children}</div>}
       {action && <div className="mt-4">{action}</div>}
     </div>
@@ -98,9 +98,9 @@ export function EmptyState({ icon, title, children, action }: { icon?: ReactNode
 
 export function Alert({ tone = "info", children, className }: { tone?: "info" | "error" | "success" | "warn"; children: ReactNode; className?: string }) {
   const map = {
-    info: "border-navy/15 bg-white text-ink",
-    error: "border-danger/30 bg-[#FDF1EE] text-[#8A2E09]",
-    success: "border-teal/30 bg-teal-tint text-teal-ink",
+    info: "border-brand/15 bg-white text-ink",
+    error: "border-danger/30 bg-danger-tint text-danger",
+    success: "border-brand/30 bg-success-tint text-brand-ink",
     warn: "border-skill-r/40 bg-skill-r-bg text-skill-r-ink",
   };
   const Icon = tone === "error" ? AlertCircle : tone === "success" ? CheckCircle2 : Info;
@@ -177,11 +177,11 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-navy/40 p-0 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cx("max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-white px-5 py-4">
-          <h2 className="font-serif text-lg font-semibold">{title}</h2>
-          <button data-close className="rounded-lg p-1.5 text-ink-muted hover:bg-sand" onClick={onClose} aria-label="Close">
+          <h2 className="text-lg font-extrabold">{title}</h2>
+          <button data-close className="rounded-lg p-1.5 text-ink-muted hover:bg-line/50" onClick={onClose} aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -220,7 +220,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4" aria-live="polite">
         {items.map((t) => (
-          <div key={t.id} className={cx("pointer-events-auto flex max-w-md items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg", t.tone === "error" ? "bg-[#8A2E09]" : t.tone === "info" ? "bg-navy" : "bg-teal")}>
+          <div key={t.id} className={cx("pointer-events-auto flex max-w-md items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg", t.tone === "error" ? "bg-danger" : t.tone === "info" ? "bg-ink" : "bg-brand")}>
             {t.tone === "error" ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             {t.text}
           </div>
@@ -242,7 +242,7 @@ export function Pagination({ page, totalPages, onChange }: { page: number; total
       {pages.map((p, i) => (
         <span key={p} className="flex items-center">
           {i > 0 && pages[i - 1] !== p - 1 && <span className="px-1 text-ink-soft">…</span>}
-          <button onClick={() => onChange(p)} aria-current={p === page ? "page" : undefined} className={cx("h-8 min-w-8 rounded-lg px-2 text-sm font-semibold", p === page ? "bg-navy text-white" : "text-ink hover:bg-sand")}>{p}</button>
+          <button onClick={() => onChange(p)} aria-current={p === page ? "page" : undefined} className={cx("h-8 min-w-8 rounded-lg px-2 text-sm font-semibold", p === page ? "bg-brand text-white" : "text-ink hover:bg-line/50")}>{p}</button>
         </span>
       ))}
       <button className="btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4" /></button>
@@ -264,7 +264,7 @@ export function StatCard({ label, value, sub, accent }: { label: string; value: 
   return (
     <div className="card p-5">
       <p className="eyebrow-muted">{label}</p>
-      <p className={cx("mt-2 font-serif text-3xl font-semibold", accent)}>{value}</p>
+      <p className={cx("mt-2 text-3xl font-extrabold", accent)}>{value}</p>
       {sub && <p className="mt-1 text-xs text-ink-muted">{sub}</p>}
     </div>
   );
@@ -275,7 +275,7 @@ export function PageHeader({ eyebrow, title, children, actions }: { eyebrow?: st
     <div className="mb-8 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
       <div>
         {eyebrow && <p className="eyebrow mb-2">{eyebrow}</p>}
-        <h1 className="font-serif text-3xl font-semibold leading-tight md:text-[40px]">{title}</h1>
+        <h1 className="text-3xl font-extrabold leading-tight md:text-[40px]">{title}</h1>
         {children && <div className="mt-2 max-w-2xl text-ink-muted">{children}</div>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}

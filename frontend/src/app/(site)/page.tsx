@@ -24,9 +24,9 @@ const STEPS = [
 ];
 
 const BARS = [
-  { level: 1, name: "Foundation", band: "Band 4.0 – 5.0", h: "h-[150px] md:h-[188px]", cls: "bg-peach text-navy", lab: "text-peach-ink" },
-  { level: 2, name: "Intermediate", band: "Band 5.5 – 6.5", h: "h-[215px] md:h-[288px]", cls: "bg-teal text-white", lab: "text-white" },
-  { level: 3, name: "Advanced", band: "Band 7.0 and above", h: "h-[280px] md:h-[388px]", cls: "bg-navy text-white", lab: "text-white" },
+  { level: 1, name: "Foundation", band: "Band 4.0 – 5.0", h: "h-[150px] md:h-[188px]", cls: "bg-vanilla text-ink", lab: "text-vanilla-ink" },
+  { level: 2, name: "Intermediate", band: "Band 5.5 – 6.5", h: "h-[215px] md:h-[288px]", cls: "bg-brand text-white", lab: "text-white" },
+  { level: 3, name: "Advanced", band: "Band 7.0 and above", h: "h-[280px] md:h-[388px]", cls: "bg-ink text-white", lab: "text-white" },
 ];
 
 export default function LandingPage() {
@@ -40,7 +40,7 @@ export default function LandingPage() {
       <section className="container grid items-end gap-12 pt-14 md:pt-20 lg:grid-cols-[1.05fr_1fr] lg:gap-16">
         <div className="pb-2 lg:pb-14">
           <p className="eyebrow mb-5">IELTS Academic · 4 skills · 3 levels</p>
-          <h1 className="font-serif text-[34px] font-bold leading-[1.05] tracking-[-0.01em] text-navy sm:text-5xl lg:text-[60px] [overflow-wrap:anywhere]">
+          <h1 className="text-[34px] font-extrabold leading-[1.05] tracking-[-0.01em] text-ink sm:text-5xl lg:text-[60px] [overflow-wrap:anywhere]">
             Climb from Band 4 to Band 7, one skill at a time.
           </h1>
           <p className="mt-6 max-w-[580px] text-[17px] leading-relaxed text-ink-muted">
@@ -58,9 +58,9 @@ export default function LandingPage() {
         <div className="flex items-end gap-3 md:gap-4" aria-hidden>
           {BARS.map((b) => (
             <div key={b.level} className={cx("flex min-w-0 flex-1 flex-col justify-end rounded-t-xl p-3 sm:p-4 md:p-5", b.h, b.cls)}>
-              <p className={cx("text-[10px] font-semibold uppercase tracking-eyebrow md:text-[11px]", b.level === 1 ? "text-peach-ink" : "text-white")}>Level {b.level}</p>
-              <p className={cx("mt-1 break-words font-serif text-[15px] font-bold leading-tight sm:text-lg md:text-[22px]", b.level === 1 && "text-peach-ink")}>{b.name}</p>
-              <p className={cx("mt-1 text-xs md:text-[13px]", b.level === 1 ? "text-peach-ink" : "text-white/90")}>{b.band}</p>
+              <p className={cx("text-[10px] font-semibold uppercase tracking-eyebrow md:text-[11px]", b.level === 1 ? "text-vanilla-ink" : "text-white")}>Level {b.level}</p>
+              <p className={cx("mt-1 break-words text-[15px] font-bold leading-tight sm:text-lg md:text-[22px]", b.level === 1 && "text-vanilla-ink")}>{b.name}</p>
+              <p className={cx("mt-1 text-xs md:text-[13px]", b.level === 1 ? "text-vanilla-ink" : "text-white/90")}>{b.band}</p>
             </div>
           ))}
         </div>
@@ -69,7 +69,7 @@ export default function LandingPage() {
       {/* Levels */}
       <section className="container pb-0 pt-16 md:pt-20" aria-labelledby="levels-h">
         <div className="mb-6 flex flex-col justify-between gap-2 md:flex-row md:items-end">
-          <h2 id="levels-h" className="font-serif text-[28px] font-bold text-navy md:text-[34px]">Choose the level that fits you today</h2>
+          <h2 id="levels-h" className="text-[28px] font-extrabold text-ink md:text-[34px]">Choose the level that fits you today</h2>
           <Link href={user ? "/placement" : "/register?next=/placement"} className="text-sm font-semibold text-brand hover:underline">Not sure? Take the placement quiz →</Link>
         </div>
         <div className="grid gap-4 pb-1 md:grid-cols-3 md:gap-5">
@@ -78,7 +78,7 @@ export default function LandingPage() {
             : courses.map((c) => (
                 <article key={c.id} className="flex min-h-[300px] flex-col rounded-2xl border border-line bg-white p-6 md:min-h-[340px]">
                   <span className={cx("pill w-fit px-2.5 py-1 text-[11px]", LEVEL_THEME[c.level].badge)}>Level {c.level}</span>
-                  <h3 className="mt-3 font-serif text-[26px] font-bold text-navy">{c.title}</h3>
+                  <h3 className="mt-3 text-[26px] font-extrabold text-ink">{c.title}</h3>
                   <p className="mt-3 text-sm leading-relaxed text-ink-muted">{c.description}</p>
                   <div className="mt-4 flex flex-wrap gap-1.5">
                     {SKILL_CATEGORIES.map((s) => <SkillChip key={s} skill={s} />)}
@@ -98,14 +98,14 @@ export default function LandingPage() {
       </section>
 
       {/* Four skills */}
-      <section className="bg-sand pb-14 pt-12 md:pt-14" aria-labelledby="skills-h">
+      <section className="border-y border-line bg-white pb-14 pt-12 md:pt-14" aria-labelledby="skills-h">
         <div className="container">
-          <h2 id="skills-h" className="font-serif text-[28px] font-bold text-navy md:text-[34px]">Four skills, trained the way IELTS tests them</h2>
+          <h2 id="skills-h" className="text-[28px] font-extrabold text-ink md:text-[34px]">Four skills, trained the way IELTS tests them</h2>
           <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             {SKILL_CATEGORIES.map((s) => (
-              <div key={s} className="rounded-2xl border border-line bg-white p-5 md:p-6">
+              <div key={s} className="rounded-2xl border border-line bg-ivory p-5 md:p-6">
                 <SkillTile skill={s} size={40} />
-                <h3 className="mt-4 font-serif text-xl font-bold capitalize text-navy">{s}</h3>
+                <h3 className="mt-4 text-xl font-extrabold capitalize text-ink">{s}</h3>
                 <p className="mt-2 text-sm leading-relaxed text-ink-muted">{SKILL_COPY[s]}</p>
               </div>
             ))}
@@ -115,13 +115,13 @@ export default function LandingPage() {
 
       {/* How lessons work */}
       <section className="container py-16 md:py-20" aria-labelledby="how-h">
-        <h2 id="how-h" className="font-serif text-[28px] font-bold text-navy md:text-[34px]">How every lesson works</h2>
+        <h2 id="how-h" className="text-[28px] font-extrabold text-ink md:text-[34px]">How every lesson works</h2>
         <ol className="mt-8 grid gap-8 md:grid-cols-3">
           {STEPS.map((s, i) => (
             <li key={s.title} className="flex gap-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-navy font-serif text-lg font-bold text-white">{i + 1}</span>
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-brand text-lg font-bold text-white">{i + 1}</span>
               <div>
-                <h3 className="font-serif text-xl font-bold text-navy">{s.title}</h3>
+                <h3 className="text-xl font-extrabold text-ink">{s.title}</h3>
                 <p className="mt-1 text-sm leading-relaxed text-ink-muted">{s.text}</p>
               </div>
             </li>
