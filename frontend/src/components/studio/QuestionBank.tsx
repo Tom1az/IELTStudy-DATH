@@ -56,7 +56,7 @@ export function QuestionBank() {
                     <tr key={x.questionId}>
                       <td className="max-w-[380px]"><p className="line-clamp-2 text-sm">{x.questionText}</p></td>
                       <td className="text-xs">{TYPE_LABEL[x.questionType]}</td>
-                      <td className="text-xs">{x.skills.map((s) => <span key={s.skillId} className="mb-1 mr-1 inline-block rounded bg-teal-tint px-1.5 py-0.5 text-teal-ink">{s.name} {s.weight}</span>)}</td>
+                      <td className="text-xs">{x.skills.map((s) => <span key={s.skillId} className="mb-1 mr-1 inline-block rounded bg-success-tint px-1.5 py-0.5 text-brand-ink">{s.name} {s.weight}</span>)}</td>
                       <td>{x.difficulty}</td>
                     </tr>
                   ))}

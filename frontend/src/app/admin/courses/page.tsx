@@ -58,14 +58,14 @@ export default function AdminCourses() {
     <div className="mx-auto max-w-6xl">
       <PageHeader eyebrow="Admin" title="Courses & review">Instructors submit courses for review. Approving puts the course in the catalog; rejecting sends your feedback to the instructor.</PageHeader>
 
-      <h2 className="mb-3 font-serif text-xl font-bold">Waiting for review ({waiting.length})</h2>
+      <h2 className="mb-3 text-xl font-extrabold">Waiting for review ({waiting.length})</h2>
       {waiting.length === 0 ? <div className="card"><EmptyState title="Review queue is empty" /></div> : (
         <div className="space-y-3">
           {waiting.map((c) => (
             <article key={c.id} className="card flex flex-col gap-4 p-5 md:flex-row md:items-center">
               <div className="flex-1">
                 <p className="text-xs text-ink-muted">Level {c.level} · by {c.instructorName} · submitted {timeAgo(c.submittedAt)}</p>
-                <h3 className="mt-1 font-serif text-xl font-bold">{c.title}</h3>
+                <h3 className="mt-1 text-xl font-extrabold">{c.title}</h3>
                 <p className="mt-1 text-sm text-ink-muted">{c.description}</p>
                 <div className="mt-2 flex flex-wrap gap-1.5">{SKILL_CATEGORIES.filter((s) => c.skillCounts[s]).map((s) => <span key={s} className={cx("pill", SKILL_META[s].chip)}>{SKILL_META[s].label} · {c.skillCounts[s]}</span>)}</div>
               </div>
@@ -79,7 +79,7 @@ export default function AdminCourses() {
         </div>
       )}
 
-      <h2 className="mb-3 mt-10 font-serif text-xl font-bold">All courses</h2>
+      <h2 className="mb-3 mt-10 text-xl font-extrabold">All courses</h2>
       <div className="overflow-x-auto rounded-2xl border border-line bg-white">
         <table className="table-base min-w-[760px]">
           <thead><tr><th>Course</th><th>Instructor</th><th>Status</th><th>Lessons</th><th>Updated</th><th /></tr></thead>

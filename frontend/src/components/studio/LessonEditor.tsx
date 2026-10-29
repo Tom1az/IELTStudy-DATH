@@ -122,18 +122,18 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
       <Link href={`/instructor/courses/${course.courseId}`} className="text-sm font-semibold text-ink-muted hover:text-ink">← {course.title}</Link>
       <div className="mt-3 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
         <div>
-          <StatusPill tone={lesson.kind === "core" ? "navy" : "violet"}>{lesson.kind}</StatusPill>
-          <h1 className="mt-2 font-serif text-[32px] font-bold leading-tight">{lesson.title}</h1>
+          <StatusPill tone={lesson.kind === "core" ? "blue" : "violet"}>{lesson.kind}</StatusPill>
+          <h1 className="mt-2 text-[32px] font-extrabold leading-tight">{lesson.title}</h1>
         </div>
         <Link href={`/learn/${course.courseId}/${lesson.lessonId}`} className="btn-outline"><Eye className="h-4 w-4" /> Preview</Link>
       </div>
       {!editable && <Alert tone="info" className="mt-4">The course isn&apos;t a draft, so this lesson is locked. Withdraw the course to draft to edit it.</Alert>}
 
-      <h2 className="mb-3 mt-8 font-serif text-2xl font-bold">Lesson content</h2>
+      <h2 className="mb-3 mt-8 text-2xl font-extrabold">Lesson content</h2>
       <ContentForm key={`${lesson.title}-${lesson.skills.length}-${lesson.kind}`} lesson={lesson} editable={editable} onSaved={() => reload(true)} />
 
       <div className="mb-3 mt-10 flex items-center justify-between">
-        <h2 className="font-serif text-2xl font-bold">Passages and media</h2>
+        <h2 className="text-2xl font-extrabold">Passages and media</h2>
         {editable && <button className="btn-primary btn-sm" onClick={() => setPassageForm("new")}><Plus className="h-3.5 w-3.5" /> Add passage</button>}
       </div>
       <section className="overflow-hidden rounded-2xl border border-line bg-white">
@@ -158,7 +158,7 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
       </section>
 
       <div className="mb-3 mt-10 flex items-center justify-between">
-        <h2 className="font-serif text-2xl font-bold">Quiz</h2>
+        <h2 className="text-2xl font-extrabold">Quiz</h2>
         {editable && quizzes.length === 0 && <button className="btn-primary btn-sm" onClick={() => setQuestionForm({ quiz: null, question: null })}><Plus className="h-3.5 w-3.5" /> Add the first question</button>}
       </div>
       {quizzes.length === 0 && <p className="card p-5 text-sm text-ink-muted">No quiz yet. The first question you add creates the lesson&apos;s quiz.</p>}
@@ -173,9 +173,9 @@ export function LessonEditor({ lessonId }: { lessonId: string }) {
                   <div className="min-w-0 flex-1">
                     <p className="text-sm">{q.questionText}</p>
                     <p className="mt-1 flex flex-wrap gap-1.5 text-[11px] text-ink-muted">
-                      <span className="rounded bg-sand px-1.5 py-0.5 font-semibold">{TYPE_LABEL[q.questionType]}</span>
-                      <span className="rounded bg-sand px-1.5 py-0.5">Difficulty {q.difficulty}</span>
-                      {q.skills.map((s) => <span key={s.skillId} className="rounded bg-teal-tint px-1.5 py-0.5 text-teal-ink">{s.name} · {s.weight}</span>)}
+                      <span className="rounded bg-line/50 px-1.5 py-0.5 font-semibold">{TYPE_LABEL[q.questionType]}</span>
+                      <span className="rounded bg-line/50 px-1.5 py-0.5">Difficulty {q.difficulty}</span>
+                      {q.skills.map((s) => <span key={s.skillId} className="rounded bg-success-tint px-1.5 py-0.5 text-brand-ink">{s.name} · {s.weight}</span>)}
                     </p>
                   </div>
                   {editable && (

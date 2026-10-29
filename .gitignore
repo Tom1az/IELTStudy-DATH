@@ -11,3 +11,4 @@ CLAUDE.local.md
 # .claude/settings.local.json
 backend/src/prisma/contract.d.ts
 backend/src/prisma/contract.json
+tiendo.md

@@ -31,7 +31,7 @@ export default function AdminHome() {
       </div>
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <section className="card p-5">
-          <h2 className="font-serif text-lg font-bold">Users by role</h2>
+          <h2 className="text-lg font-extrabold">Users by role</h2>
           <ul className="mt-3 divide-y divide-line text-sm">
             <li className="flex justify-between py-2.5"><span>Learners</span><span className="font-semibold tabular-nums">{s.users.byRole.learner}</span></li>
             <li className="flex justify-between py-2.5"><span>Instructors</span><span className="font-semibold tabular-nums">{s.users.byRole.instructor}</span></li>
@@ -39,7 +39,7 @@ export default function AdminHome() {
           </ul>
         </section>
         <section className="card p-5">
-          <h2 className="font-serif text-lg font-bold">Courses by status <span className="text-sm font-normal text-ink-muted">· {s.courses.total} in total</span></h2>
+          <h2 className="text-lg font-extrabold">Courses by status <span className="text-sm font-normal text-ink-muted">· {s.courses.total} in total</span></h2>
           <ul className="mt-3 divide-y divide-line text-sm">
             {(Object.keys(STATUS_LABEL) as (keyof typeof STATUS_LABEL)[]).map((status) => (
               <li key={status} className="flex justify-between py-2.5"><span>{STATUS_LABEL[status]}</span><span className="font-semibold tabular-nums">{s.courses.byStatus[status]}</span></li>

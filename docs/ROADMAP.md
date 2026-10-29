@@ -23,7 +23,7 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 | Auth tokens | JWT in the response body, 1 day, no refresh token; the user is reloaded from the database on every request | Decided | Phase 2 |
 | Practice quizzes | Need a lesson (API rule), so they follow the lesson's access and lock rules | Decided | Phase 2 |
 | Recommender ranking | Ranking formula, the rule that unlocks the next module, and whether learners can open remedial lessons outside their enrolled courses | Open | Phase 3 |
-| UI design | Figma or wireframe approval | Open | Phase 4 |
+| UI design | Figma file "DATH": sidebar learner layout, Plus Jakarta Sans, palette Celtic Blue / Ivory / Drab Dark Brown / Vanilla, Tea Green used sparingly (`docs/plans/phase-4-frontend.md`) | Decided | Phase 4 |
 
 ## Phase 0 — Harness and repo foundation (~1 day)
 

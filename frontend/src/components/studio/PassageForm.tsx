@@ -56,7 +56,7 @@ export function PassageForm({ lessonId, passage, onClose, onSaved }: { lessonId:
           <TextInput label="Title" value={title} onChange={(e) => setTitle(e.target.value)} error={errs.title} />
         </div>
         {isMedia && (
-          <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-[#C9BFA9] p-5 text-center text-sm text-ink-muted">
+          <label className="flex cursor-pointer flex-col items-center gap-1.5 rounded-xl border-2 border-dashed border-line p-5 text-center text-sm text-ink-muted">
             <FileUp className="h-6 w-6" />
             <strong className="text-ink">{file ? file.name : passage?.mediaPath ? "Replace the file" : "Choose a file to upload"}</strong>
             <span className="text-xs">{type === "video" ? "MP4 or WebM" : "MP3, M4A or WAV"}. The file goes straight to storage when you save.</span>

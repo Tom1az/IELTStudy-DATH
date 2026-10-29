@@ -71,14 +71,14 @@ export function ListeningPlayer({ passage, showScript }: { passage: Passage; sho
 
   return (
     <div>
-      <div className="rounded-2xl bg-navy p-4 text-white">
+      <div className="rounded-2xl bg-brand p-4 text-white">
         <div className="flex items-center gap-3">
-          <button onClick={toggle} disabled={!supported} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-navy disabled:opacity-50" aria-label={playing ? "Pause recording" : "Play recording"}>
-            {playing ? <Pause className="h-5 w-5 fill-navy" /> : <Play className="ml-0.5 h-5 w-5 fill-navy" />}
+          <button onClick={toggle} disabled={!supported} className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-white text-brand disabled:opacity-50" aria-label={playing ? "Pause recording" : "Play recording"}>
+            {playing ? <Pause className="h-5 w-5 fill-brand" /> : <Play className="ml-0.5 h-5 w-5 fill-brand" />}
           </button>
           <div className="min-w-0 flex-1">
             <p className="flex items-center gap-1.5 text-xs text-white/80"><Volume2 className="h-3.5 w-3.5" /> Recording · {lines.length} parts</p>
-            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-navy-600"><div className="h-full bg-brand-soft transition-all" style={{ width: `${progress * 100}%` }} /></div>
+            <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/25"><div className="h-full bg-white transition-all" style={{ width: `${progress * 100}%` }} /></div>
           </div>
           <button className="text-xs font-semibold" onClick={() => setRate((r) => (r >= 1.25 ? 0.85 : r + 0.15))} aria-label="Change speed">{rate.toFixed(2).replace(/0$/, "")}x</button>
           <button onClick={() => { playingRef.current = true; setPlaying(true); setIdx(0); speakFrom(0); }} aria-label="Restart recording" className="rounded p-1 hover:bg-white/10"><RotateCcw className="h-4 w-4" /></button>
@@ -108,8 +108,8 @@ export function PassagePane({ passage, revealScript = false }: { passage: Passag
   }
   return (
     <div>
-      <p className="eyebrow-muted">{label}</p>
-      <h2 className="mt-2 font-serif text-[26px] font-bold leading-tight md:text-[30px]">{passage.title}</h2>
+      <p className="pill bg-brand-tint uppercase text-brand">{label}</p>
+      <h2 className="mt-5 text-[24px] leading-tight md:text-[29px]">{passage.title}</h2>
       {passage.kind === "listening" ? (
         <div className="mt-5">
           {passage.paragraphs.map((p, i) => <p key={i} className="mb-4 text-[15px] leading-relaxed text-ink-muted">{p.text}</p>)}
@@ -123,10 +123,10 @@ export function PassagePane({ passage, revealScript = false }: { passage: Passag
       ) : (
         <div className="mt-6 space-y-5">
           {passage.paragraphs.map((p, i) => (
-            <div key={i} className="flex gap-4">
-              {p.label && <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded bg-sand text-xs font-semibold text-ink">{p.label}</span>}
-              <p className="text-[15.5px] leading-[1.75] text-ink">{p.text}</p>
-            </div>
+            <p key={i} className="text-[15px] leading-[1.85] text-ink">
+              {p.label && <span className="mr-2 font-extrabold text-brand">{p.label}</span>}
+              {p.text}
+            </p>
           ))}
         </div>
       )}

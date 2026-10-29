@@ -67,7 +67,7 @@ export function RequireRole({ roles, children }: { roles?: Role[]; children: Rea
   if (loading || !allowed) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center" role="status" aria-live="polite">
-        <span className="h-6 w-6 animate-spin rounded-full border-2 border-navy/20 border-t-navy" />
+        <span className="h-6 w-6 animate-spin rounded-full border-2 border-brand/20 border-t-brand" />
         <span className="sr-only">Loading…</span>
       </div>
     );

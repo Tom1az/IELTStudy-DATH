@@ -48,7 +48,7 @@ function MatchingInputs({ q, value, onChange, disabled, review }: { q: Question;
         <label key={item.id} className="flex flex-wrap items-center gap-3">
           <span className="min-w-[110px] text-sm font-semibold">{item.text}</span>
           <select disabled={disabled} value={picked[item.id] ?? ""} onChange={(e) => pick(item.id, e.target.value)}
-            className={cx("input h-11 max-w-md", review && (picked[item.id] === key[item.id] ? "border-teal bg-teal-tint" : "border-brand bg-[#FDF1EE]"))}>
+            className={cx("input h-11 max-w-md", review && (picked[item.id] === key[item.id] ? "border-brand bg-success-tint" : "border-danger bg-danger-tint"))}>
             <option value="">Choose…</option>
             {q.matchChoices?.map((c) => <option key={c.id} value={c.id}>{c.id}. {c.text}</option>)}
           </select>
@@ -80,8 +80,8 @@ export function QuestionView({ q, number, value, onChange, review, disabled }: {
                 autoComplete="off"
                 spellCheck={false}
                 className={cx(
-                  "h-10 w-[150px] rounded-lg border-[1.5px] bg-white px-3 text-[15px] text-ink placeholder:text-[13px] placeholder:text-ink-soft focus:border-navy focus:outline-none",
-                  review ? (review.isCorrect ? "border-teal bg-teal-tint" : "border-brand bg-[#FDF1EE]") : value ? "border-navy" : "border-[#C9BFA9]",
+                  "h-10 w-[150px] rounded-lg border-[1.5px] bg-white px-3 text-[15px] text-ink placeholder:text-[13px] placeholder:text-ink-soft focus:border-brand focus:outline-none",
+                  review ? (review.isCorrect ? "border-brand bg-success-tint" : "border-danger bg-danger-tint") : value ? "border-brand bg-vanilla/40" : "border-line",
                 )}
               />
             )}
@@ -89,13 +89,13 @@ export function QuestionView({ q, number, value, onChange, review, disabled }: {
         ))}
       </p>
     ) : (
-      <p className="text-[15px] leading-relaxed text-ink" id={`${id}-label`}>{q.prompt}</p>
+      <p className="text-base font-semibold leading-relaxed text-ink" id={`${id}-label`}>{q.prompt}</p>
     );
 
   return (
     <div id={`question-${number}`} className="scroll-mt-24">
       <div className="flex gap-3">
-        <span className="mt-0.5 w-5 shrink-0 text-[15px] font-bold text-ink">{number}</span>
+        <span className="mt-0.5 w-6 shrink-0 text-[15px] font-extrabold text-brand">{number}</span>
         <div className="min-w-0 flex-1">
           {promptEl}
 
@@ -106,10 +106,10 @@ export function QuestionView({ q, number, value, onChange, review, disabled }: {
                 const correct = review && review.answerKey === o;
                 return (
                   <button key={o} type="button" role="radio" aria-checked={sel} disabled={ro} onClick={() => onChange?.(o)}
-                    className={cx("h-11 min-w-[62px] rounded-lg border-[1.5px] px-4 text-[13px] font-semibold transition-colors",
+                    className={cx("h-11 min-w-[62px] rounded-xl px-4 text-[13px] font-bold transition-colors",
                       review
-                        ? correct ? "border-teal bg-teal text-white" : sel ? "border-brand bg-brand-tint text-[#8A2E09] line-through" : "border-[#C9BFA9] bg-white text-ink-soft"
-                        : sel ? "border-navy bg-navy text-white" : "border-[#C9BFA9] bg-white text-ink hover:border-navy")}>
+                        ? correct ? "border-2 border-brand bg-success-tint text-brand-ink" : sel ? "border-2 border-danger bg-danger-tint text-danger line-through" : "border border-line bg-white text-ink-soft"
+                        : sel ? "border-2 border-brand bg-vanilla text-ink" : "border border-line bg-white text-ink hover:border-brand")}>
                     {o}
                   </button>
                 );
@@ -118,19 +118,24 @@ export function QuestionView({ q, number, value, onChange, review, disabled }: {
           )}
 
           {q.type === "mcq" && (
-            <div className={cx("mt-3 gap-2", (q.options?.length ?? 0) > 4 && q.options!.every((o) => o.length <= 2) ? "flex flex-wrap" : "flex flex-col")} role="radiogroup" aria-labelledby={`${id}-label`}>
+            <div className={cx("mt-4 gap-3", (q.options?.length ?? 0) > 4 && q.options!.every((o) => o.length <= 2) ? "flex flex-wrap" : "flex flex-col")} role="radiogroup" aria-labelledby={`${id}-label`}>
               {q.options?.map((o, i) => {
                 const sel = value === String(i);
                 const correct = review && review.answerKey === String(i);
                 const short = o.length <= 2;
                 return (
                   <button key={i} type="button" role="radio" aria-checked={sel} disabled={ro} onClick={() => onChange?.(String(i))}
-                    className={cx("flex items-center gap-3 rounded-lg border-[1.5px] text-left text-sm transition-colors", short ? "h-11 w-12 justify-center font-semibold" : "min-h-[46px] w-full px-4 py-2.5",
+                    className={cx("flex items-center gap-3 rounded-2xl text-left text-[15px] leading-normal transition-colors", short ? "h-11 w-12 justify-center font-bold" : "min-h-[60px] w-full px-4 py-3",
                       review
-                        ? correct ? "border-teal bg-teal text-white" : sel ? "border-brand bg-brand-tint text-[#8A2E09]" : "border-[#C9BFA9] bg-white text-ink-soft"
-                        : sel ? "border-navy bg-navy text-white" : "border-[#C9BFA9] bg-white text-ink hover:border-navy")}>
-                    {!short && <span className="w-4 font-semibold">{letter(i)}</span>}
-                    <span>{o}</span>
+                        ? correct ? "border-2 border-brand bg-success-tint" : sel ? "border-2 border-danger bg-danger-tint" : "border border-line bg-white text-ink-soft"
+                        : sel ? "border-2 border-brand bg-vanilla font-semibold" : "border border-line bg-white hover:border-brand")}>
+                    {!short && (
+                      <span className={cx("flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border text-[13px] font-bold",
+                        (review ? correct : sel) ? "border-brand bg-brand text-white" : review && sel ? "border-danger bg-danger text-white" : "border-line bg-ivory text-ink")}>
+                        {letter(i)}
+                      </span>
+                    )}
+                    <span className="min-w-0 flex-1">{o}</span>
                   </button>
                 );
               })}
@@ -140,7 +145,7 @@ export function QuestionView({ q, number, value, onChange, review, disabled }: {
           {q.type === "matching" && <MatchingInputs q={q} value={value} onChange={onChange} disabled={!!ro} review={review} />}
 
           {review && (
-            <div className={cx("mt-3 rounded-lg px-3.5 py-3 text-sm", review.isCorrect ? "bg-teal-tint text-teal-ink" : "bg-[#FDF1EE] text-[#8A2E09]")}>
+            <div className={cx("mt-3 rounded-lg px-3.5 py-3 text-sm", review.isCorrect ? "bg-success-tint text-brand-ink" : "bg-danger-tint text-danger")}>
               <p className="flex items-center gap-1.5 font-semibold">
                 {review.isCorrect ? <Check className="h-4 w-4" /> : <X className="h-4 w-4" />}
                 {review.isCorrect ? "Correct" : value ? "Incorrect" : "Not answered"}
