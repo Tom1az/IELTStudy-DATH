@@ -1,36 +1,36 @@
 import type { Config } from "tailwindcss";
 
-// Design tokens sampled from the team's Figma file (DATH_G18_figma).
+// Design tokens from the team's Figma file "DATH" and the agreed palette:
+// Celtic Blue #3971B8 (primary), Ivory #FBFCEE (page), Drab Dark Brown #343B1B (text),
+// Vanilla #F6E6A5 (accent cards) and Tea Green #C8D69B (used sparingly, by choice).
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     container: { center: true, padding: { DEFAULT: "1rem", md: "2rem" }, screens: { sm: "640px", md: "768px", lg: "1024px", xl: "1280px", "2xl": "1344px" } },
     extend: {
       colors: {
-        cream: "#FAF7F0",
-        sand: { DEFAULT: "#F1EADA", dark: "#E6DCC6" },
-        line: "#E8E2D6",
-        navy: { DEFAULT: "#1B2A41", 700: "#24354F", 600: "#3A4B65", 300: "#C7D0DF" },
-        ink: { DEFAULT: "#1B2A41", muted: "#4F5B6E", soft: "#6B7587" },
-        brand: { DEFAULT: "#C3410D", hover: "#A93709", soft: "#F4A682", tint: "#FBE4D6" },
-        teal: { DEFAULT: "#0E5C5C", tint: "#DCEFEE", ink: "#084D4A" },
-        peach: { DEFAULT: "#FBE4D6", ink: "#7A2E12" },
+        ivory: "#FBFCEE",
+        line: "#E0E5D4",
+        ink: { DEFAULT: "#343B1B", muted: "#626950", soft: "#858B72" },
+        brand: { DEFAULT: "#3971B8", hover: "#2E5E9C", tint: "#F2F6FC", soft: "#A9C4E6", ink: "#24497A" },
+        vanilla: { DEFAULT: "#F6E6A5", track: "#DFD39E", ink: "#5C4A0E" },
+        tea: { DEFAULT: "#C8D69B", ink: "#343B1B" },
         skill: {
-          l: "#0E5C5C", "l-bg": "#DCEFEE", "l-ink": "#0E5C5C",
-          r: "#B67920", "r-bg": "#FBE9C5", "r-ink": "#6E4704",
-          w: "#C3410D", "w-bg": "#F9D8CF", "w-ink": "#97361A",
-          s: "#6B50BB", "s-bg": "#E3DEF5", "s-ink": "#4A3790",
+          l: "#3971B8", "l-bg": "#E3ECF7", "l-ink": "#24497A",
+          r: "#B8921F", "r-bg": "#F6E6A5", "r-ink": "#5C4A0E",
+          w: "#7F9148", "w-bg": "#E6EDCF", "w-ink": "#46521F",
+          s: "#7A6A4F", "s-bg": "#ECE7DC", "s-ink": "#4B3F2A",
         },
-        success: "#0E5C5C",
-        danger: "#B42318",
+        // "Correct" uses the primary blue so the UI needs no green
+        success: { DEFAULT: "#3971B8", tint: "#E3ECF7" },
+        danger: { DEFAULT: "#B42318", tint: "#FDECEA" },
       },
       fontFamily: {
-        serif: ['"Fraunces"', "Georgia", "serif"],
-        sans: ['"DM Sans"', "system-ui", "sans-serif"],
+        sans: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
       },
-      borderRadius: { xl: "14px", "2xl": "18px" },
-      boxShadow: { card: "0 1px 2px rgba(27,42,65,0.04)" },
-      letterSpacing: { eyebrow: "0.12em" },
+      borderRadius: { xl: "12px", "2xl": "16px" },
+      boxShadow: { card: "0 1px 2px rgba(52,59,27,0.04)" },
+      letterSpacing: { eyebrow: "0.08em" },
     },
   },
   plugins: [],

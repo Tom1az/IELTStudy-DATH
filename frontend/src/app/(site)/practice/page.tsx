@@ -32,7 +32,7 @@ function PracticeList() {
         <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by skill">
           {(["all", ...SKILL_CATEGORIES] as Filter[]).map((s) => (
             <button key={s} onClick={() => setSkill(s)} aria-pressed={skill === s}
-              className={cx("h-[38px] rounded-full border-[1.5px] border-navy px-4 text-sm font-semibold", skill === s ? "bg-navy text-white" : "text-navy hover:bg-white")}>
+              className={cx("h-[38px] rounded-full border-[1.5px] px-4 text-sm font-semibold", skill === s ? "border-brand bg-brand text-white" : "border-line bg-white text-ink hover:border-brand")}>
               {s === "all" ? "All skills" : SKILL_META[s].label}
             </button>
           ))}
@@ -57,7 +57,7 @@ function PracticeList() {
       <div className="space-y-8">
         {groups.map((g) => (
           <section key={g.course.id} aria-label={g.course.levelName}>
-            <h2 className="mb-3 font-serif text-2xl font-bold">Level {g.course.level} · {g.course.levelName}</h2>
+            <h2 className="mb-3 text-2xl font-extrabold">Level {g.course.level} · {g.course.levelName}</h2>
             <div className="overflow-hidden rounded-2xl border border-line bg-white">
               <ul className="divide-y divide-line">
                 {g.items.map((it) => (
@@ -88,7 +88,7 @@ function PracticeList() {
                           {it.inProgress ? <><PlayCircle className="h-3.5 w-3.5" /> Resume</> : it.last ? <><RotateCcw className="h-3.5 w-3.5" /> Retake</> : "Start"}
                         </Link>
                       </div>
-                      {it.best !== null && it.best === it.quiz.questions && <CheckCircle2 className="h-4 w-4 text-teal" aria-label="Perfect score" />}
+                      {it.best !== null && it.best === it.quiz.questions && <CheckCircle2 className="h-4 w-4 text-brand" aria-label="Perfect score" />}
                     </div>
                   </li>
                 ))}

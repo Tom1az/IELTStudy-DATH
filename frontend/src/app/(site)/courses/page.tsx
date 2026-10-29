@@ -41,18 +41,18 @@ function CoursesInner() {
     <>
       <div className="container pb-16 pt-10 md:pt-12">
         <p className="eyebrow mb-2">Courses</p>
-        <h1 className="font-serif text-[32px] font-bold leading-tight text-navy md:text-[40px]">Pick a level, then work through all four skills</h1>
+        <h1 className="text-[32px] font-extrabold leading-tight text-ink md:text-[40px]">Pick a level, then work through all four skills</h1>
 
         <div className="mt-6 flex flex-col gap-3 lg:flex-row lg:items-center">
           <label className="relative block w-full lg:w-[440px]">
             <span className="sr-only">Search lessons or topics</span>
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" aria-hidden />
-            <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Search lessons or topics, e.g. True / False / Not Given" className="input h-[42px] rounded-lg border-[#C9BFA9] pl-10" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Search lessons or topics, e.g. True / False / Not Given" className="input h-[42px] rounded-lg border-line pl-10" />
           </label>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by skill">
             {(["all", ...SKILL_CATEGORIES] as Filter[]).map((s) => (
               <button key={s} onClick={() => setSkill(s)} aria-pressed={skill === s}
-                className={cx("h-[38px] rounded-full border-[1.5px] px-4 text-sm font-semibold transition-colors", skill === s ? "border-navy bg-navy text-white" : "border-navy bg-transparent text-navy hover:bg-white")}>
+                className={cx("h-[38px] rounded-full border-[1.5px] px-4 text-sm font-semibold transition-colors", skill === s ? "border-brand bg-brand text-white" : "border-line bg-white text-ink hover:border-brand")}>
                 {s === "all" ? "All skills" : SKILL_META[s].label}
               </button>
             ))}
@@ -77,7 +77,7 @@ function CoursesInner() {
                   const open = !!course?.enrollment;
                   return (
                     <li key={h.lessonId}>
-                      <Link href={open ? `/learn/${h.courseId}/${h.lessonId}` : `/courses/${h.courseId}#${h.skill}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-cream">
+                      <Link href={open ? `/learn/${h.courseId}/${h.lessonId}` : `/courses/${h.courseId}#${h.skill}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-ivory">
                         <SkillChip skill={h.skill} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">{h.title}</p>
@@ -103,22 +103,22 @@ function CoursesInner() {
                 return (
                   <article key={c.id} className="grid overflow-hidden rounded-2xl border border-line bg-white md:grid-cols-[230px_1fr_220px] lg:grid-cols-[260px_1fr_240px]">
                     <div className={cx("flex flex-col p-5 md:min-h-[214px]", t.panel)}>
-                      <p className={cx("text-[11px] font-semibold uppercase tracking-eyebrow", c.level === 1 ? "text-peach-ink" : "text-white")}>Level {c.level}</p>
-                      <h2 className={cx("mt-1 break-words font-serif text-[26px] font-bold leading-tight lg:text-[30px]", t.title)}>{c.title}</h2>
+                      <p className={cx("text-[11px] font-semibold uppercase tracking-eyebrow", c.level === 1 ? "text-vanilla-ink" : "text-white")}>Level {c.level}</p>
+                      <h2 className={cx("mt-1 break-words text-[26px] font-extrabold leading-tight lg:text-[30px]", t.title)}>{c.title}</h2>
                       <p className={cx("mt-auto pt-6 text-xs", t.foot)}>{plural(c.lessonCount, "lesson")}</p>
                     </div>
                     <div className="p-5 md:px-6">
                       <p className="text-sm leading-relaxed text-ink-muted">{c.description}</p>
                       <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                         {SKILL_CATEGORIES.filter((s) => c.skillCounts[s] > 0).map((s) => (
-                          <Link href={`/courses/${c.id}#${s}`} key={s} className={cx("flex items-center justify-between rounded-lg border border-line px-3 py-2.5 transition-opacity hover:border-navy/30", skill !== "all" && skill !== s && "opacity-40")}>
+                          <Link href={`/courses/${c.id}#${s}`} key={s} className={cx("flex items-center justify-between rounded-lg border border-line px-3 py-2.5 transition-opacity hover:border-brand/30", skill !== "all" && skill !== s && "opacity-40")}>
                             <SkillChip skill={s} />
                             <span className="text-xs text-ink-muted">{plural(c.skillCounts[s], "lesson")}</span>
                           </Link>
                         ))}
                       </div>
                       {c.enrollment && (
-                        <p className="mt-3 text-xs font-semibold text-teal">{c.enrollment.status === "completed" ? "Completed" : `Enrolled · ${c.enrollment.pct}% complete`}</p>
+                        <p className="mt-3 text-xs font-semibold text-brand">{c.enrollment.status === "completed" ? "Completed" : `Enrolled · ${c.enrollment.pct}% complete`}</p>
                       )}
                     </div>
                     <div className="flex flex-col items-stretch justify-center gap-2.5 border-t border-line p-5 md:border-l md:border-t-0">
@@ -136,9 +136,9 @@ function CoursesInner() {
 
         {/* Placement CTA */}
         {!(user?.role === "learner" && user.placementDone) && (
-          <section className="mt-8 flex flex-col items-start justify-between gap-5 rounded-2xl bg-navy px-6 py-7 text-white md:flex-row md:items-center md:px-8">
+          <section className="mt-8 flex flex-col items-start justify-between gap-5 rounded-2xl bg-brand px-6 py-7 text-white md:flex-row md:items-center md:px-8">
             <div>
-              <h2 className="font-serif text-2xl font-bold">Not sure where to start?</h2>
+              <h2 className="text-2xl font-extrabold">Not sure where to start?</h2>
               <p className="mt-1 text-sm text-white/85">The placement quiz checks your skills and sets the starting point of your skill map.</p>
             </div>
             <Link href={user ? "/placement" : "/register?next=/placement"} className="btn-light px-6 py-3">Start placement quiz</Link>

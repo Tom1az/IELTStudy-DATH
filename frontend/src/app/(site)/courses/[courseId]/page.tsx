@@ -39,7 +39,7 @@ function Syllabus({ detail }: { detail: CourseDetail }) {
             <button className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left" onClick={() => setOpen((o) => ({ ...o, [sec.skill]: !o[sec.skill] }))} aria-expanded={isOpen} aria-controls={`sec-${sec.skill}`}>
               <SkillTile skill={sec.skill} size={36} />
               <div className="flex-1">
-                <h3 className="font-serif text-lg font-bold leading-tight">{SKILL_META[sec.skill].label}</h3>
+                <h3 className="text-lg font-extrabold leading-tight">{SKILL_META[sec.skill].label}</h3>
                 <p className="text-xs text-ink-muted">{plural(sec.lessons.length, "lesson")}{enrollment && <> · {sec.done} done</>}</p>
               </div>
               <ChevronDown className={cx("h-5 w-5 text-ink transition-transform", isOpen && "rotate-180")} aria-hidden />
@@ -51,12 +51,12 @@ function Syllabus({ detail }: { detail: CourseDetail }) {
                     const canOpen = !!enrollment && l.unlocked;
                     const inner = (
                       <>
-                        <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", l.completed ? "bg-teal text-white" : "bg-sand text-ink")}>
+                        <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", l.completed ? "bg-brand text-white" : "bg-line/50 text-ink")}>
                           {l.completed ? <Check className="h-3.5 w-3.5" /> : l.order}
                         </span>
                         <p className="min-w-0 flex-1 text-sm font-semibold text-ink">{l.title}</p>
                         {!enrollment ? <Lock className="h-4 w-4 text-ink-soft" aria-label="Enroll to unlock" />
-                          : l.completed ? <CheckCircle2 className="h-4 w-4 text-teal" aria-label="Completed" />
+                          : l.completed ? <CheckCircle2 className="h-4 w-4 text-brand" aria-label="Completed" />
                           : l.unlocked ? <PlayCircle className="h-4 w-4 text-brand" aria-label="Open" />
                           : <Lock className="h-4 w-4 text-ink-soft" aria-label="Finish earlier lessons first" />}
                       </>
@@ -64,7 +64,7 @@ function Syllabus({ detail }: { detail: CourseDetail }) {
                     return (
                       <li key={l.id} className="border-t border-line">
                         {canOpen ? (
-                          <Link href={`/learn/${course.id}/${l.id}`} className="flex items-center gap-3.5 px-4 py-3 hover:bg-cream">{inner}</Link>
+                          <Link href={`/learn/${course.id}/${l.id}`} className="flex items-center gap-3.5 px-4 py-3 hover:bg-ivory">{inner}</Link>
                         ) : (
                           <div className="flex items-center gap-3.5 px-4 py-3">{inner}</div>
                         )}
@@ -73,7 +73,7 @@ function Syllabus({ detail }: { detail: CourseDetail }) {
                   })}
                 </ul>
                 {sec.lessons.length > 4 && (
-                  <button className="w-full border-t border-line px-4 py-3.5 text-left text-sm font-semibold text-brand hover:bg-cream" onClick={() => setAll((a) => ({ ...a, [sec.skill]: !a[sec.skill] }))}>
+                  <button className="w-full border-t border-line px-4 py-3.5 text-left text-sm font-semibold text-brand hover:bg-ivory" onClick={() => setAll((a) => ({ ...a, [sec.skill]: !a[sec.skill] }))}>
                     {all[sec.skill] ? "Show fewer lessons" : `Show all ${sec.lessons.length} lessons`}
                   </button>
                 )}
@@ -114,11 +114,11 @@ function CourseInner() {
     <>
       <section className={cx(t.heroBg)}>
         <div className="container py-6 md:py-7">
-          <nav aria-label="Breadcrumb" className={cx("text-[13px]", darkHero ? "text-white/90" : "text-navy")}>
+          <nav aria-label="Breadcrumb" className={cx("text-[13px]", darkHero ? "text-white/90" : "text-ink")}>
             <Link href="/courses" className="underline underline-offset-2">Courses</Link> / Level {course.level} {course.levelName}
           </nav>
-          <span className="pill mt-3 inline-flex bg-white px-2.5 py-0.5 text-[11px] text-navy">Level {course.level}</span>
-          <h1 className="mt-3 font-serif text-[34px] font-bold leading-tight md:text-[40px]">{course.title}</h1>
+          <span className="pill mt-3 inline-flex bg-white px-2.5 py-0.5 text-[11px] text-ink">Level {course.level}</span>
+          <h1 className="mt-3 text-[34px] font-extrabold leading-tight md:text-[40px]">{course.title}</h1>
           {course.description && <p className={cx("mt-2 max-w-[640px] text-[15px] leading-relaxed", darkHero ? "text-white/90" : "text-ink-muted")}>{course.description}</p>}
           <p className="mt-4 flex flex-wrap gap-x-6 gap-y-1 text-sm font-semibold">
             <span>{plural(course.lessonCount, "lesson")}</span>
@@ -129,10 +129,10 @@ function CourseInner() {
 
       <div className="container grid gap-8 py-10 lg:grid-cols-[1fr_258px] lg:gap-7">
         <div className="min-w-0">
-          <h2 className="font-serif text-2xl font-bold">Syllabus</h2>
+          <h2 className="text-2xl font-extrabold">Syllabus</h2>
           <div className="mt-4"><Syllabus detail={data} /></div>
 
-          <h2 className="mt-10 font-serif text-2xl font-bold">Your instructor</h2>
+          <h2 className="mt-10 text-2xl font-extrabold">Your instructor</h2>
           <div className="mt-4 flex items-center gap-4 rounded-2xl border border-line bg-white p-5">
             <Avatar name={course.instructorName} size={48} />
             <p className="font-semibold">{course.instructorName}</p>
@@ -143,15 +143,15 @@ function CourseInner() {
           <div className="rounded-2xl border border-line bg-white p-5">
             {enrollment ? (
               <>
-                <h2 className="font-serif text-[22px] font-bold">{enrollment.status === "completed" ? "Course completed" : "Your progress"}</h2>
+                <h2 className="text-[22px] font-extrabold">{enrollment.status === "completed" ? "Course completed" : "Your progress"}</h2>
                 <div className="mt-3 flex items-center justify-between text-xs text-ink-muted"><span>{done} of {lessons.length} lessons</span><span>{Math.round((done / Math.max(1, lessons.length)) * 100)}%</span></div>
-                <div className="mt-1.5"><ProgressBar value={done} max={lessons.length} color="bg-brand-soft" label="Course progress" /></div>
+                <div className="mt-1.5"><ProgressBar value={done} max={lessons.length} color="bg-brand" track="bg-brand-tint" label="Course progress" /></div>
                 <Link href={`/courses/${course.id}?continue=1`} className="btn-primary mt-4 w-full">{enrollment.status === "completed" ? "Review lessons" : "Continue learning"}</Link>
                 <Link href="/practice" className="btn-outline mt-2.5 w-full">Practice quizzes</Link>
               </>
             ) : (
               <>
-                <h2 className="font-serif text-[22px] font-bold">Start Level {course.level}</h2>
+                <h2 className="text-[22px] font-extrabold">Start Level {course.level}</h2>
                 <EnrollButton course={course} label="Enroll in this course" className="mt-4" firstLessonId={lessons[0]?.id} onEnrolled={reload} />
                 {!data.canEnroll.ok && data.canEnroll.reason && <p className="mt-2 text-xs text-ink-muted">{data.canEnroll.reason}</p>}
               </>

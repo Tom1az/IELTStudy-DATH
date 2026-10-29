@@ -200,7 +200,7 @@ export function QuestionForm({ question, passages, onClose, onSave }: { question
 
         <TextArea label="Explanation shown after submitting" value={d.explanation} onChange={(e) => setD({ ...d, explanation: e.target.value })} className="min-h-[70px]" />
         <QMatrixEditor value={d.skills} onChange={(skills) => setD({ ...d, skills })} error={errs.skills} />
-        <p className={Math.abs(total - 1) < 0.001 ? "text-xs text-teal" : "text-xs font-semibold text-brand"}>
+        <p className={Math.abs(total - 1) < 0.001 ? "text-xs text-brand" : "text-xs font-semibold text-brand"}>
           Weights add up to {total.toFixed(1)}. They must add up to 1.0.
         </p>
       </div>

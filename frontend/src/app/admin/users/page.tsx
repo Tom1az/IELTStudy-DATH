@@ -71,7 +71,7 @@ export default function UsersPage() {
                       <td className="text-ink-muted">{fmtDate(u.createdAt)}</td>
                       <td>{u.id !== me?.id && (u.status === "active"
                         ? <button className="btn-ghost btn-sm text-danger" onClick={() => setConfirm({ user: u, kind: "suspend" })}>Suspend</button>
-                        : <button className="btn-ghost btn-sm text-teal" onClick={() => setConfirm({ user: u, kind: "activate" })}>Reactivate</button>)}</td>
+                        : <button className="btn-ghost btn-sm text-brand" onClick={() => setConfirm({ user: u, kind: "activate" })}>Reactivate</button>)}</td>
                     </tr>
                   ))}
                 </tbody>

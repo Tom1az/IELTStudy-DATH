@@ -21,9 +21,9 @@ export default function StudioCourses() {
       {data.length === 0 ? <div className="card"><EmptyState title="No courses yet" action={<Link href="/instructor/courses/new" className="btn-primary">Create your first course</Link>} /></div> : (
         <div className="grid gap-4 md:grid-cols-2">
           {data.map((c) => (
-            <Link key={c.id} href={`/instructor/courses/${c.id}`} className="overflow-hidden rounded-2xl border border-line bg-white transition-colors hover:border-navy/30">
-              <div className={cx("flex items-start justify-between p-5", (LEVEL_THEME[c.level] ?? LEVEL_THEME[2]).panel, c.level === 1 ? "text-peach-ink" : "text-white")}>
-                <div><p className="text-[11px] font-semibold uppercase tracking-eyebrow">Level {c.level} · {c.levelName}</p><h2 className="mt-1 font-serif text-2xl font-bold">{c.title}</h2></div>
+            <Link key={c.id} href={`/instructor/courses/${c.id}`} className="overflow-hidden rounded-2xl border border-line bg-white transition-colors hover:border-brand/30">
+              <div className={cx("flex items-start justify-between p-5", (LEVEL_THEME[c.level] ?? LEVEL_THEME[2]).panel, c.level === 1 ? "text-vanilla-ink" : "text-white")}>
+                <div><p className="text-[11px] font-extrabold uppercase tracking-eyebrow">Level {c.level} · {c.levelName}</p><h2 className="mt-1 text-2xl font-extrabold">{c.title}</h2></div>
                 <span className="rounded-full bg-white/90 p-0.5"><CourseStatusPill status={c.status} /></span>
               </div>
               <div className="p-5">

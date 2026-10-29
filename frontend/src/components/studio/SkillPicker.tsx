@@ -27,7 +27,7 @@ export function SkillPicker({ value, onChange, error }: { value: string[]; onCha
                 const i = value.indexOf(s.id);
                 return (
                   <button type="button" key={s.id} onClick={() => toggle(s.id)} aria-pressed={i >= 0}
-                    className={cx("rounded-full border px-2.5 py-1 text-xs font-medium transition-colors", i >= 0 ? "border-navy bg-navy text-white" : "border-line bg-white text-ink hover:border-navy/40")}>
+                    className={cx("rounded-full border px-2.5 py-1 text-xs font-medium transition-colors", i >= 0 ? "border-brand bg-brand text-white" : "border-line bg-white text-ink hover:border-brand/40")}>
                     {s.name}
                   </button>
                 );
@@ -56,7 +56,7 @@ export function QMatrixEditor({ value, onChange, error }: { value: QuestionSkill
               <span className="flex-1 text-sm">{s?.name ?? v.skillId} <span className="text-xs text-ink-soft">{v.skillId}</span></span>
               <label className="flex items-center gap-2 text-xs text-ink-muted">
                 Weight
-                <input type="range" min={0.1} max={1} step={0.1} value={v.weight} onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, weight: Number(e.target.value) } : x)))} className="accent-navy" aria-label={`Weight for ${s?.name}`} />
+                <input type="range" min={0.1} max={1} step={0.1} value={v.weight} onChange={(e) => onChange(value.map((x, j) => (j === i ? { ...x, weight: Number(e.target.value) } : x)))} className="accent-brand" aria-label={`Weight for ${s?.name}`} />
                 <span className="w-7 tabular-nums text-ink">{v.weight.toFixed(1)}</span>
               </label>
               <button type="button" className="text-xs font-semibold text-ink-muted hover:text-danger" onClick={() => onChange(value.filter((_, j) => j !== i))}>Remove</button>

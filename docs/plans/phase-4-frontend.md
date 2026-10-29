@@ -81,3 +81,47 @@ Still to do:
 - Phase 4 Gate (wireframes) is still open, and the dashboard's radar chart and next best step wait for Phase 3.
 
 Deviation: the plan said to replace the UI types with the backend's. Mapping backend responses into the existing UI types (`mappers.ts`) lets each module move over on its own while the rest of the app keeps building.
+
+## Task: UI restyle from the DATH Figma file
+
+ROADMAP: Phase 4, "UI design: Figma or wireframe approval" and the open Learner task. Approved 2026-10-26.
+
+### Context
+The owner asked for the frontend to follow the new Figma file `DATH` (`fgGST1I6LC0FEOJ7Cmiitx`). It has 5 frames: Desktop/Mobile *My learning*, Desktop/Mobile *Reading practice*, Mobile *Practice result*. The goal was the Figma's design language, not a pixel copy, with the same style applied to the screens the Figma doesn't cover. The old teal and orange were dropped for the owner's palette:
+
+| Name | Hex | Role |
+|---|---|---|
+| Celtic Blue | #3971B8 | primary: buttons, active nav, progress, links, timer, "correct" in review |
+| Ivory | #FBFCEE | page background |
+| Drab Dark Brown | #343B1B | text, dark surfaces (level 3, footer) |
+| Vanilla | #F6E6A5 | accent cards (courses), selected answer, level 1 |
+| Tea Green | #C8D69B | used as little as possible (owner's choice): the Writing skill colour and the "below 65%" mastery badge |
+
+Decisions made in chat:
+- The Figma's Tea Green "Next best step" card is a solid Celtic Blue card with white text instead.
+- Only real data is shown. Study streak, weekly goal, exam date, "Mark for review", the Highlight tool, "Help & resources" and the "Plus" plan are not in `specs.md` and have no backend, so they were left out. Their places show data that exists (bands, recommendations, courses, recent results, target band).
+- No new features and no backend change.
+
+### Plan
+1. Feature branch `feat/figma-restyle`. Font: Plus Jakarta Sans (the Figma's only font) through `@fontsource/plus-jakarta-sans`, replacing DM Sans and Fraunces.
+2. New tokens in `tailwind.config.ts` (`ivory`, `line`, `ink`, `brand`, `vanilla`, `tea`, `skill-*`, `success`, `danger`) and `globals.css`. Remove `cream`, `sand`, `navy`, `teal`, `peach` and sweep every usage.
+3. Brand mark from the Figma (blue rounded square, white open book).
+4. `LearnerShell`: a white sidebar on desktop and a bottom bar on phones for learners. Guests and staff keep the top header. `AppShell` (instructor/admin) gets the same sidebar look.
+5. Rebuild the My learning dashboard, the quiz player and the practice result page after the Figma frames.
+6. Apply the same style to the other screens (mostly the token sweep).
+7. Verify: typecheck, lint, unit tests, `next build`, screenshots at 1440 and 390 px, and e2e.
+
+### Outcome
+Done 2026-10-26. What changed (read in this order):
+- **Tokens**: `frontend/tailwind.config.ts`, `frontend/src/app/globals.css`, `frontend/src/lib/format.ts` (`SKILL_META`, `SKILL_HEX`, `LEVEL_THEME`). Old token names were replaced in about 30 files with a search-and-replace script (`bg-cream` → `bg-ivory`, `navy`/`teal` → `brand` or `ink`, `sand` → `line/50`, `peach` → `vanilla`). Headings use `font-extrabold` instead of a serif face.
+- **Layout**: new `frontend/src/components/layout/LearnerShell.tsx`. `frontend/src/app/(site)/layout.tsx` is now a client component that picks `LearnerShell` for learners and `SiteHeader` for everyone else. It renders no header until the session check ends, so learners don't see the guest header flash. `AppShell`, `Logo`, `SiteHeader` and `AuthShell` were restyled.
+- **Dashboard** (`app/(site)/my-learning/page.tsx`): header with date and greeting, an overview strip (estimated band, courses, latest quiz), then three columns: learning path (blue next-best-step card from `upNext[0]`, falling back to the lesson to resume), skill compass (radar of the four bands plus bars; "not available yet" while `bands` is null), and course cards on Vanilla with recent quiz results.
+- **Quiz player** (`components/quiz/QuizRunner.tsx`, `QuestionView.tsx`, `PassagePane.tsx`): a white header with brand, title, timer box and "Save & exit", a progress row, passage and questions as two cards, and the passage collapsed behind "Show passage" on phones. Answer options are cards with a round letter marker. Selected = Vanilla with a blue border. In review, correct = blue and wrong = red. Logic (timer, autosave, submit) is unchanged.
+- **Result page** (`app/(site)/practice/result/[attemptId]/page.tsx`): accuracy ring, a "Your mastery update" list (before → after, with a Tea Green badge under 0.65), and a blue "Your next best step" card with the first recommendation and its rationale.
+- Smaller tweaks: lesson viewer header is white, the landing page's level 3 bar is Drab Dark Brown, skill filter pills use the line border, and the favicon is the new brand mark.
+
+Deviations:
+- "Practice" is a fifth item in the learner nav (the Figma has four), because the practice list would otherwise be unreachable for learners.
+- Writing's skill colour is a darker olive built from Tea Green (`#7F9148` on `#E6EDCF`), so the four skills stay distinct without a fifth hue.
+
+Verified: typecheck, lint, unit tests (16) and `next build` pass. Screenshots of the landing page, login, placement, catalog, lesson, quiz (desktop and phone), result (desktop and phone), dashboard (desktop and phone), history and practice were checked against the Figma. E2E against the running backend with one worker: 8 passed, 2 skipped (the staff spec needs `SEED_PASSWORD`, so the owner runs it). With the default parallel workers on a dev server, 4 auth tests timed out waiting for sign-up or login. The same tests pass serially and the API answers in about 0.5 s, so this was load on the dev server, not the UI.
