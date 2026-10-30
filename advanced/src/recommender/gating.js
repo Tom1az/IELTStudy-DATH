@@ -1,31 +1,35 @@
 'use strict';
 
 /**
- * Gating: "weak scores on specific skills automatically trigger focused review
- * modules ... before moving forward" (PDF mục 2 & 3).
- *
- * Với mỗi khoá đã đăng ký: module kế tiếp bị KHOÁ nếu còn skill nào mà người học
- * ĐÃ học (xuất hiện trong bài đã hoàn thành của khoá) nhưng mastery < ngưỡng.
- * Mở khoá tự động khi mastery của các skill đó >= ngưỡng (sau quiz luyện tập).
+ * Computes gating state per enrolled course.
+ * Core lessons are unlocked sequentially: the next uncompleted core lesson is locked
+ * while any skill taught in a previously completed core lesson of that course is below threshold.
  */
 function computeGates({ catalog, completedLessonIds, enrolledCourseIds, masteryBySkill, threshold, enabled }) {
   const byCourse = new Map();
   for (const l of catalog) {
-    if (!enrolledCourseIds.has(l.courseId)) continue;
-    if (!byCourse.has(l.courseId)) byCourse.set(l.courseId, []);
-    byCourse.get(l.courseId).push(l);
+    const courseId = Number(l.courseId);
+    if (!enrolledCourseIds.has(courseId)) continue;
+    if (!byCourse.has(courseId)) byCourse.set(courseId, []);
+    byCourse.get(courseId).push(l);
   }
 
   const gates = [];
   for (const [courseId, lessons] of byCourse) {
-    const main = lessons.filter((l) => !l.isRemedial).sort((a, b) => a.orderIndex - b.orderIndex);
-    const next = main.find((l) => !completedLessonIds.has(l.id));
-    if (!next) continue; // đã học hết khoá
+    const isRemedial = (l) => (l.kind ? l.kind === 'remedial' : !!l.isRemedial);
+    const getLessonId = (l) => Number(l.lessonId ?? l.id);
+
+    const main = lessons.filter((l) => !isRemedial(l)).sort((a, b) => a.orderIndex - b.orderIndex);
+    const next = main.find((l) => !completedLessonIds.has(getLessonId(l)));
+    if (!next) continue;
 
     const studied = new Set();
     for (const l of main) {
-      if (completedLessonIds.has(l.id)) l.skills.forEach((s) => studied.add(s.skillId));
+      if (completedLessonIds.has(getLessonId(l))) {
+        l.skills.forEach((s) => studied.add(Number(s.skillId)));
+      }
     }
+
     const blockingSkills = [];
     if (enabled) {
       for (const skillId of studied) {
@@ -36,13 +40,13 @@ function computeGates({ catalog, completedLessonIds, enrolledCourseIds, masteryB
     }
 
     const remedialLessonIds = lessons
-      .filter((l) => l.isRemedial && l.skills.some((s) => blockingSkills.some((b) => b.skillId === s.skillId)))
-      .map((l) => l.id);
+      .filter((l) => isRemedial(l) && l.skills.some((s) => blockingSkills.some((b) => b.skillId === Number(s.skillId))))
+      .map(getLessonId);
 
     gates.push({
       courseId,
       courseTitle: next.courseTitle,
-      nextLessonId: next.id,
+      nextLessonId: getLessonId(next),
       locked: blockingSkills.length > 0,
       blockingSkills,
       remedialLessonIds

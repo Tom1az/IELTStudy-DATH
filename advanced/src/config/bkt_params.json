@@ -1,7 +1,19 @@
 {
-  "_comment": "File này được xuất ra từ ml/ (pyBKT fit trên EdNet). Chỉ cần ghi đè skill nào có tham số riêng; skill còn lại dùng 'default'. Key của 'skills' là skill_code.",
-  "default": { "pInit": 0.3, "pLearn": 0.15, "pSlip": 0.1, "pGuess": 0.25, "pForget": 0.0 },
+  "_comment": "Exported from ml/ (pyBKT fitted on EdNet). Keyed by skill_code; unlisted skills fall back to 'default'.",
+  "default": {
+    "pInit": 0.3,
+    "pLearn": 0.15,
+    "pSlip": 0.1,
+    "pGuess": 0.25,
+    "pForget": 0.0
+  },
   "skills": {
-    "GRAM_INVERSION": { "pInit": 0.2, "pLearn": 0.12, "pSlip": 0.12, "pGuess": 0.25, "pForget": 0.02 }
+    "W_INVERSION": {
+      "pInit": 0.2,
+      "pLearn": 0.12,
+      "pSlip": 0.12,
+      "pGuess": 0.25,
+      "pForget": 0.02
+    }
   }
 }

@@ -1,119 +1,205 @@
 'use strict';
 
 /**
- * Repository PostgreSQL (Supabase). Toàn bộ SQL của module nằm ở file này.
- * Tên bảng/cột bám theo Relational Data Model trong proposal (snake_case).
- * Bảng mới do module này thêm: xem sql/001_advanced_schema.sql.
- *
- * @param {import('pg').Pool} pool
- * @param {{publishedCourseStatus:string}} config
+ * PostgreSQL Repository matching backend/src/prisma/schema.prisma.
+ * All IDs are integers; timestamps are explicitly provided on INSERT/UPDATE.
  */
 function createPgRepository(pool, config) {
-  const S = (v) => String(v);
+  const N = (v) => Number(v);
 
   return {
-    async getUserProfile(userId) {
-      const { rows } = await pool.query('SELECT id, role, target_band FROM users WHERE id = $1', [userId]);
+    async getUserProfile(userId, client = pool) {
+      const { rows } = await client.query(
+        'SELECT user_id, role, target_band FROM users WHERE user_id = $1',
+        [N(userId)]
+      );
       if (!rows[0]) return null;
       return {
-        id: S(rows[0].id),
+        userId: N(rows[0].user_id),
         role: rows[0].role,
         targetBand: rows[0].target_band == null ? null : Number(rows[0].target_band)
       };
     },
 
-    async getSkills() {
-      const { rows } = await pool.query('SELECT id, skill_code, skill_category, description FROM skills ORDER BY id');
+    async getSkills(client = pool) {
+      const { rows } = await client.query(
+        'SELECT skill_id, skill_code, name, category, description FROM skills ORDER BY skill_id'
+      );
       return rows.map((r) => ({
-        id: S(r.id), skillCode: r.skill_code, skillCategory: r.skill_category, description: r.description
+        skillId: N(r.skill_id),
+        id: N(r.skill_id),
+        skillCode: r.skill_code,
+        name: r.name,
+        category: r.category,
+        skillCategory: r.category,
+        description: r.description
       }));
     },
 
-    /** Bài học (của khoá đã duyệt) kèm skill tag. */
-    async getCatalog() {
-      const { rows } = await pool.query(
-        `SELECT l.id, l.course_id, l.title, l.order_index, l.is_remedial,
+    async getCatalog(client = pool) {
+      const { rows } = await client.query(
+        `SELECT l.lesson_id, l.course_id, l.title, l.order_index, l.kind,
                 c.title AS course_title, c.target_level,
-                COALESCE(json_agg(json_build_object('skillId', ls.skill_id::text, 'weight', ls.weight))
+                COALESCE(json_agg(json_build_object('skillId', ls.skill_id, 'weight', ls.weight))
                          FILTER (WHERE ls.skill_id IS NOT NULL), '[]') AS skills
            FROM lessons l
-           JOIN courses c ON c.id = l.course_id
-           LEFT JOIN lesson_skills ls ON ls.lesson_id = l.id
+           JOIN courses c ON c.course_id = l.course_id
+           LEFT JOIN lesson_skills ls ON ls.lesson_id = l.lesson_id
           WHERE c.status = $1
-          GROUP BY l.id, c.id`,
+          GROUP BY l.lesson_id, c.course_id`,
         [config.publishedCourseStatus]
       );
       return rows.map((r) => ({
-        id: S(r.id), courseId: S(r.course_id), courseTitle: r.course_title,
-        targetLevel: r.target_level, title: r.title, orderIndex: r.order_index,
-        isRemedial: !!r.is_remedial,
-        skills: r.skills.map((s) => ({ skillId: S(s.skillId), weight: Number(s.weight) }))
+        lessonId: N(r.lesson_id),
+        id: N(r.lesson_id),
+        courseId: N(r.course_id),
+        courseTitle: r.course_title,
+        targetLevel: r.target_level,
+        title: r.title,
+        orderIndex: N(r.order_index),
+        kind: r.kind,
+        isRemedial: r.kind === 'remedial',
+        skills: r.skills.map((s) => ({ skillId: N(s.skillId), weight: Number(s.weight) }))
       }));
     },
 
-    async getMastery(userId) {
-      const { rows } = await pool.query(
-        'SELECT skill_id, mastery_prob FROM user_skill_mastery WHERE user_id = $1', [userId]
+    async getMastery(userId, client = pool) {
+      const { rows } = await client.query(
+        'SELECT skill_id, mastery_prob FROM user_skill_mastery WHERE user_id = $1',
+        [N(userId)]
       );
-      return new Map(rows.map((r) => [S(r.skill_id), Number(r.mastery_prob)]));
+      return new Map(rows.map((r) => [N(r.skill_id), Number(r.mastery_prob)]));
     },
 
-    async getAttempt(attemptId) {
-      const { rows } = await pool.query(
-        'SELECT id, user_id, completed_at FROM quiz_attempts WHERE id = $1', [attemptId]
-      );
-      if (!rows[0]) return null;
-      return { id: S(rows[0].id), userId: S(rows[0].user_id), completedAt: rows[0].completed_at };
-    },
-
-    async getAttemptResponses(attemptId) {
-      const { rows } = await pool.query(
-        `SELECT question_id, is_correct, attempt_order
-           FROM question_responses WHERE attempt_id = $1 ORDER BY attempt_order`, [attemptId]
+    async getMasteryRows(userId, client = pool) {
+      const { rows } = await client.query(
+        `SELECT usm.skill_id, usm.mastery_prob, usm.observations, usm.updated_at,
+                s.skill_code, s.name, s.category
+           FROM user_skill_mastery usm
+           JOIN skills s ON s.skill_id = usm.skill_id
+          WHERE usm.user_id = $1
+          ORDER BY usm.skill_id`,
+        [N(userId)]
       );
       return rows.map((r) => ({
-        questionId: S(r.question_id), isCorrect: !!r.is_correct, attemptOrder: r.attempt_order
+        skillId: N(r.skill_id),
+        skillCode: r.skill_code,
+        name: r.name,
+        category: r.category,
+        masteryProb: Number(r.mastery_prob),
+        observations: N(r.observations),
+        updatedAt: r.updated_at instanceof Date ? r.updated_at.toISOString() : r.updated_at
       }));
     },
 
-    /** Q-matrix cho một tập câu hỏi -> Map<questionId, [{skillId, weight}]> */
-    async getQuestionSkills(questionIds) {
-      const out = new Map(questionIds.map((q) => [q, []]));
-      if (!questionIds.length) return out;
-      // Ép về text để chạy được với cả id kiểu uuid lẫn bigint
-      const { rows } = await pool.query(
-        'SELECT question_id, skill_id, weight FROM question_skills WHERE question_id::text = ANY($1::text[])',
-        [questionIds]
+    async getAttempt(attemptId, client = pool) {
+      const { rows } = await client.query(
+        `SELECT qa.attempt_id, qa.user_id, qa.quiz_id, qa.completed_at, qa.mastery_changes,
+                q.kind AS quiz_kind
+           FROM quiz_attempts qa
+           JOIN quizzes q ON q.quiz_id = qa.quiz_id
+          WHERE qa.attempt_id = $1`,
+        [N(attemptId)]
       );
-      for (const r of rows) out.get(S(r.question_id)).push({ skillId: S(r.skill_id), weight: Number(r.weight) });
+      if (!rows[0]) return null;
+      return {
+        attemptId: N(rows[0].attempt_id),
+        id: N(rows[0].attempt_id),
+        userId: N(rows[0].user_id),
+        quizId: N(rows[0].quiz_id),
+        quizKind: rows[0].quiz_kind,
+        completedAt: rows[0].completed_at,
+        masteryChanges: rows[0].mastery_changes
+      };
+    },
+
+    async getQuizQuestionIds(quizId, client = pool) {
+      const { rows } = await client.query(
+        'SELECT question_id FROM quiz_questions WHERE quiz_id = $1 ORDER BY order_index',
+        [N(quizId)]
+      );
+      return rows.map((r) => N(r.question_id));
+    },
+
+    async getAttemptResponses(attemptId, client = pool) {
+      const { rows } = await client.query(
+        `SELECT question_id, is_correct, attempt_order
+           FROM question_responses
+          WHERE attempt_id = $1
+          ORDER BY attempt_order`,
+        [N(attemptId)]
+      );
+      return rows.map((r) => ({
+        questionId: N(r.question_id),
+        isCorrect: !!r.is_correct,
+        attemptOrder: N(r.attempt_order)
+      }));
+    },
+
+    async getQuestionSkills(questionIds, client = pool) {
+      const ids = questionIds.map(N);
+      const out = new Map(ids.map((q) => [q, []]));
+      if (!ids.length) return out;
+      const { rows } = await client.query(
+        'SELECT question_id, skill_id, weight FROM question_skills WHERE question_id = ANY($1::int[])',
+        [ids]
+      );
+      for (const r of rows) {
+        out.get(N(r.question_id)).push({
+          skillId: N(r.skill_id),
+          weight: Number(r.weight)
+        });
+      }
       return out;
     },
 
-    async hasProcessedAttempt(attemptId) {
-      const { rowCount } = await pool.query('SELECT 1 FROM mastery_history WHERE attempt_id = $1 LIMIT 1', [attemptId]);
-      return rowCount > 0;
+    async hasProcessedAttempt(attemptId, client = pool) {
+      const { rows } = await client.query(
+        'SELECT mastery_changes FROM quiz_attempts WHERE attempt_id = $1',
+        [N(attemptId)]
+      );
+      return Boolean(rows[0] && rows[0].mastery_changes !== null);
     },
 
-    /** Ghi mastery + history trong 1 transaction (idempotent theo attempt_id+skill_id). */
-    async saveMasteryUpdate({ userId, attemptId, source, entries }) {
+    /**
+     * Upserts user_skill_mastery (incrementing observations) and records mastery_changes
+     * on quiz_attempts. Runs in a transaction unless an active transaction client is passed.
+     */
+    async saveMasteryUpdate({ userId, attemptId, entries }, externalClient = null) {
+      const run = async (client) => {
+        for (const e of entries) {
+          await client.query(
+            `INSERT INTO user_skill_mastery (user_id, skill_id, mastery_prob, observations, updated_at)
+             VALUES ($1, $2, $3, $4, now())
+             ON CONFLICT (user_id, skill_id)
+             DO UPDATE SET
+               mastery_prob = EXCLUDED.mastery_prob,
+               observations = user_skill_mastery.observations + EXCLUDED.observations,
+               updated_at = now()`,
+            [N(userId), N(e.skillId), Number(e.after), N(e.observations ?? 0)]
+          );
+        }
+        const masteryChangesJson = entries.map((e) => ({
+          skillId: N(e.skillId),
+          skillCode: e.skillCode,
+          name: e.name,
+          before: e.before,
+          after: Number(e.after)
+        }));
+        await client.query(
+          'UPDATE quiz_attempts SET mastery_changes = $1::jsonb WHERE attempt_id = $2',
+          [JSON.stringify(masteryChangesJson), N(attemptId)]
+        );
+      };
+
+      if (externalClient) {
+        return run(externalClient);
+      }
+
       const client = await pool.connect();
       try {
         await client.query('BEGIN');
-        for (const e of entries) {
-          await client.query(
-            `INSERT INTO user_skill_mastery (user_id, skill_id, mastery_prob, updated_at)
-             VALUES ($1, $2, $3, now())
-             ON CONFLICT (user_id, skill_id)
-             DO UPDATE SET mastery_prob = EXCLUDED.mastery_prob, updated_at = now()`,
-            [userId, e.skillId, e.after]
-          );
-          await client.query(
-            `INSERT INTO mastery_history (user_id, skill_id, attempt_id, source, mastery_before, mastery_after)
-             VALUES ($1, $2, $3, $4, $5, $6)
-             ON CONFLICT (attempt_id, skill_id) DO NOTHING`,
-            [userId, e.skillId, attemptId, source, e.before, e.after]
-          );
-        }
+        await run(client);
         await client.query('COMMIT');
       } catch (err) {
         await client.query('ROLLBACK');
@@ -123,39 +209,78 @@ function createPgRepository(pool, config) {
       }
     },
 
-    async getMasteryHistory(userId, limit) {
-      const { rows } = await pool.query(
-        `SELECT skill_id, attempt_id, mastery_after, created_at
-           FROM (SELECT * FROM mastery_history WHERE user_id = $1 ORDER BY created_at DESC, id DESC LIMIT $2) t
-          ORDER BY created_at ASC, id ASC`,
-        [userId, limit]
-      );
-      return rows.map((r) => ({
-        skillId: S(r.skill_id), attemptId: S(r.attempt_id),
-        masteryAfter: Number(r.mastery_after), createdAt: r.created_at
-      }));
+    async saveRecommendations({ userId, sourceAttemptId = null, items }, client = pool) {
+      const saved = [];
+      for (const item of items) {
+        const { rows } = await client.query(
+          `INSERT INTO recommendations
+             (user_id, skill_id, lesson_id, quiz_id, source_attempt_id, mastery_prob, rank, score, rationale, created_at, clicked_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now(), NULL)
+           RETURNING recommendation_id, created_at, clicked_at`,
+          [
+            N(userId),
+            N(item.skill.skillId),
+            item.lesson ? N(item.lesson.lessonId) : null,
+            item.quiz ? N(item.quiz.quizId) : null,
+            sourceAttemptId != null ? N(sourceAttemptId) : null,
+            Number(item.masteryProb),
+            N(item.rank),
+            Number(item.score),
+            item.rationale
+          ]
+        );
+        const row = rows[0];
+        saved.push({
+          recommendationId: N(row.recommendation_id),
+          type: item.type,
+          lesson: item.lesson,
+          quiz: item.quiz,
+          skill: item.skill,
+          masteryProb: item.masteryProb,
+          rank: item.rank,
+          score: item.score,
+          rationale: item.rationale,
+          createdAt: row.created_at instanceof Date ? row.created_at.toISOString() : row.created_at,
+          clickedAt: null
+        });
+      }
+      return saved;
     },
 
-    async getCompletedLessonIds(userId) {
-      const { rows } = await pool.query(
-        `SELECT lesson_id FROM lesson_progress WHERE user_id = $1 AND status = 'completed'`, [userId]
+    async getRecommendationById(recommendationId, client = pool) {
+      const { rows } = await client.query(
+        'SELECT recommendation_id, user_id, clicked_at FROM recommendations WHERE recommendation_id = $1',
+        [N(recommendationId)]
       );
-      return new Set(rows.map((r) => S(r.lesson_id)));
+      if (!rows[0]) return null;
+      return {
+        recommendationId: N(rows[0].recommendation_id),
+        userId: N(rows[0].user_id),
+        clickedAt: rows[0].clicked_at
+      };
     },
 
-    async getEnrolledCourseIds(userId) {
-      const { rows } = await pool.query('SELECT course_id FROM enrollments WHERE user_id = $1', [userId]);
-      return new Set(rows.map((r) => S(r.course_id)));
+    async clickRecommendation(recommendationId, client = pool) {
+      await client.query(
+        'UPDATE recommendations SET clicked_at = COALESCE(clicked_at, now()) WHERE recommendation_id = $1',
+        [N(recommendationId)]
+      );
     },
 
-    async markLessonCompleted(userId, lessonId) {
-      await pool.query(
-        `INSERT INTO lesson_progress (user_id, lesson_id, status, completed_at)
-         VALUES ($1, $2, 'completed', now())
-         ON CONFLICT (user_id, lesson_id)
-         DO UPDATE SET status = 'completed', completed_at = COALESCE(lesson_progress.completed_at, now())`,
-        [userId, lessonId]
+    async getCompletedLessonIds(userId, client = pool) {
+      const { rows } = await client.query(
+        `SELECT lesson_id FROM lesson_progress WHERE user_id = $1 AND status = 'completed'`,
+        [N(userId)]
       );
+      return new Set(rows.map((r) => N(r.lesson_id)));
+    },
+
+    async getEnrolledCourseIds(userId, client = pool) {
+      const { rows } = await client.query(
+        'SELECT course_id FROM enrollments WHERE user_id = $1',
+        [N(userId)]
+      );
+      return new Set(rows.map((r) => N(r.course_id)));
     }
   };
 }

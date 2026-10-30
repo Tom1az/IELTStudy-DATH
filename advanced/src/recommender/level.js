@@ -2,7 +2,7 @@
 
 const LEVEL_ORDER = ['beginner', 'intermediate', 'advanced'];
 
-/** target_band -> tên level (theo config.levels). Không có band -> intermediate. */
+/** Maps target_band to course level ('beginner' | 'intermediate' | 'advanced'). */
 function levelFromBand(targetBand, levels) {
   if (targetBand == null) return 'intermediate';
   const band = Number(targetBand);
@@ -10,7 +10,7 @@ function levelFromBand(targetBand, levels) {
   return levels[levels.length - 1].name;
 }
 
-/** 1 nếu cùng level, 0.5 nếu lệch 1 bậc, 0 nếu lệch xa hơn. */
+/** Returns 1 for exact level match, 0.5 for adjacent level, 0 otherwise. */
 function levelFit(lessonLevel, userLevel) {
   const a = LEVEL_ORDER.indexOf(String(lessonLevel || '').toLowerCase());
   const b = LEVEL_ORDER.indexOf(userLevel);
