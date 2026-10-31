@@ -1,17 +1,33 @@
 {
-  "name": "ielstudy-advanced",
+  "name": "ieltstudy-advanced",
   "version": "1.0.0",
-  "description": "IELTStudy – Personalized Learning Paths & Recommendations (BKT + Content-Based Filtering)",
-  "main": "src/index.js",
   "private": true,
-  "scripts": {
-    "dev": "node src/server.js",
-    "test": "node --test test/*.test.js",
-    "eval": "node scripts/runEvaluation.js"
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
   },
-  "engines": { "node": ">=18" },
+  "scripts": {
+    "dev": "node --watch src/server.ts",
+    "start": "node src/server.ts",
+    "eval": "node src/eval/simulator.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
   "dependencies": {
-    "express": "^4.19.2",
-    "pg": "^8.11.5"
+    "@prisma/orm-postgres": "8.0.0-rc.17",
+    "dotenv": "^18.0.3",
+    "express": "^5.2.1",
+    "joi": "^18.3.0",
+    "jsonwebtoken": "^9.0.3",
+    "temporal-polyfill": "1.0.6"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.6",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^26.6.2",
+    "@types/supertest": "^6.0.3",
+    "supertest": "^7.1.4",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.5"
   }
 }
