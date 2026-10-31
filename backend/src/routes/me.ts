@@ -15,7 +15,7 @@ router
   .get(meController.getMe)
   .patch(validateBody(schemas.profileUpdateSchema), meController.updateMe);
 
-// Only learners enrol in courses
+// Only learners enroll in courses
 router.get("/enrollments", authorize("learner"), meController.listMyEnrollments);
 
 // Only learners take quizzes

@@ -20,6 +20,7 @@ import uploadsRoute from "./routes/uploads.ts";
 import { httpError } from "./utils/http-error.ts";
 import type { HttpError } from "./utils/http-error.ts";
 
+//Initiate express app
 const app = express();
 
 const openapiDoc = YAML.parse(
@@ -68,7 +69,7 @@ app.use((err: HttpError, req: Request, res: Response, _next: NextFunction) => {
 
   return res.status(status).json({
     error: {
-      message: status < 500 || isDev ? err.message : "Internal Server Error",
+      message: (status < 500 || isDev) ? err.message : "Internal Server Error",
     },
   });
 });
