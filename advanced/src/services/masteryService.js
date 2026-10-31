@@ -4,89 +4,131 @@ const { buildBaseline } = require('../bkt/placement');
 const { notFound, forbidden, badRequest, conflict } = require('../utils/errors');
 const { round } = require('../utils/math');
 
-/**
- * Cập nhật latent mastery sau placement test / quiz.
- * Người gọi: route POST /mastery/... HOẶC trực tiếp từ handler nộp quiz của backend
- * (gọi masteryService.processAttempt(...) ngay sau khi chấm điểm).
- */
 function createMasteryService({ repository, paramStore, config }) {
-  const th = config.masteryThreshold;
-
-  async function loadAttempt({ attemptId, requester }) {
-    const attempt = await repository.getAttempt(attemptId);
+  async function loadAttempt({ attemptId, requester }, client) {
+    const attempt = await repository.getAttempt(attemptId, client);
     if (!attempt) throw notFound('Attempt not found');
-    if (attempt.userId !== String(requester.id) && requester.role !== 'admin') {
-      throw forbidden('Attempt does not belong to you');
+    const reqUserId = String(requester.userId ?? requester.id);
+    if (String(attempt.userId) !== reqUserId && requester.role !== 'admin') {
+      throw forbidden("This is another learner's attempt");
     }
     if (!attempt.completedAt) throw badRequest('Attempt is not completed yet');
-    const responses = await repository.getAttemptResponses(attemptId);
-    if (!responses.length) throw badRequest('Attempt has no responses');
-    const questionSkills = await repository.getQuestionSkills([...new Set(responses.map((r) => r.questionId))]);
-    return { attempt, responses, questionSkills };
-  }
 
-  function summarize(entries, skillsById) {
-    return entries.map((e) => ({
-      skillId: e.skillId,
-      skillCode: skillsById.get(e.skillId)?.skillCode,
-      before: e.before == null ? null : round(e.before),
-      after: round(e.after),
-      belowThreshold: e.after < th,
-      crossedBelowThreshold: e.before != null && e.before >= th && e.after < th,
-      crossedAboveThreshold: e.before != null && e.before < th && e.after >= th
-    }));
-  }
+    const responses = await repository.getAttemptResponses(attemptId, client);
+    const quizQuestionIds = repository.getQuizQuestionIds
+      ? await repository.getQuizQuestionIds(attempt.quizId, client)
+      : [];
 
-  /** Placement 30 câu: khởi tạo toàn bộ skill vector (chỉ chạy 1 lần / người học). */
-  async function initPlacement({ attemptId, requester }) {
-    const existing = await repository.getMastery(requester.id);
-    if (existing.size) throw conflict('Skill profile already initialized');
-
-    const { attempt, responses, questionSkills } = await loadAttempt({ attemptId, requester });
-    const skills = await repository.getSkills();
-    const skillsById = new Map(skills.map((s) => [s.id, s]));
-
-    const { state } = buildBaseline({ skills, responses, questionSkills, paramStore, bktConfig: config.bkt });
-    const entries = [...state].map(([skillId, after]) => ({ skillId, before: null, after }));
-    await repository.saveMasteryUpdate({ userId: attempt.userId, attemptId, source: 'placement', entries });
-    return { source: 'placement', updates: summarize(entries, skillsById) };
-  }
-
-  /** Quiz thường: cập nhật mastery từ giá trị hiện tại. Idempotent theo attemptId. */
-  async function processAttempt({ attemptId, requester }) {
-    const { attempt, responses, questionSkills } = await loadAttempt({ attemptId, requester });
-    const prior = await repository.getMastery(attempt.userId);
-    if (!prior.size) throw badRequest('Complete the placement test first');
-
-    if (await repository.hasProcessedAttempt(attemptId)) {
-      return { source: 'quiz', alreadyProcessed: true, updates: [] };
+    const answeredIds = new Set(responses.map((r) => String(r.questionId)));
+    const allObservations = [...responses];
+    let nextOrder = allObservations.length + 1;
+    for (const qId of quizQuestionIds) {
+      if (!answeredIds.has(String(qId))) {
+        allObservations.push({ questionId: qId, isCorrect: false, attemptOrder: nextOrder++ });
+      }
     }
 
-    const skills = await repository.getSkills();
-    const skillsById = new Map(skills.map((s) => [s.id, s]));
-    const { state, evidence } = applyResponses({
-      prior, responses, questionSkills, skillsById, paramStore, bktConfig: config.bkt
+    const uniqueQIds = [...new Set(allObservations.map((r) => r.questionId))];
+    const questionSkills = await repository.getQuestionSkills(uniqueQIds, client);
+    return { attempt, responses: allObservations, questionSkills };
+  }
+
+  function formatMasteryChanges(entries) {
+    return entries.map((e) => ({
+      skillId: e.skillId,
+      skillCode: e.skillCode,
+      name: e.name,
+      before: e.before == null ? null : round(e.before),
+      after: round(e.after)
+    }));
+  }
+
+  async function processSubmittedAttempt({ attemptId, requester, client = null }) {
+    const { attempt, responses, questionSkills } = await loadAttempt({ attemptId, requester }, client);
+    if (attempt.masteryChanges !== null && attempt.masteryChanges !== undefined) {
+      return {
+        alreadyProcessed: true,
+        masteryChanges: attempt.masteryChanges,
+        touchedSkillIds: new Set(attempt.masteryChanges.map((m) => m.skillId))
+      };
+    }
+
+    const [prior, skills] = await Promise.all([
+      repository.getMastery(attempt.userId, client),
+      repository.getSkills(client)
+    ]);
+    const skillsById = new Map(skills.map((s) => [s.skillId ?? s.id, s]));
+
+    const isDiagnostic = attempt.quizKind === 'diagnostic';
+    const { state, evidence } = isDiagnostic
+      ? buildBaseline({ skills, responses, questionSkills, paramStore, bktConfig: config.bkt })
+      : applyResponses({ prior, responses, questionSkills, skillsById, paramStore, bktConfig: config.bkt });
+
+    const skillIdsToSave = isDiagnostic
+      ? [...state.keys()].filter((skillId) => evidence.has(skillId))
+      : [...evidence.keys()];
+
+    const entries = skillIdsToSave.map((skillId) => {
+      const sk = skillsById.get(skillId) || skillsById.get(String(skillId)) || skillsById.get(Number(skillId));
+      return {
+        skillId,
+        skillCode: sk?.skillCode || '',
+        name: sk?.name || sk?.description || sk?.skillCode || '',
+        before: prior.has(skillId) ? round(prior.get(skillId)) : (prior.has(String(skillId)) ? round(prior.get(String(skillId))) : null),
+        after: round(state.get(skillId) ?? state.get(String(skillId))),
+        observations: evidence.get(skillId) ?? evidence.get(String(skillId)) ?? 0
+      };
     });
 
-    const entries = [...evidence.keys()].map((skillId) => ({
-      skillId, before: prior.get(skillId) ?? null, after: state.get(skillId)
-    }));
-    await repository.saveMasteryUpdate({ userId: attempt.userId, attemptId, source: 'quiz', entries });
-    return { source: 'quiz', alreadyProcessed: false, updates: summarize(entries, skillsById) };
+    await repository.saveMasteryUpdate(
+      { userId: attempt.userId, attemptId: attempt.attemptId, entries },
+      client
+    );
+
+    return {
+      alreadyProcessed: false,
+      masteryChanges: formatMasteryChanges(entries),
+      touchedSkillIds: new Set(evidence.keys())
+    };
+  }
+
+  async function initPlacement({ attemptId, requester, client = null }) {
+    const reqUserId = String(requester.userId ?? requester.id);
+    const existing = await repository.getMastery(reqUserId, client);
+    if (existing.size) throw conflict('Skill profile already initialized');
+
+    const { attempt } = await loadAttempt({ attemptId, requester }, client);
+    if (attempt.quizKind && attempt.quizKind !== 'diagnostic') {
+      throw badRequest('Only a diagnostic quiz attempt can initialize placement mastery');
+    }
+
+    const result = await processSubmittedAttempt({ attemptId, requester, client });
+    return { masteryChanges: result.masteryChanges, updates: result.masteryChanges.map(u => ({ ...u, belowThreshold: u.after < config.masteryThreshold })) };
+  }
+
+  async function processAttempt({ attemptId, requester, client = null }) {
+    const result = await processSubmittedAttempt({ attemptId, requester, client });
+    return {
+      alreadyProcessed: result.alreadyProcessed,
+      masteryChanges: result.masteryChanges,
+      updates: result.masteryChanges.map(u => ({ ...u, belowThreshold: u.after < config.masteryThreshold }))
+    };
   }
 
   async function getMastery(userId) {
-    const [mastery, skills] = await Promise.all([repository.getMastery(userId), repository.getSkills()]);
-    return skills
-      .filter((s) => mastery.has(s.id))
-      .map((s) => ({
-        skillId: s.id, skillCode: s.skillCode, category: s.skillCategory,
-        label: s.description || s.skillCode,
-        mastery: round(mastery.get(s.id)), belowThreshold: mastery.get(s.id) < th
-      }));
+    const rows = await repository.getMasteryRows(userId);
+    return rows.map((r) => ({
+      skillId: r.skillId,
+      skillCode: r.skillCode,
+      name: r.name,
+      category: r.category,
+      masteryProb: round(r.masteryProb),
+      observations: Number(r.observations),
+      updatedAt: r.updatedAt
+    }));
   }
 
-  return { initPlacement, processAttempt, getMastery };
+  return { initPlacement, processAttempt, processSubmittedAttempt, getMastery };
 }
 
 module.exports = { createMasteryService };

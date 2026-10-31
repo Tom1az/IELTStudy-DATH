@@ -6,7 +6,7 @@ const round = (x, digits = 4) => {
   return Math.round(x * f) / f;
 };
 
-/** Cosine similarity giữa hai Map<key, number>. Trả 0 nếu một vector rỗng. */
+/** Cosine similarity between two Map<key, number>. Returns 0 if either vector is empty. */
 function cosine(a, b) {
   if (!a.size || !b.size) return 0;
   let dot = 0;

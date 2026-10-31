@@ -1,85 +1,110 @@
 'use strict';
 const { recommend } = require('../recommender/recommend');
-const { notFound, forbidden, badRequest } = require('../utils/errors');
+const { notFound, forbidden } = require('../utils/errors');
 const { createCatalogCache } = require('./catalogCache');
 
-/**
- * Service cho GET /api/v1/recommendations.
- * context = 'dashboard' (next best step) | 'post_quiz' (kèm attemptId).
- */
-function createRecommendationService({ repository, config, logger = console }) {
+function createRecommendationService({ repository, config }) {
   const cache = createCatalogCache(repository, config.cache.catalogTtlMs);
 
-  async function getFocusSkillIds({ attemptId, requester }) {
-    const attempt = await repository.getAttempt(attemptId);
+  async function getFocusSkillIds({ attemptId, requester }, client) {
+    const attempt = await repository.getAttempt(attemptId, client);
     if (!attempt) throw notFound('Attempt not found');
-    if (attempt.userId !== String(requester.id) && requester.role !== 'admin') {
-      throw forbidden('Attempt does not belong to you');
+    const reqUserId = Number(requester.userId ?? requester.id);
+    if (attempt.userId !== reqUserId && requester.role !== 'admin') {
+      throw forbidden('This is another learner\'s attempt');
     }
-    const responses = await repository.getAttemptResponses(attemptId);
-    const qs = await repository.getQuestionSkills([...new Set(responses.map((r) => r.questionId))]);
+    const responses = await repository.getAttemptResponses(attemptId, client);
+    const qs = await repository.getQuestionSkills(
+      [...new Set(responses.map((r) => Number(r.questionId)))],
+      client
+    );
     const ids = new Set();
-    for (const links of qs.values()) links.forEach((l) => ids.add(l.skillId));
+    for (const links of qs.values()) links.forEach((l) => ids.add(Number(l.skillId)));
     return ids;
   }
 
-  async function getRecommendations({ userId, context = 'dashboard', attemptId, limit, requester }) {
-    const t0 = process.hrtime.bigint();
-    if (!['dashboard', 'post_quiz'].includes(context)) throw badRequest('Invalid context');
-    if (context === 'post_quiz' && !attemptId) throw badRequest('attemptId is required for post_quiz');
-
+  /**
+   * Computes up to 3 recommendations for skills below 0.65, saves them to the
+   * `recommendations` table, and returns `{ recommendations, message }` per openapi.yaml.
+   */
+  async function getRecommendations({ userId, attemptId = null, focusSkillIds = null, limit, requester }, client) {
+    const uid = Number(userId);
     const [mastery, profile, completed, enrolled, { catalog, skills }] = await Promise.all([
-      repository.getMastery(userId),
-      repository.getUserProfile(userId),
-      repository.getCompletedLessonIds(userId),
-      repository.getEnrolledCourseIds(userId),
+      repository.getMastery(uid, client),
+      repository.getUserProfile(uid, client),
+      repository.getCompletedLessonIds(uid, client),
+      repository.getEnrolledCourseIds(uid, client),
       cache.get()
     ]);
     if (!profile) throw notFound('User not found');
 
-    // Luôn kiểm tra quyền sở hữu attempt trước (kể cả khi cold-start)
-    const focusSkillIds = context === 'post_quiz'
-      ? await getFocusSkillIds({ attemptId, requester: requester || { id: userId } })
-      : null;
+    const resolvedFocus =
+      focusSkillIds ||
+      (attemptId != null
+        ? await getFocusSkillIds({ attemptId, requester: requester || { userId: uid } }, client)
+        : null);
 
-    // Chưa làm placement test -> chưa có skill vector (cold-start)
     if (!mastery.size) {
       return {
-        userId, context, needsPlacement: true, items: [], weakSkills: [], gates: [],
-        message: 'Take the 30-question placement test to get personalized recommendations.',
-        meta: { latencyMs: elapsedMs(t0), withinBudget: true }
+        recommendations: [],
+        message: 'Complete the diagnostic test to get personalized recommendations'
       };
     }
 
-    const skillsById = new Map(skills.map((s) => [s.id, s]));
+    const skillsById = new Map(skills.map((s) => [Number(s.skillId ?? s.id), s]));
     const result = recommend({
-      masteryBySkill: mastery, skillsById, catalog, config,
-      completedLessonIds: completed, enrolledCourseIds: enrolled,
-      profile, focusSkillIds, limit: limit ? Number(limit) : undefined
+      masteryBySkill: mastery,
+      skillsById,
+      catalog,
+      config,
+      completedLessonIds: completed,
+      enrolledCourseIds: enrolled,
+      profile,
+      focusSkillIds: resolvedFocus,
+      limit: limit ? Number(limit) : config.recommender.defaultLimit
     });
 
-    const latencyMs = elapsedMs(t0);
-    const withinBudget = latencyMs < config.latencyBudgetMs;
-    if (!withinBudget) logger.warn(`[recommendations] ${latencyMs}ms exceeds budget ${config.latencyBudgetMs}ms`);
+    if (!result.items.length) {
+      return {
+        recommendations: [],
+        message: 'No skills are currently below the 0.65 mastery threshold'
+      };
+    }
+
+    const saved = await repository.saveRecommendations(
+      {
+        userId: uid,
+        sourceAttemptId: attemptId != null ? Number(attemptId) : null,
+        items: result.items
+      },
+      client
+    );
 
     return {
-      userId, context, needsPlacement: false,
-      threshold: config.masteryThreshold,
-      nextBestStep: result.items[0] || null,
-      items: result.items,
-      weakSkills: result.weakSkills.map((w) => ({
-        ...w,
-        skillCode: skillsById.get(w.skillId)?.skillCode,
-        label: skillsById.get(w.skillId)?.description || skillsById.get(w.skillId)?.skillCode
-      })),
-      gates: result.gates,
-      meta: { latencyMs, withinBudget, candidateCount: result.candidateCount }
+      recommendations: saved,
+      message: 'Recommendations retrieved'
     };
   }
 
-  const elapsedMs = (t0) => Math.round(Number(process.hrtime.bigint() - t0) / 1e4) / 100;
+  /** POST /recommendations/{recommendationId}/click */
+  async function clickRecommendation({ recommendationId, requester }) {
+    const recId = Number(recommendationId);
+    const reqUserId = Number(requester.userId ?? requester.id);
+    const row = await repository.getRecommendationById(recId);
+    if (!row) throw notFound('Recommendation not found');
+    if (row.userId !== reqUserId) {
+      throw forbidden('This recommendation belongs to another learner');
+    }
+    await repository.clickRecommendation(recId);
+    return { message: 'Recommendation click recorded' };
+  }
 
-  return { getRecommendations, invalidateCache: cache.invalidate, getCatalog: cache.get };
+  return {
+    getRecommendations,
+    clickRecommendation,
+    invalidateCache: cache.invalidate,
+    getCatalog: cache.get
+  };
 }
 
 module.exports = { createRecommendationService };

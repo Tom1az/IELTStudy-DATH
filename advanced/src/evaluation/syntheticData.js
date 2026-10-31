@@ -1,82 +1,99 @@
 'use strict';
-const { clamp } = require('../utils/math');
 
-/** PRNG có seed (mulberry32) -> kết quả mô phỏng tái lập được. */
-function makeRng(seed) {
-  let a = seed >>> 0;
-  const rng = () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+/**
+ * Generates synthetic skill taxonomy, catalog, and learners for simulation and testing.
+ * Uses integer IDs for skills and lessons.
+ */
+function makeRng(seed = 42) {
+  let s = seed % 2147483647;
+  if (s <= 0) s += 2147483646;
+  return () => {
+    s = (s * 16807) % 2147483647;
+    return (s - 1) / 2147483646;
   };
-  rng.normal = () => {
-    const u = Math.max(rng(), 1e-9);
-    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * rng());
-  };
-  return rng;
 }
 
-// Micro-skill mẫu cho 4 kỹ năng IELTS (đổi/thêm tuỳ ý)
-const SKILL_NAMES = {
-  Listening: ['Listening: Main Idea', 'Listening: Detail Capture', 'Listening: Map Labelling', 'Listening: Distractors', 'Listening: Note Completion'],
-  Reading: ['Reading: Skimming', 'Reading: True/False/Not Given', 'Reading: Matching Headings', 'Reading: Inference', 'Reading: Summary Completion'],
-  Writing: ['Grammar: Inversion', 'Grammar: Conditionals Type 3', 'Vocab: Collocations', 'Cohesion: Linking Devices', 'Grammar: Passive Voice'],
-  Speaking: ['Pronunciation: Word Stress', 'Fluency: Discourse Markers', 'Pronunciation: Intonation', 'Fluency: Self-correction', 'Vocab: Idiomatic Expressions']
-};
-const LEVELS = ['beginner', 'intermediate', 'advanced'];
-
 function generateSkills() {
+  const categories = ['listening', 'reading', 'writing', 'speaking'];
   const skills = [];
-  let n = 1;
-  for (const [category, names] of Object.entries(SKILL_NAMES)) {
-    for (const description of names) {
+  let id = 1;
+  for (const cat of categories) {
+    for (let i = 1; i <= 5; i++) {
       skills.push({
-        id: `s${n++}`,
-        skillCode: description.toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, ''),
-        skillCategory: category,
-        description
+        skillId: id,
+        id: id,
+        skillCode: `${cat.toUpperCase()}_SKILL_${i}`,
+        name: `${cat.charAt(0).toUpperCase() + cat.slice(1)} Skill ${i}`,
+        category: cat,
+        skillCategory: cat,
+        description: `Synthetic skill ${i} in ${cat}`
       });
+      id++;
     }
   }
   return skills;
 }
 
-/** Mỗi level: 1 khoá; mỗi skill: 1 bài chính + 1 micro-lesson remedial. */
 function generateCatalog(skills, rng) {
   const catalog = [];
-  LEVELS.forEach((level, li) => {
-    const courseId = `c${li + 1}`;
-    const courseTitle = `IELTS ${level[0].toUpperCase()}${level.slice(1)}`;
-    skills.forEach((skill, si) => {
-      const make = (isRemedial) => {
-        const links = [{ skillId: skill.id, weight: 1 }];
-        const peers = skills.filter((s) => s.skillCategory === skill.skillCategory && s.id !== skill.id);
-        if (rng() < 0.5) links.push({ skillId: peers[Math.floor(rng() * peers.length)].id, weight: 0.4 });
-        return {
-          id: `${isRemedial ? 'r' : 'l'}-${li + 1}-${si + 1}`,
-          courseId, courseTitle, targetLevel: level,
-          title: `${isRemedial ? 'Quick review' : 'Lesson'}: ${skill.description}`,
-          orderIndex: isRemedial ? 1000 + si : si + 1,
-          isRemedial, skills: links
-        };
-      };
-      catalog.push(make(false), make(true));
-    });
-  });
+  let lessonId = 1;
+  const levels = ['beginner', 'intermediate', 'advanced'];
+
+  for (let c = 1; c <= 3; c++) {
+    const courseId = c;
+    const targetLevel = levels[c - 1];
+    const courseSkills = skills.slice((c - 1) * 5, c * 5);
+
+    // Core lessons
+    for (let i = 0; i < 4; i++) {
+      const assignedSkill = courseSkills[i % courseSkills.length];
+      catalog.push({
+        lessonId: lessonId++,
+        courseId: courseId,
+        courseTitle: `Course ${c} (${targetLevel})`,
+        targetLevel: targetLevel,
+        title: `Core Lesson ${i + 1}`,
+        kind: 'core',
+        isRemedial: false,
+        orderIndex: i,
+        skills: [{ skillId: assignedSkill.skillId, weight: 1.0 }]
+      });
+    }
+
+    // Remedial lessons (targeting weak skills specifically)
+    for (let i = 0; i < courseSkills.length; i++) {
+      const assignedSkill = courseSkills[i];
+      catalog.push({
+        lessonId: lessonId++,
+        courseId: courseId,
+        courseTitle: `Course ${c} (${targetLevel})`,
+        targetLevel: targetLevel,
+        title: `Remedial Module: ${assignedSkill.name}`,
+        kind: 'remedial',
+        isRemedial: true,
+        orderIndex: 10 + i,
+        skills: [{ skillId: assignedSkill.skillId, weight: 1.0 }]
+      });
+    }
+  }
   return catalog;
 }
 
-function generateLearners(skills, rng, count) {
+function generateLearners(skills, rng, count = 10) {
   const learners = [];
-  for (let i = 0; i < count; i++) {
-    const ability = 0.3 + rng() * 0.5; // quần thể trung bình ~0.55 -> khoảng nửa số skill yếu
-    const trueMastery = new Map(skills.map((s) => [s.id, clamp(ability + rng.normal() * 0.2, 0.03, 0.97)]));
-    const targetBand = Math.round((5 + rng() * 3) * 2) / 2;
-    learners.push({ id: `u${i + 1}`, targetBand, trueMastery });
+  for (let i = 1; i <= count; i++) {
+    const trueMastery = new Map();
+    for (const s of skills) {
+      // Initial synthetic true mastery between 0.2 and 0.8
+      trueMastery.set(s.skillId, 0.2 + rng() * 0.6);
+    }
+    learners.push({
+      userId: i,
+      targetBand: 5.5 + Math.floor(rng() * 3) * 0.5,
+      trueMastery
+    });
   }
   return learners;
 }
 
-module.exports = { makeRng, generateSkills, generateCatalog, generateLearners, LEVELS };
+module.exports = { makeRng, generateSkills, generateCatalog, generateLearners };

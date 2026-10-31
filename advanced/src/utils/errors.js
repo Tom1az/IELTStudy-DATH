@@ -1,16 +1,16 @@
 'use strict';
 
 class AppError extends Error {
-  constructor(status, code, message) {
+  constructor(status, message) {
     super(message);
     this.status = status;
-    this.code = code;
   }
 }
 
-const notFound = (msg = 'Not found') => new AppError(404, 'NOT_FOUND', msg);
-const forbidden = (msg = 'Forbidden') => new AppError(403, 'FORBIDDEN', msg);
-const badRequest = (msg = 'Bad request') => new AppError(400, 'BAD_REQUEST', msg);
-const conflict = (msg = 'Conflict') => new AppError(409, 'CONFLICT', msg);
+const badRequest = (msg = 'Validation failed') => new AppError(400, msg);
+const unauthorized = (msg = 'Please log in') => new AppError(401, msg);
+const forbidden = (msg = "You don't have permission to do this") => new AppError(403, msg);
+const notFound = (msg = 'Not found') => new AppError(404, msg);
+const conflict = (msg = 'Conflict') => new AppError(409, msg);
 
-module.exports = { AppError, notFound, forbidden, badRequest, conflict };
+module.exports = { AppError, badRequest, unauthorized, forbidden, notFound, conflict };

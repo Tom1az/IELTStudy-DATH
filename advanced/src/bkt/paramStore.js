@@ -1,10 +1,6 @@
 'use strict';
 const fs = require('fs');
 
-/**
- * Nạp tham số BKT cho từng skill (xuất từ pipeline ML: ml/ -> bkt_params.json).
- * Nếu skill không có tham số riêng -> dùng "default".
- */
 const KEYS = ['pInit', 'pLearn', 'pSlip', 'pGuess', 'pForget'];
 
 function validate(params, label) {
@@ -14,7 +10,6 @@ function validate(params, label) {
       throw new Error(`BKT params "${label}": ${k} must be a number in [0,1], got ${v}`);
     }
   }
-  // Điều kiện "model degeneracy" của BKT: slip + guess phải < 1
   if (params.pSlip + params.pGuess >= 1) {
     throw new Error(`BKT params "${label}": pSlip + pGuess must be < 1`);
   }
@@ -22,7 +17,6 @@ function validate(params, label) {
 }
 
 class ParamStore {
-  /** @param {{defaults:object, skills?:object}} data */
   constructor(data) {
     this.load(data);
   }
@@ -39,7 +33,6 @@ class ParamStore {
     return this.bySkillCode.get(skillCode) || this.defaults;
   }
 
-  /** Đọc từ file JSON do ML pipeline export. File thiếu -> dùng config.bkt.defaults. */
   static fromFile(file, fallbackDefaults) {
     let raw = {};
     if (file && fs.existsSync(file)) raw = JSON.parse(fs.readFileSync(file, 'utf8'));

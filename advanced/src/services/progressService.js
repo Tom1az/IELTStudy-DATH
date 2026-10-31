@@ -2,31 +2,37 @@
 const { round, mean } = require('../utils/math');
 const { notFound } = require('../utils/errors');
 
-const CATEGORIES = ['Listening', 'Reading', 'Writing', 'Speaking'];
+const CATEGORIES = ['listening', 'reading', 'writing', 'speaking'];
 
 /**
- * Theo dõi tiến độ: dữ liệu cho Learner Dashboard (radar chart, completion, trend).
+ * Learner progress summary helper (radar chart and course completion).
+ * Adapted to match schema.prisma (lowercase categories, integer IDs, skills.name, lessons.kind).
  */
 function createProgressService({ repository, config, catalogProvider }) {
   const th = config.masteryThreshold;
 
-  async function getProgress({ userId, historyLimit }) {
-    const limit = historyLimit || config.progress.defaultHistoryLimit;
-    const [mastery, completed, enrolled, { catalog, skills }, history] = await Promise.all([
-      repository.getMastery(userId),
-      repository.getCompletedLessonIds(userId),
-      repository.getEnrolledCourseIds(userId),
-      catalogProvider(),
-      repository.getMasteryHistory(userId, limit)
+  async function getProgress({ userId }) {
+    const uid = Number(userId);
+    const [mastery, completed, enrolled, { catalog, skills }] = await Promise.all([
+      repository.getMastery(uid),
+      repository.getCompletedLessonIds(uid),
+      repository.getEnrolledCourseIds(uid),
+      catalogProvider()
     ]);
 
-    const skillsById = new Map(skills.map((s) => [s.id, s]));
+    const radar = skills
+      .map((s) => ({ ...s, skillId: Number(s.skillId ?? s.id), category: (s.category ?? s.skillCategory ?? '').toLowerCase() }))
+      .filter((s) => mastery.has(s.skillId))
+      .map((s) => ({
+        skillId: s.skillId,
+        skillCode: s.skillCode,
+        name: s.name || s.description || s.skillCode,
+        label: s.name || s.description || s.skillCode,
+        category: s.category,
+        mastery: round(mastery.get(s.skillId)),
+        threshold: th
+      }));
 
-    // Radar: mastery từng skill + trung bình 4 kỹ năng IELTS
-    const radar = skills.filter((s) => mastery.has(s.id)).map((s) => ({
-      skillId: s.id, skillCode: s.skillCode, category: s.skillCategory,
-      label: s.description || s.skillCode, mastery: round(mastery.get(s.id)), threshold: th
-    }));
     const categories = CATEGORIES.map((c) => {
       const vals = radar.filter((r) => r.category === c).map((r) => r.mastery);
       return { category: c, mastery: round(mean(vals)), skillCount: vals.length };
@@ -35,20 +41,26 @@ function createProgressService({ repository, config, catalogProvider }) {
     const weak = radar.filter((r) => r.mastery < th).sort((a, b) => a.mastery - b.mastery);
     const strong = radar.filter((r) => r.mastery >= th).sort((a, b) => b.mastery - a.mastery);
 
-    // Completion theo khoá đã đăng ký (không tính micro-lesson remedial)
     const courses = [];
-    for (const courseId of enrolled) {
-      const lessons = catalog.filter((l) => l.courseId === courseId && !l.isRemedial);
+    for (const rawCourseId of enrolled) {
+      const courseId = Number(rawCourseId);
+      const lessons = catalog.filter((l) => {
+        const isRemedial = l.kind ? l.kind === 'remedial' : !!l.isRemedial;
+        return Number(l.courseId) === courseId && !isRemedial;
+      });
       if (!lessons.length) continue;
-      const done = lessons.filter((l) => completed.has(l.id)).length;
+      const done = lessons.filter((l) => completed.has(Number(l.lessonId ?? l.id))).length;
       courses.push({
-        courseId, title: lessons[0].courseTitle, totalLessons: lessons.length,
-        completedLessons: done, percent: round((done / lessons.length) * 100, 1)
+        courseId,
+        title: lessons[0].courseTitle,
+        totalCoreLessons: lessons.length,
+        completedLessons: done,
+        progressPercent: round((done / lessons.length) * 100, 1)
       });
     }
 
     return {
-      userId,
+      userId: uid,
       threshold: th,
       summary: {
         overallMastery: round(mean(radar.map((r) => r.mastery))),
@@ -56,40 +68,25 @@ function createProgressService({ repository, config, catalogProvider }) {
         masteredSkillCount: strong.length,
         lessonsCompleted: completed.size
       },
-      radar, categories, weakSkills: weak, strongSkills: strong, courses,
-      trend: buildTrend(history, skillsById)
+      radar,
+      categories,
+      weakSkills: weak,
+      strongSkills: strong,
+      courses
     };
-  }
-
-  /** Replay history theo thứ tự thời gian -> trung bình mastery từng category sau mỗi attempt. */
-  function buildTrend(history, skillsById) {
-    const state = new Map();
-    const points = [];
-    let currentAttempt = null;
-    let at = null;
-    const flush = () => {
-      if (currentAttempt === null) return;
-      const point = { attemptId: currentAttempt, at };
-      for (const c of CATEGORIES) {
-        const vals = [...state].filter(([id]) => skillsById.get(id)?.skillCategory === c).map(([, v]) => v);
-        point[c] = vals.length ? round(mean(vals)) : null;
-      }
-      points.push(point);
-    };
-    for (const h of history) {
-      if (h.attemptId !== currentAttempt) { flush(); currentAttempt = h.attemptId; }
-      state.set(h.skillId, h.masteryAfter);
-      at = h.createdAt;
-    }
-    flush();
-    return points;
   }
 
   async function completeLesson({ userId, lessonId }) {
+    const uid = Number(userId);
+    const lid = Number(lessonId);
     const { catalog } = await catalogProvider();
-    if (!catalog.some((l) => l.id === String(lessonId))) throw notFound('Lesson not found');
-    await repository.markLessonCompleted(userId, lessonId);
-    return { lessonId: String(lessonId), status: 'completed' };
+    if (!catalog.some((l) => Number(l.lessonId ?? l.id) === lid)) {
+      throw notFound('Lesson not found');
+    }
+    if (repository.markLessonCompleted) {
+      await repository.markLessonCompleted(uid, lid);
+    }
+    return { lessonId: lid, status: 'completed' };
   }
 
   return { getProgress, completeLesson };
