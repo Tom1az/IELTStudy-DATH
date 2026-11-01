@@ -30,6 +30,51 @@ type GradedResponse = {
   responseTimeSeconds: number | null;
 };
 
+// A submit that arrives this many seconds after the time limit is still treated as on time.
+// It covers network delay between the learner's timer reaching zero and the request arriving.
+const GRACE_SECONDS = 30;
+
+// The time limit rule (spec: quizzes have an optional time limit, enforced by the server):
+// - A submit that arrives late is still graded with whatever answers it contains
+//   ("graded as far as the learner got"). It is never rejected.
+// - An attempt that is never submitted is closed by the server the next time anyone opens it,
+//   with score 0, because the server only receives answers at submit time. Its completed_at
+//   is the deadline, not the moment we noticed.
+// - Not for the diagnostic: an empty, completed diagnostic would block a retake for good (409)
+//   and seed the learner's mastery with zeros.
+// Returns true if this call closed the attempt.
+export const closeAttemptIfTimeIsUp = async (attempt: {
+  attemptId: number;
+  quizId: number;
+  startedAt: Temporal.Instant;
+  completedAt: Temporal.Instant | null;
+}) => {
+  if (attempt.completedAt !== null) {
+    return false;
+  }
+
+  const quiz = await orm.Quizzes.first({ quizId: attempt.quizId });
+  if (!quiz || quiz.kind === "diagnostic" || quiz.timeLimitSeconds === null) {
+    return false;
+  }
+
+  const deadlineMs = attempt.startedAt.epochMilliseconds + quiz.timeLimitSeconds * 1000;
+  const lastAcceptedMs = deadlineMs + GRACE_SECONDS * 1000;
+  if (Temporal.Now.instant().epochMilliseconds <= lastAcceptedMs) {
+    return false;
+  }
+
+  // One UPDATE ... WHERE completed_at IS NULL (updateAndCount), so a submit that arrives at the
+  // same moment wins or loses cleanly: only one of the two closes the attempt.
+  const closedCount = await orm.QuizAttempts.where((a) =>
+    and(a.attemptId.eq(attempt.attemptId), a.completedAt.isNull()),
+  ).updateAndCount({
+    completedAt: Temporal.Instant.fromEpochMilliseconds(deadlineMs),
+    totalScore: 0,
+  });
+  return closedCount > 0;
+};
+
 // A learner reads their own attempts; an admin may read anyone's
 export const findOwnAttempt = async (attemptId: number, user: PublicUser) => {
   const attempt = await orm.QuizAttempts.first({ attemptId });
@@ -70,8 +115,10 @@ export const startOrResumeAttempt = async (quizId: number, user: PublicUser) => 
     }
   }
 
+  // An unfinished attempt whose time ran out is closed now (see closeAttemptIfTimeIsUp), so it
+  // can't be resumed to keep working past the limit. The learner then gets a fresh attempt.
   const open = await findOpenAttempt(user.userId, quiz.quizId);
-  if (open) {
+  if (open && !(await closeAttemptIfTimeIsUp(open))) {
     return { attempt: open, quiz, created: false };
   }
 
@@ -103,7 +150,8 @@ export const startOrResumeAttempt = async (quizId: number, user: PublicUser) => 
 
 // POST /attempts/{attemptId}/submit. Grades every answer, then closes the attempt and logs one
 // question_responses row per answer, all in one transaction. Skipped questions get no row and
-// count as wrong. Returns the closed attempt.
+// count as wrong. Returns the closed attempt. A late submit is graded like any other: it
+// grades what the learner got to (time limit rule: closeAttemptIfTimeIsUp).
 export const submitAttempt = async (
   attempt: { attemptId: number; quizId: number; completedAt: Temporal.Instant | null },
   responses: SubmittedResponse[],

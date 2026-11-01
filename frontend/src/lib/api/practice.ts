@@ -3,6 +3,7 @@ import type {
   BackendAttempt, BackendAttemptResult, BackendAttemptSummary, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendQuizForLearner, BackendSkill,
 } from "./backend-types";
 import { ApiError, backendRequest } from "./client";
+import { meApi } from "./learning";
 import { buildSyllabus, lessonCategory, toCourse, toRecommendation, toSkillCategories, type SkillCategories } from "./mappers";
 import { toBackendAnswer, toSections, toUiAnswer } from "./quiz-mappers";
 
@@ -208,6 +209,15 @@ function buildResult(result: BackendAttemptResult, quiz: BackendQuizForLearner, 
   };
 }
 
+/**
+ * Fills in the estimated bands from my current mastery (Advanced service). They stay null when
+ * that service isn't available or I haven't been measured in all four skills yet.
+ */
+async function withBands(result: AttemptResult): Promise<AttemptResult> {
+  const mastery = await meApi.mastery().catch(() => null);
+  return { ...result, bands: mastery?.bands ?? null, overall: mastery?.overall ?? null };
+}
+
 /* ───────── API ───────── */
 
 export const practiceApi = {
@@ -338,7 +348,7 @@ export const practiceApi = {
 
     const res = await backendRequest<{ result: BackendAttemptResult }>("POST", `/attempts/${attemptId}/submit`, { responses });
     clearDraft(attemptId);
-    return buildResult(res.result, quiz, await loadCategories());
+    return withBands(buildResult(res.result, quiz, await loadCategories()));
   },
 
   /** The post-quiz review: the graded attempt, merged with the quiz for its options and passages. */
@@ -346,7 +356,7 @@ export const practiceApi = {
     const res = await backendRequest<{ result: BackendAttemptResult }>("GET", `/attempts/${attemptId}`);
     if (res.result.attempt.status !== "completed") throw new ApiError(409, "HTTP_409", "This attempt hasn't been submitted yet.");
     const [quiz, categories] = await Promise.all([loadQuiz(res.result.attempt.quizId), loadCategories()]);
-    return buildResult(res.result, quiz, categories);
+    return withBands(buildResult(res.result, quiz, categories));
   },
 
   /** My finished attempts, newest first. */

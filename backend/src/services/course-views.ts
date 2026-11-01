@@ -260,7 +260,7 @@ const loadSkillTags = async (lessonIds: number[]) => {
 };
 
 // The contract's Lesson objects. Learners also get `progress` (null if not started) and
-// `locked`. The unlock rule is a Phase 3 decision, so nothing is locked yet.
+// `locked`, which is false here: the lessons controller sets it from the Advanced service's gates.
 export const buildLessons = async (lessons: LessonRow[], viewer: PublicUser) => {
   const lessonIds = lessons.map((lesson) => lesson.lessonId);
   const tagsByLesson = await loadSkillTags(lessonIds);

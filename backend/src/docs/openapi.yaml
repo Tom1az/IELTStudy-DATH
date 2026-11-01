@@ -1042,6 +1042,8 @@ paths:
         Any learner may take the diagnostic. Instructors and admins get 403.
         - If I already have an unfinished attempt on this quiz, it is returned (200) instead of starting a new one (201).
           Two starts at the same moment get the same attempt.
+        - Time limit: if the quiz has `timeLimitSeconds` and my unfinished attempt ran out of time (plus a 30-second grace period for network delay),
+          the server closes it first, with score 0 because no answers were sent, and starts a new attempt (201). Not applied to the diagnostic.
         - `quiz` is the learner view: no answers.
         - 403 if I'm not enrolled in the quiz's course; 404 if the quiz doesn't exist or its course isn't visible.
         - 409 if I already completed the diagnostic, or the quiz has no questions.
@@ -1072,6 +1074,8 @@ paths:
         Roles: the learner who made it, admin. Another learner, or an instructor, gets 403.
         After submitting, this is the full graded result for the post-quiz review screen.
         Before submitting, `responses` is empty and no answers are revealed.
+        If the quiz has a time limit and this unfinished attempt ran out of time (plus a 30-second grace period), the server closes it
+        with score 0 before answering, so it is returned as completed. Not applied to the diagnostic.
       responses:
         "200":
           description: The attempt
@@ -1103,6 +1107,9 @@ paths:
           ignoring case and extra spaces; `matching` is all or nothing (every item right, and no extra items).
         - The server grades the answers; the client never sends `isCorrect`. Grading, logging and (Phase 3) the mastery update happen in one transaction.
         - Submitting twice returns 409.
+        - Time limit: a late submit is never rejected. It is graded with the answers it contains ("graded as far as the learner got").
+          The client should send its answers when its own timer reaches zero. An attempt that is never submitted is closed by the server
+          with score 0 the next time it is opened (see startAttempt and getAttempt), and a submit after that returns 409.
 
         `masteryChanges` and `recommendations` are empty until Phase 3.
       requestBody:
