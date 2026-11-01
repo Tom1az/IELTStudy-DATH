@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieltstudy
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d ieltstudy"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
+      JWT_SECRET: ci-test-jwt-secret
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 26.8.2
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            backend/package-lock.json
+            frontend/package-lock.json
+            advanced/package-lock.json
+
+      - name: Create backend test database
+        run: |
+          until pg_isready -h localhost -U postgres -d ieltstudy; do
+            sleep 1
+          done
+          PGPASSWORD=postgres psql \
+            --host localhost \
+            --username postgres \
+            --dbname ieltstudy \
+            --command "CREATE DATABASE ieltstudy_test"
+
+      - name: Install backend dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Check backend types
+        working-directory: backend
+        run: npm run typecheck
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Test backend
+        working-directory: backend
+        run: npm test
+
+      - name: Install frontend dependencies
+        working-directory: frontend
+        run: npm ci
+
+      - name: Check frontend types
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Lint frontend
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Test frontend
+        working-directory: frontend
+        run: npm test
+
+      - name: Install advanced dependencies
+        working-directory: advanced
+        run: npm ci
+
+      - name: Check advanced types
+        working-directory: advanced
+        run: npm run typecheck
+
+      - name: Lint advanced
+        working-directory: advanced
+        run: npm run lint --if-present
+
+      - name: Test advanced
+        working-directory: advanced
+        run: npm test
