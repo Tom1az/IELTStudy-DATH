@@ -50,6 +50,13 @@ export const createAdvancedRouter = () => {
     authorize("learner"),
     advancedController.processPlacement,
   );
+  router.get(
+    "/mastery/attempts/:attemptId",
+    authenticate,
+    authorize("learner", "admin"),
+    validateParams(schemas.idSchema, "attemptId"),
+    advancedController.getAttemptOutcome,
+  );
   router.post(
     "/mastery/attempts/:attemptId/process",
     authenticate,

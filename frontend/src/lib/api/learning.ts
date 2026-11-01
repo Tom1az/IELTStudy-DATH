@@ -1,6 +1,7 @@
+import { SKILL_CATEGORIES } from "@/lib/types";
 import type { Course, Enrollment, Lesson, Paginated, Recommendation, Skill, SkillCategory, User } from "@/lib/types";
 import type {
-  BackendAttemptSummary, BackendCourse, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendRecommendation, BackendSkill,
+  BackendAttemptSummary, BackendCourse, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendMastery, BackendRecommendation, BackendSkill,
 } from "./backend-types";
 import { ApiError, backendRequest, getToken } from "./client";
 import { authApi } from "./auth";
@@ -75,6 +76,43 @@ export interface LessonView {
   unlocked: boolean;
   prevId?: string;
   nextId?: string;
+}
+
+/** One micro-skill in the mastery map. `mastery` is 0..1. */
+export interface MasterySkill {
+  skillId: string;
+  name: string;
+  category: SkillCategory;
+  mastery: number;
+  observations: number;
+  updatedAt: string;
+}
+
+export interface MasteryData {
+  skills: MasterySkill[];
+  /** Estimated band per skill category. Null until every category has been measured. */
+  bands: Record<SkillCategory, number> | null;
+  overall: number | null;
+}
+
+/** Below this mastery a skill counts as weak and triggers remedial recommendations (spec: 0.65). */
+export const WEAK_MASTERY = 0.65;
+
+// Bands run from about 3 to 7.5 in this app: band = 3 + mastery * 4.5, rounded to the nearest half
+const BAND_MIN = 3;
+const BAND_RANGE = 4.5;
+const toBand = (mastery: number) => Math.round((BAND_MIN + Math.min(1, Math.max(0, mastery)) * BAND_RANGE) * 2) / 2;
+
+/** Averages the micro-skills of each category into an estimated band. */
+export function masteryToBands(skills: MasterySkill[]): Pick<MasteryData, "bands" | "overall"> {
+  const bands = {} as Record<SkillCategory, number>;
+  for (const category of SKILL_CATEGORIES) {
+    const inCategory = skills.filter((s) => s.category === category);
+    if (inCategory.length === 0) return { bands: null, overall: null };
+    bands[category] = toBand(inCategory.reduce((sum, s) => sum + s.mastery, 0) / inCategory.length);
+  }
+  const overall = Math.round((SKILL_CATEGORIES.reduce((sum, c) => sum + bands[c], 0) / SKILL_CATEGORIES.length) * 2) / 2;
+  return { bands, overall };
 }
 
 export interface DashboardData {
@@ -169,15 +207,40 @@ function summarize(course: BackendCourse, lessons: BackendLesson[], categories: 
   };
 }
 
-/** `GET /recommendations` is built in Phase 3. Until then it is a 404, and the dashboard says so. */
-async function loadRecommendations(categories: SkillCategories): Promise<Recommendation[] | null> {
+/**
+ * Phase 3 data (mastery, recommendations) comes from the separate Advanced service. When it isn't
+ * running, the proxy answers 404 or 5xx (or the request fails outright). That must not break the
+ * dashboard, so those cases mean "not available" (null) and the page says so.
+ */
+async function optionalAdvanced<T>(call: () => Promise<T>): Promise<T | null> {
   try {
-    const res = await backendRequest<{ recommendations: BackendRecommendation[] }>("GET", "/recommendations");
-    return res.recommendations.map((r) => toRecommendation(r, categories));
+    return await call();
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null;
+    if (e instanceof ApiError && (e.status === 404 || e.status >= 500)) return null;
+    if (!(e instanceof ApiError) && e instanceof TypeError) return null; // network failure
     throw e;
   }
+}
+
+/** `GET /recommendations` (Advanced service). Null while it isn't available. */
+async function loadRecommendations(categories: SkillCategories): Promise<Recommendation[] | null> {
+  const res = await optionalAdvanced(() => backendRequest<{ recommendations: BackendRecommendation[] }>("GET", "/recommendations"));
+  return res ? res.recommendations.map((r) => toRecommendation(r, categories)) : null;
+}
+
+/** `GET /me/mastery` (Advanced service). Null while it isn't available. */
+async function loadMastery(): Promise<MasteryData | null> {
+  const res = await optionalAdvanced(() => backendRequest<{ mastery: BackendMastery[] }>("GET", "/me/mastery"));
+  if (!res) return null;
+  const skills: MasterySkill[] = res.mastery.map((m) => ({
+    skillId: String(m.skillId),
+    name: m.name,
+    category: m.category,
+    mastery: m.masteryProb,
+    observations: m.observations,
+    updatedAt: m.updatedAt,
+  }));
+  return { skills, ...masteryToBands(skills) };
 }
 
 /* ───────── Catalog ───────── */
@@ -311,6 +374,11 @@ export const lessonApi = {
 /* ───────── Dashboard ───────── */
 
 export const meApi = {
+  /** My skill map. Null while the Advanced service isn't available. */
+  mastery(): Promise<MasteryData | null> {
+    return loadMastery();
+  },
+
   async dashboard(): Promise<DashboardData> {
     const [user, enrollmentsRes, attemptsRes, categories] = await Promise.all([
       authApi.me(),
@@ -319,7 +387,7 @@ export const meApi = {
       loadCategories(),
     ]);
     if (!user) throw new ApiError(401, "HTTP_401", "Please log in");
-    const upNext = await loadRecommendations(categories);
+    const [upNext, mastery] = await Promise.all([loadRecommendations(categories), loadMastery()]);
 
     const enrollments = enrollmentsRes.enrollments;
     const lessonLists = await Promise.all(enrollments.map((e) => loadLessons(e.course.courseId)));
@@ -376,8 +444,8 @@ export const meApi = {
     return {
       user,
       continue: cont,
-      bands: null,
-      overall: null,
+      bands: mastery?.bands ?? null,
+      overall: mastery?.overall ?? null,
       courses,
       upNext,
       recent,
