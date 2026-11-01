@@ -30,7 +30,7 @@ const tryReview = async (course: CourseRow, status: CourseStatus, reviewerId: nu
   }
 };
 
-// The route test in routes/courses.test.ts races two HTTP requests, which rarely overlap
+// The route test in routes/courses.integration.test.ts races two HTTP requests, which rarely overlap
 // closely enough to hit the gap between reading and writing the row. Calling the service
 // directly, several times, makes the two status changes really run at the same moment.
 describe("changeCourseStatus", () => {

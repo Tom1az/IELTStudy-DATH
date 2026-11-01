@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import type { Varchar } from "@prisma/orm-postgres/target/codec-types";
 import { and } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
+import { assertLessonUnlocked, fetchCourseGates } from "../services/advanced-client.ts";
 import { buildLessonDetail, buildLessons, toProgress } from "../services/course-views.ts";
 import {
   assertCanStudy,
@@ -39,8 +40,24 @@ const listLessons = async (req: Request, res: Response) => {
     .orderBy([(l) => l.kind.asc(), (l) => l.orderIndex.asc(), (l) => l.lessonId.asc()])
     .all();
 
+  const lessons = await buildLessons(rows, req.user!);
+
+  // Phase 3: the Advanced service decides which lessons a learner has unlocked yet. If it isn't
+  // available, nothing is locked.
+  if (req.user!.role === "learner") {
+    const gates = await fetchCourseGates(course.courseId, req.headers.authorization);
+    if (gates) {
+      return res.status(200).json({
+        lessons: lessons.map((lesson) =>
+          gates.get(lesson.lessonId)?.locked ? { ...lesson, locked: true } : lesson,
+        ),
+        message: "Lessons",
+      });
+    }
+  }
+
   return res.status(200).json({
-    lessons: await buildLessons(rows, req.user!),
+    lessons,
     message: "Lessons",
   });
 };
@@ -88,6 +105,8 @@ const createLesson = async (req: Request, res: Response) => {
 const getLesson = async (req: Request, res: Response) => {
   const { lesson, course } = await findVisibleLesson(req.value!.params!.lessonId, req.user!);
   await assertCanStudy(course, req.user!);
+
+  await assertLessonUnlocked(lesson, req.user!, req.headers.authorization);
 
   return res.status(200).json({
     lesson: await buildLessonDetail(lesson, req.user!),
@@ -225,6 +244,7 @@ const setLessonProgress = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { lesson, course } = await findVisibleLesson(req.value!.params!.lessonId, req.user!);
   await assertCanStudy(course, req.user!);
+  await assertLessonUnlocked(lesson, req.user!, req.headers.authorization);
 
   const { status }: { status: "in_progress" | "completed" } = req.value!.body;
 

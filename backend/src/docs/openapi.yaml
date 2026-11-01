@@ -520,6 +520,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Courses]
+      operationId: leaveCourse
+      summary: Leave a course
+      description: "Roles: learner. Deletes the enrolment only; lesson progress and attempts are kept. 404 if the learner is not enrolled."
+      responses:
+        "200":
+          description: Left the course
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------------------
   # Lessons
@@ -1024,6 +1042,8 @@ paths:
         Any learner may take the diagnostic. Instructors and admins get 403.
         - If I already have an unfinished attempt on this quiz, it is returned (200) instead of starting a new one (201).
           Two starts at the same moment get the same attempt.
+        - Time limit: if the quiz has `timeLimitSeconds` and my unfinished attempt ran out of time (plus a 30-second grace period for network delay),
+          the server closes it first, with score 0 because no answers were sent, and starts a new attempt (201). Not applied to the diagnostic.
         - `quiz` is the learner view: no answers.
         - 403 if I'm not enrolled in the quiz's course; 404 if the quiz doesn't exist or its course isn't visible.
         - 409 if I already completed the diagnostic, or the quiz has no questions.
@@ -1054,6 +1074,8 @@ paths:
         Roles: the learner who made it, admin. Another learner, or an instructor, gets 403.
         After submitting, this is the full graded result for the post-quiz review screen.
         Before submitting, `responses` is empty and no answers are revealed.
+        If the quiz has a time limit and this unfinished attempt ran out of time (plus a 30-second grace period), the server closes it
+        with score 0 before answering, so it is returned as completed. Not applied to the diagnostic.
       responses:
         "200":
           description: The attempt
@@ -1083,8 +1105,12 @@ paths:
         - Each answer must fit its question type: a string, or for `matching` an object of item id → choice id (400 otherwise).
         - Grading: option ids and `true`/`false`/`not_given` must match exactly; gap-fill answers match any accepted answer,
           ignoring case and extra spaces; `matching` is all or nothing (every item right, and no extra items).
-        - The server grades the answers; the client never sends `isCorrect`. Grading, logging and (Phase 3) the mastery update happen in one transaction.
+        - The server grades the answers; the client never sends `isCorrect`. Grading and logging happen in one transaction. The mastery update runs
+          afterwards in the Advanced service, so it can fail without losing the grade; `GET /attempts/{attemptId}` retries it.
         - Submitting twice returns 409.
+        - Time limit: a submit after the limit plus the 30-second grace period returns 409, and the attempt is closed with score 0.
+          The diagnostic is exempt. The client should send its answers when its own timer reaches zero. An attempt that is never submitted
+          is closed the same way the next time it is opened (see startAttempt and getAttempt).
 
         `masteryChanges` and `recommendations` are empty until Phase 3.
       requestBody:
@@ -2295,12 +2321,15 @@ components:
         lesson:
           oneOf:
             - type: object
-              required: [lessonId, title, courseId, courseTitle]
+              required: [lessonId, title, courseId, courseTitle, isEnrolled]
               properties:
                 lessonId: { type: integer }
                 title: { type: string }
                 courseId: { type: integer }
                 courseTitle: { type: string }
+                isEnrolled:
+                  type: boolean
+                  description: Whether the learner is enrolled in the course. They must enrol before opening the lesson.
             - type: "null"
         quiz:
           oneOf:

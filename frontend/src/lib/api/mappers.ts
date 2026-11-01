@@ -115,7 +115,7 @@ export function buildSyllabus(lessons: BackendLesson[], categories: SkillCategor
 }
 
 /** Converts a lesson into the UI `Lesson`. Its passages and quizzes are returned separately. */
-export function toLesson(detail: BackendLessonDetail, skill: SkillCategory, order: number): Lesson {
+export function toLesson(detail: Pick<BackendLessonDetail, "lessonId" | "courseId" | "title" | "content">, skill: SkillCategory, order: number): Lesson {
   return { id: String(detail.lessonId), courseId: String(detail.courseId), skill, order, title: detail.title, content: detail.content };
 }
 
@@ -153,6 +153,7 @@ export function toRecommendation(r: BackendRecommendation, categories: SkillCate
     kind: r.type === "quiz" ? "practice" : "lesson",
     targetId: String(r.lesson?.lessonId ?? r.quiz?.quizId ?? ""),
     courseId: r.lesson ? String(r.lesson.courseId) : "",
+    enrolled: r.lesson?.isEnrolled ?? true,
     title: r.lesson?.title ?? r.quiz?.title ?? "",
     skill: categories.get(r.skill.skillId) ?? "reading",
     score: r.score,

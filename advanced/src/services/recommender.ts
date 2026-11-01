@@ -2,8 +2,11 @@ import "temporal-polyfill/global";
 import { db } from "../prisma/db.ts";
 import { httpError } from "../utils/http-error.ts";
 import { MASTERY_THRESHOLD } from "../config/bkt-params.ts";
+import { gateCourseLessons } from "./gating.ts";
+import { lockLearner } from "./learner-lock.ts";
 
 const orm = db.orm.public;
+type Orm = typeof db.orm.public;
 
 export type RecommendationView = {
   recommendationId: number;
@@ -13,6 +16,7 @@ export type RecommendationView = {
     title: string;
     courseId: number;
     courseTitle: string;
+    isEnrolled: boolean;
   } | null;
   quiz: {
     quizId: number;
@@ -60,13 +64,21 @@ const cosineSimilarity = (
   return denom > 0 ? dot / denom : 0;
 };
 
+// One attempt gets one batch of recommendations, however many requests ask for it at once: the
+// transaction holds the learner's lock, so a parallel request finds the rows saved here.
 export const generateRecommendationsForLearner = async (
   userId: number,
-  options: { sourceAttemptId?: number; forceRefresh?: boolean } = {},
+  options: { sourceAttemptId?: number } = {},
 ): Promise<RecommendationView[]> => {
-  const { sourceAttemptId, forceRefresh = false } = options;
+  const rows = await db.transaction(async (tx) => {
+    await lockLearner(tx, userId);
+    return generateRows(tx.orm.public, userId, options.sourceAttemptId);
+  });
+  return buildRecommendationViews(rows);
+};
 
-  if (sourceAttemptId !== undefined && !forceRefresh) {
+const generateRows = async (orm: Orm, userId: number, sourceAttemptId: number | undefined) => {
+  if (sourceAttemptId !== undefined) {
     const existingForAttempt = await orm.Recommendations.where({
       userId,
       sourceAttemptId,
@@ -74,7 +86,7 @@ export const generateRecommendationsForLearner = async (
       .orderBy((r) => r.rank.asc())
       .all();
     if (existingForAttempt.length > 0) {
-      return buildRecommendationViews(existingForAttempt);
+      return existingForAttempt;
     }
   }
 
@@ -151,6 +163,22 @@ export const generateRecommendationsForLearner = async (
     progresses.filter((p) => p.status === "completed").map((p) => p.lessonId),
   );
 
+  // A locked lesson can't be opened, so recommending it would be a dead end
+  const masteryBySkill = new Map(masteryRows.map((m) => [m.skillId, m.masteryProb]));
+  const lockedLessonIds = new Set<number>();
+  for (const courseId of approvedCourseIds) {
+    const courseLessons = lessons.filter((l) => l.courseId === courseId);
+    const gates = gateCourseLessons(
+      courseLessons,
+      completedLessonIds,
+      masteryBySkill,
+      skillsByLesson,
+    );
+    for (const gate of gates.values()) {
+      if (gate.locked) lockedLessonIds.add(gate.lessonId);
+    }
+  }
+
   const preferredLevel = getPreferredLevel(user.targetBand);
 
   type Candidate = {
@@ -164,7 +192,7 @@ export const generateRecommendationsForLearner = async (
 
   for (const lesson of lessons) {
     const course = courseById.get(lesson.courseId);
-    if (!course) continue;
+    if (!course || lockedLessonIds.has(lesson.lessonId)) continue;
 
     const tags = skillsByLesson.get(lesson.lessonId) ?? [];
     const matchingWeak = tags
@@ -240,50 +268,60 @@ export const generateRecommendationsForLearner = async (
 
   if (selected.length === 0) return [];
 
-  const createdRows = await db.transaction(async (tx) => {
-    const rows = [];
-    for (const item of selected) {
-      const row = await tx.orm.public.Recommendations.create({
-        userId,
-        skillId: item.primarySkill.skillId,
-        lessonId: item.lesson.lessonId,
-        quizId: null,
-        sourceAttemptId: sourceAttemptId ?? null,
-        masteryProb: item.primarySkill.masteryProb,
-        rank: item.rank,
-        score: item.finalScore,
-        rationale: item.rationale,
-      });
-      rows.push(row);
-    }
-    return rows;
-  });
-
-  return buildRecommendationViews(createdRows);
-};
-
-export const getLatestRecommendations = async (userId: number): Promise<RecommendationView[]> => {
-  const anyMastery = await orm.UserSkillMastery.first({ userId });
-  if (!anyMastery) return [];
-
-  const recentRows = await orm.Recommendations.where({ userId })
-    .orderBy([(r) => r.createdAt.desc(), (r) => r.rank.asc()])
-    .all();
-
-  if (recentRows.length > 0) {
-    const latestBatch: typeof recentRows = [];
-    const seenRanks = new Set<number>();
-    for (const row of recentRows) {
-      if (seenRanks.has(row.rank) || row.rank > 3) break;
-      seenRanks.add(row.rank);
-      latestBatch.push(row);
-      if (latestBatch.length === 3) break;
-    }
-    latestBatch.sort((a, b) => a.rank - b.rank);
-    return buildRecommendationViews(latestBatch);
+  const createdRows = [];
+  for (const item of selected) {
+    const row = await orm.Recommendations.create({
+      userId,
+      skillId: item.primarySkill.skillId,
+      lessonId: item.lesson.lessonId,
+      quizId: null,
+      sourceAttemptId: sourceAttemptId ?? null,
+      masteryProb: item.primarySkill.masteryProb,
+      rank: item.rank,
+      score: item.finalScore,
+      rationale: item.rationale,
+    });
+    createdRows.push(row);
   }
 
-  return generateRecommendationsForLearner(userId);
+  return createdRows;
+};
+
+// The newest batch, without the items that no longer apply. A batch is what one generation saved,
+// so rows are newest first and the batch ends where the source attempt changes.
+export const getLatestRecommendations = async (userId: number): Promise<RecommendationView[]> => {
+  const masteryRows = await orm.UserSkillMastery.where({ userId }).all();
+  if (masteryRows.length === 0) return [];
+
+  const rows = await orm.Recommendations.where({ userId })
+    .orderBy((r) => r.recommendationId.desc())
+    .all();
+  if (rows.length === 0) return generateRecommendationsForLearner(userId);
+
+  const latestBatch: typeof rows = [];
+  const seenRanks = new Set<number>();
+  for (const row of rows) {
+    if (row.sourceAttemptId !== rows[0]!.sourceAttemptId || seenRanks.has(row.rank)) break;
+    seenRanks.add(row.rank);
+    latestBatch.push(row);
+  }
+
+  const masteryBySkill = new Map(masteryRows.map((m) => [m.skillId, m.masteryProb]));
+  const progressRows = await orm.LessonProgress.where({ userId, status: "completed" }).all();
+  const completedAtByLesson = new Map(progressRows.map((p) => [p.lessonId, p.completedAt]));
+
+  // A skill can be mastered since, and a lesson finished since. A lesson finished before the
+  // recommendation was made stays: the recommender chose to repeat it.
+  const stillValid = latestBatch.filter((row) => {
+    if ((masteryBySkill.get(row.skillId) ?? 0) >= MASTERY_THRESHOLD) return false;
+    const completedAt = row.lessonId !== null ? completedAtByLesson.get(row.lessonId) : null;
+    return !completedAt || Temporal.Instant.compare(completedAt, row.createdAt) < 0;
+  });
+
+  if (stillValid.length === 0) return generateRecommendationsForLearner(userId);
+
+  stillValid.sort((a, b) => a.rank - b.rank);
+  return buildRecommendationViews(stillValid);
 };
 
 export const markRecommendationClicked = async (recommendationId: number, userId: number) => {
@@ -304,6 +342,7 @@ export const markRecommendationClicked = async (recommendationId: number, userId
 export const buildRecommendationViews = async (
   rows: Array<{
     recommendationId: number;
+    userId: number;
     lessonId: number | null;
     quizId: number | null;
     skillId: number;
@@ -321,10 +360,11 @@ export const buildRecommendationViews = async (
   const quizIds = rows.map((r) => r.quizId).filter((id): id is number => id !== null);
   const skillIds = rows.map((r) => r.skillId);
 
-  const [lessons, quizzes, skills] = await Promise.all([
+  const [lessons, quizzes, skills, enrollments] = await Promise.all([
     lessonIds.length > 0 ? orm.Lessons.where((l) => l.lessonId.in(lessonIds)).all() : [],
     quizIds.length > 0 ? orm.Quizzes.where((q) => q.quizId.in(quizIds)).all() : [],
     skillIds.length > 0 ? orm.Skills.where((s) => s.skillId.in(skillIds)).all() : [],
+    orm.Enrollments.where({ userId: rows[0]!.userId }).all(),
   ]);
 
   const courseIds = lessons.map((l) => l.courseId);
@@ -335,6 +375,7 @@ export const buildRecommendationViews = async (
   const lessonById = new Map(lessons.map((l) => [l.lessonId, l]));
   const quizById = new Map(quizzes.map((q) => [q.quizId, q]));
   const skillById = new Map(skills.map((s) => [s.skillId, s]));
+  const enrolledCourseIds = new Set(enrollments.map((e) => e.courseId));
 
   return rows.map((row) => {
     const lesson = row.lessonId !== null ? lessonById.get(row.lessonId) : undefined;
@@ -352,6 +393,7 @@ export const buildRecommendationViews = async (
               title: lesson.title,
               courseId: course.courseId,
               courseTitle: course.title,
+              isEnrolled: enrolledCourseIds.has(course.courseId),
             }
           : null,
       quiz: quiz

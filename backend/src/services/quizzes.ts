@@ -3,6 +3,7 @@
 import { db } from "../prisma/db.ts";
 import { httpError } from "../utils/http-error.ts";
 import type { PublicUser } from "../utils/public-user.ts";
+import { assertLessonUnlocked } from "./advanced-client.ts";
 import { assertCanStudy, assertEditable, canSeeCourse, isCourseOwner } from "./courses.ts";
 import type { CourseRow } from "./courses.ts";
 
@@ -56,13 +57,22 @@ const isQuizAuthor = (quiz: QuizRow, course: CourseRow | null, user: PublicUser)
 // Loads a quiz for GET /quizzes/{id} and decides which view the caller gets. Everyone who isn't
 // an author gets the learner view, with the same rule as opening the quiz's lesson: learners
 // must be enrolled. Anyone may see the diagnostic's learner view.
-export const findQuizForViewer = async (quizId: number, user: PublicUser) => {
+export const findQuizForViewer = async (
+  quizId: number,
+  user: PublicUser,
+  authorization: string | undefined,
+) => {
   const { quiz, course } = await findVisibleQuiz(quizId, user);
 
   let view: QuizView = "author";
   if (!isQuizAuthor(quiz, course, user)) {
     if (course !== null) {
       await assertCanStudy(course, user);
+      await assertLessonUnlocked(
+        { lessonId: quiz.lessonId!, courseId: course.courseId },
+        user,
+        authorization,
+      );
     }
     view = "learner";
   }

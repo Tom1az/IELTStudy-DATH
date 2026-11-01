@@ -23,14 +23,14 @@ test("main flow: enroll → lesson → mark complete → quiz → review → das
   await expect(page).toHaveURL(/\/practice\/result\//);
   await expect(page.getByRole("heading", { name: /You scored \d+ \/ \d+/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Answer review" })).toBeVisible();
-  // BKT is Phase 3: until then the review says so instead of showing skill changes
-  await expect(page.getByText("Skill tracking is not available yet")).toBeVisible();
+  // The Advanced service runs in these tests, so the review shows what BKT changed
+  await expect(page.getByText("Bayesian Knowledge Tracing updated")).toBeVisible();
 
   await page.goto("/my-learning");
   await expect(page.getByRole("heading", { name: "Your courses" })).toBeVisible();
-  await expect(page.getByText("33% of course")).toBeVisible();
+  await expect(page.getByRole("link", { name: /1 of 3 lessons completed/ })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Recent quiz results" })).toBeVisible();
-  await expect(page.getByText("Recommendations are not available yet.")).toBeVisible();
+  await expect(page.getByText("Recommendations are not available yet.")).toHaveCount(0);
 
   await page.goto("/my-learning/history");
   await expect(page.getByRole("link", { name: "Review" }).first()).toBeVisible();
