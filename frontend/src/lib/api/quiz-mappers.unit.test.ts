@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BackendPassage, BackendQuestionForLearner, BackendQuizForLearner } from "./backend-types";
-import { parseMatchingValue, toBackendAnswer, toQuestion, toSections, toUiAnswer } from "./quiz-mappers";
+import { answerOrder, parseMatchingValue, toBackendAnswer, toQuestion, toSections, toUiAnswer } from "./quiz-mappers";
 
 const mcq: BackendQuestionForLearner = {
   questionId: 1,
@@ -101,5 +101,15 @@ describe("toSections", () => {
   it("uses the lesson's skill when it is known, and guesses from the passage otherwise", () => {
     expect(toSections(quiz, "writing").map((s) => s.skill)).toEqual(["writing", "writing", "writing"]);
     expect(toSections(quiz).map((s) => s.skill)).toEqual(["reading", "listening", "reading"]);
+  });
+});
+
+describe("answerOrder", () => {
+  it("keeps the order questions were touched in, even for numeric ids", () => {
+    expect(answerOrder(["30", "2", "11"], { "2": "a", "11": "b", "30": "c" })).toEqual(["30", "2", "11"]);
+  });
+
+  it("puts answers restored from a draft after the touched ones", () => {
+    expect(answerOrder(["7"], { "3": "a", "7": "b" })).toEqual(["7", "3"]);
   });
 });

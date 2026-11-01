@@ -1,0 +1,185 @@
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieltstudy_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  advanced:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieltstudy_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            advanced/package-lock.json
+      # The two services share one database, so their copies of the contract must match
+      - name: Check the Prisma contract copies match
+        run: |
+          node -e '
+            const { readFileSync } = require("node:fs");
+            const { isDeepStrictEqual } = require("node:util");
+            const read = (dir) => JSON.parse(readFileSync(`${dir}/src/prisma/schema.json`, "utf8"));
+            if (!isDeepStrictEqual(read("backend"), read("advanced"))) {
+              console.error("advanced/src/prisma/schema.json differs from the backend copy");
+              process.exit(1);
+            }
+          '
+          cmp backend/src/prisma/schema.d.ts advanced/src/prisma/schema.d.ts
+      # Advanced has no migrations of its own: the backend owns the schema
+      - name: Migrate the test database
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma db migrate --db "$TEST_DATABASE_URL" --yes --quiet > /dev/null
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - run: npm ci
+        working-directory: advanced
+      - run: npm run typecheck
+        working-directory: advanced
+      - run: npm test
+        working-directory: advanced
+      - run: npm run eval
+        working-directory: advanced
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-latest
+    needs: [backend, advanced, frontend]
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieltstudy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy
+      JWT_SECRET: ci-e2e-secret
+      SEED_PASSWORD: ci-seed-password
+      BACKEND_URL: http://localhost:3000
+      ADVANCED_URL: http://localhost:4001
+      ADVANCED_SERVICE_URL: http://localhost:4001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            advanced/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm ci
+        working-directory: advanced
+      - run: npm ci
+        working-directory: frontend
+      - name: Migrate and seed
+        working-directory: backend
+        run: |
+          npx prisma db migrate --db "$DATABASE_URL" --yes --quiet > /dev/null
+          npm run seed
+      - name: Start the backend and Advanced
+        run: |
+          (cd backend && PORT=3000 node src/server.ts) &
+          (cd advanced && PORT=4001 node src/server.ts) &
+          npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/ http-get://localhost:4001/
+      - run: npx playwright install --with-deps chromium
+        working-directory: frontend
+      # Playwright builds and starts the frontend itself (playwright.config.ts)
+      - run: npm run test:e2e
+        working-directory: frontend
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/playwright-report
+          retention-days: 7
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t ieltstudy-backend backend
+      - run: docker build -t ieltstudy-advanced advanced

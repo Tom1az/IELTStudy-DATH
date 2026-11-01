@@ -5,7 +5,7 @@ import type {
 import { ApiError, backendRequest } from "./client";
 import { meApi } from "./learning";
 import { buildSyllabus, lessonCategory, toCourse, toRecommendation, toSkillCategories, type SkillCategories } from "./mappers";
-import { toBackendAnswer, toSections, toUiAnswer } from "./quiz-mappers";
+import { answerOrder, toBackendAnswer, toSections, toUiAnswer } from "./quiz-mappers";
 
 /**
  * Quizzes: the practice list, taking a quiz, the post-quiz review, history and the
@@ -323,21 +323,15 @@ export const practiceApi = {
 
   /**
    * Sends my answers. The backend wants them in the order I answered, which the player
-   * records as the order of `timings` (the first time each question was touched).
+   * records as `touchOrder` (the first time each question was touched).
    * Questions left empty are not sent: the backend counts them as wrong.
    */
-  async submit(attemptId: string, answers: Record<string, string>, timings: Record<string, number> = {}): Promise<AttemptResult> {
+  async submit(attemptId: string, answers: Record<string, string>, timings: Record<string, number> = {}, touchOrder: string[] = []): Promise<AttemptResult> {
     const before = await backendRequest<{ result: BackendAttemptResult }>("GET", `/attempts/${attemptId}`);
     const quiz = await loadQuiz(before.result.attempt.quizId);
 
-    const order: string[] = [];
-    for (const id of Object.keys(timings)) order.push(id);
-    for (const id of Object.keys(answers)) {
-      if (!order.includes(id)) order.push(id);
-    }
-
     const responses: { questionId: number; answer: unknown; responseTimeSeconds?: number }[] = [];
-    for (const id of order) {
+    for (const id of answerOrder(touchOrder, answers)) {
       const question = quiz.questions.find((q) => String(q.questionId) === id);
       if (!question) continue;
       const answer = toBackendAnswer(question, answers[id] ?? "");

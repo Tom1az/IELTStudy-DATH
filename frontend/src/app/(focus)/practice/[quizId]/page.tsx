@@ -37,9 +37,9 @@ function Runner() {
       allowUntimed={seconds > 0}
       onSave={onSave}
       onExit={() => { toast("Your answers are saved in this browser. You can resume any time.", "info"); router.push(exitTo); }}
-      onSubmit={async (answers, timings) => {
+      onSubmit={async (answers, timings, touchOrder) => {
         try {
-          const res = await practiceApi.submit(attempt.id, answers, timings);
+          const res = await practiceApi.submit(attempt.id, answers, timings, touchOrder);
           router.push(`/practice/result/${res.attempt.id}`);
         } catch (e) {
           toast((e as Error).message, "error");
