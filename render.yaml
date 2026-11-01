@@ -4,8 +4,8 @@ services:
   - type: web
     name: ieltstudy-backend
     runtime: docker
-    dockerfilePath: ./backend/Dockerfile
-    dockerContext: ./backend
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
     plan: free
     region: singapore
     branch: main
@@ -28,8 +28,8 @@ services:
   - type: web
     name: ieltstudy-advanced
     runtime: docker
-    dockerfilePath: ./advanced/Dockerfile
-    dockerContext: ./advanced
+    dockerfilePath: advanced/Dockerfile
+    dockerContext: advanced
     plan: free
     region: singapore
     branch: main
