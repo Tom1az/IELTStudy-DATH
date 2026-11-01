@@ -1,0 +1,61 @@
+name: CD
+
+# Runs when CI finishes on a push to main, or by hand from the Actions tab. Stays off until the
+# repository variable DEPLOY_ENABLED is "true". Setup: docs/DEPLOYMENT.md.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      vars.DEPLOY_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      # Migrations run first, so the new code never runs against an older schema
+      - name: Migrate the production database
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.PRODUCTION_DATABASE_URL }}
+        run: |
+          npm ci
+          npx prisma db migrate --db "$DATABASE_URL" --yes --quiet > /dev/null
+
+      - name: Deploy Advanced and the backend to Render
+        env:
+          ADVANCED_HOOK: ${{ secrets.RENDER_ADVANCED_DEPLOY_HOOK }}
+          BACKEND_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
+        run: |
+          curl --fail --silent --show-error -X POST "$ADVANCED_HOOK" > /dev/null
+          curl --fail --silent --show-error -X POST "$BACKEND_HOOK" > /dev/null
+
+      - name: Deploy the frontend to Vercel
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npx --yes vercel@latest pull --yes --environment=production --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest build --prod --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest deploy --prebuilt --prod --token="$VERCEL_TOKEN"
