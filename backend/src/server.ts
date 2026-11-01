@@ -1,3 +1,4 @@
+import "temporal-polyfill/global";
 import "dotenv/config";
 import app from "./app.ts";
 

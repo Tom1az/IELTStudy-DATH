@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { and } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
 import { buildAttemptResult, buildAttemptSummaries, toAttempt } from "../services/attempt-views.ts";
+import { fetchAttemptOutcome, processAttemptWithAdvanced } from "../services/advanced-client.ts";
 import {
   closeAttemptIfTimeIsUp,
   findOwnAttempt,
@@ -33,9 +34,20 @@ const submitMyAttempt = async (req: Request, res: Response) => {
   const { responses }: { responses: SubmittedResponse[] } = req.value!.body;
 
   const closed = await submitAttempt(attempt, responses);
+  const result = await buildAttemptResult(closed);
+
+  // Phase 3: ask the Advanced service to update the learner's BKT mastery and recommendations.
+  // The submit is already saved, so if Advanced is unavailable the lists simply stay empty.
+  const advanced = await processAttemptWithAdvanced(closed.attemptId, req.headers.authorization);
 
   return res.status(200).json({
-    result: await buildAttemptResult(closed),
+    result: advanced
+      ? {
+          ...result,
+          masteryChanges: advanced.masteryChanges,
+          recommendations: advanced.recommendations,
+        }
+      : result,
     message: "Attempt submitted",
   });
 };
@@ -47,9 +59,23 @@ const getAttempt = async (req: Request, res: Response) => {
   if (await closeAttemptIfTimeIsUp(attempt)) {
     attempt = await findOwnAttempt(attempt.attemptId, req.user!);
   }
+  const result = await buildAttemptResult(attempt);
+
+  // A submitted attempt was already processed by the Advanced service at submit time: read back
+  // what it stored, so the post-quiz review still shows the skill changes and recommendations.
+  const advanced =
+    attempt.completedAt !== null
+      ? await fetchAttemptOutcome(attempt.attemptId, req.headers.authorization)
+      : null;
 
   return res.status(200).json({
-    result: await buildAttemptResult(attempt),
+    result: advanced
+      ? {
+          ...result,
+          masteryChanges: advanced.masteryChanges,
+          recommendations: advanced.recommendations,
+        }
+      : result,
     message: "Attempt",
   });
 };
