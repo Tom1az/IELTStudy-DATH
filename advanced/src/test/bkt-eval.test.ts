@@ -13,8 +13,17 @@ describe("BKT Math & Simulation Unit Tests (100% Standalone)", () => {
     expect(afterWrong).toBeLessThan(params.pInit);
   });
 
+  it("matches a hand-computed update", () => {
+    const params = { pLearn: 0.15, pSlip: 0.1, pGuess: 0.25, pForget: 0 };
+    // Posterior 0.3 * 0.9 / (0.3 * 0.9 + 0.7 * 0.25) = 0.60674, then 0.60674 + 0.39326 * 0.15
+    expect(computeBktStep(0.3, true, 1, params, false)).toBeCloseTo(0.6657, 4);
+    // Half weight blends the posterior halfway, and no transitions for the diagnostic
+    expect(computeBktStep(0.3, true, 0.5, params, true)).toBeCloseTo(0.4534, 4);
+  });
+
+  // The size the report uses. Small runs are noise: P@3 flips between seeds at 50 learners.
   it("evaluates Hybrid strategy higher than Sequential baseline on seed 42", () => {
-    const results = runSimulation(42, 50, 20);
+    const results = runSimulation(42, 200, 40);
     expect(results.hybrid.normalizedGain).toBeGreaterThan(results.sequential.normalizedGain);
     expect(results.hybrid.precisionAt3).toBeGreaterThan(results.sequential.precisionAt3);
   });

@@ -37,6 +37,16 @@ const clickRecommendation = async (req: Request, res: Response) => {
   });
 };
 
+// An attempt without evidence changes no mastery, so it has nothing to recommend either
+const processAndRecommend = async (attemptId: number, userId: number) => {
+  const masteryChanges = await processAttemptMastery(attemptId);
+  const recommendations =
+    masteryChanges.length > 0
+      ? await generateRecommendationsForLearner(userId, { sourceAttemptId: attemptId })
+      : [];
+  return { masteryChanges, recommendations };
+};
+
 const processPlacement = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const diagnostic = await orm.Quizzes.first({ kind: "diagnostic" });
@@ -52,10 +62,10 @@ const processPlacement = async (req: Request, res: Response) => {
     throw httpError(409, "Complete and submit the diagnostic quiz first");
   }
 
-  const masteryChanges = await processAttemptMastery(completedAttempt.attemptId);
-  const recommendations = await generateRecommendationsForLearner(userId, {
-    sourceAttemptId: completedAttempt.attemptId,
-  });
+  const { masteryChanges, recommendations } = await processAndRecommend(
+    completedAttempt.attemptId,
+    userId,
+  );
 
   return res.status(200).json({
     attemptId: completedAttempt.attemptId,
@@ -79,10 +89,7 @@ const processAttempt = async (req: Request, res: Response) => {
     throw httpError(409, "Attempt has not been submitted yet");
   }
 
-  const masteryChanges = await processAttemptMastery(attemptId);
-  const recommendations = await generateRecommendationsForLearner(attempt.userId, {
-    sourceAttemptId: attemptId,
-  });
+  const { masteryChanges, recommendations } = await processAndRecommend(attemptId, attempt.userId);
 
   return res.status(200).json({
     attemptId,
@@ -155,6 +162,11 @@ const getMyProgress = async (req: Request, res: Response) => {
 
 const getCourseGates = async (req: Request, res: Response) => {
   const courseId = req.value!.params!.courseId;
+  // Same 404 as the core API for a course the learner can't see, so this never reveals one
+  const course = await orm.Courses.first({ courseId });
+  if (!course || course.status !== "approved") {
+    throw httpError(404, "Course not found");
+  }
   const gatesMap = await computeCourseLessonGates(req.user!.userId, courseId);
   return res.status(200).json({
     courseId,
