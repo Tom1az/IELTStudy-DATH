@@ -2,7 +2,7 @@ import type { Request, Response } from "express";
 import type { Varchar } from "@prisma/orm-postgres/target/codec-types";
 import { and } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
-import { fetchCourseGates } from "../services/advanced-client.ts";
+import { assertLessonUnlocked, fetchCourseGates } from "../services/advanced-client.ts";
 import { buildLessonDetail, buildLessons, toProgress } from "../services/course-views.ts";
 import {
   assertCanStudy,
@@ -106,14 +106,7 @@ const getLesson = async (req: Request, res: Response) => {
   const { lesson, course } = await findVisibleLesson(req.value!.params!.lessonId, req.user!);
   await assertCanStudy(course, req.user!);
 
-  // A learner can't open a lesson they haven't unlocked yet (403, as the contract says)
-  if (req.user!.role === "learner") {
-    const gates = await fetchCourseGates(course.courseId, req.headers.authorization);
-    const gate = gates?.get(lesson.lessonId);
-    if (gate?.locked) {
-      throw httpError(403, gate.reason ?? "This lesson is locked");
-    }
-  }
+  await assertLessonUnlocked(lesson, req.user!, req.headers.authorization);
 
   return res.status(200).json({
     lesson: await buildLessonDetail(lesson, req.user!),
@@ -251,6 +244,7 @@ const setLessonProgress = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { lesson, course } = await findVisibleLesson(req.value!.params!.lessonId, req.user!);
   await assertCanStudy(course, req.user!);
+  await assertLessonUnlocked(lesson, req.user!, req.headers.authorization);
 
   const { status }: { status: "in_progress" | "completed" } = req.value!.body;
 

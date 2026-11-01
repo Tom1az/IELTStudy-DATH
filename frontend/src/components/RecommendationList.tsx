@@ -6,7 +6,9 @@ import type { Recommendation } from "@/lib/types";
 import { SKILL_META, cx } from "@/lib/format";
 
 export function recHref(r: Recommendation) {
-  return r.kind === "practice" ? `/practice/${r.targetId}` : `/learn/${r.courseId}/${r.targetId}`;
+  if (r.kind === "practice") return `/practice/${r.targetId}`;
+  // Not enrolled yet: the course page offers to enrol, then opens this lesson
+  return r.enrolled ? `/learn/${r.courseId}/${r.targetId}` : `/courses/${r.courseId}?lesson=${r.targetId}`;
 }
 
 /** Recommendation rows with their human-readable rationale. Opening one records a click (for the evaluation). */

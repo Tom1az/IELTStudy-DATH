@@ -16,7 +16,7 @@ export interface QuizRunnerProps {
   initialAnswers?: Record<string, string>;
   initialSeconds: number;
   onSave?: (answers: Record<string, string>, remaining: number) => Promise<void>;
-  onSubmit: (answers: Record<string, string>, timings: Record<string, number>) => Promise<void>;
+  onSubmit: (answers: Record<string, string>, timings: Record<string, number>, touchOrder: string[]) => Promise<void>;
   onExit: () => void;
   allowUntimed?: boolean;
 }
@@ -35,6 +35,8 @@ export function QuizRunner({ title, skill, sections, initialAnswers = {}, initia
   const [saving, setSaving] = useState(false);
   const [timeUp, setTimeUp] = useState(false);
   const timings = useRef<Record<string, number>>({});
+  // A list, because an object sorts numeric keys and loses the order they were added in
+  const touchOrder = useRef<string[]>([]);
   const lastAct = useRef(Date.now());
   const answersRef = useRef(answers);
   answersRef.current = answers;
@@ -50,6 +52,7 @@ export function QuizRunner({ title, skill, sections, initialAnswers = {}, initia
   const set = (qid: string, v: string) => {
     const now = Date.now();
     timings.current[qid] = (timings.current[qid] ?? 0) + (now - lastAct.current) / 1000;
+    if (!touchOrder.current.includes(qid)) touchOrder.current.push(qid);
     lastAct.current = now;
     setAnswers((a) => ({ ...a, [qid]: v }));
   };
@@ -57,7 +60,7 @@ export function QuizRunner({ title, skill, sections, initialAnswers = {}, initia
   const doSubmit = useCallback(async () => {
     setSubmitting(true);
     try {
-      await onSubmit(answersRef.current, timings.current);
+      await onSubmit(answersRef.current, timings.current, touchOrder.current);
     } finally {
       setSubmitting(false);
     }

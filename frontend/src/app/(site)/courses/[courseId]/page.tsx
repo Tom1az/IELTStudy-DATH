@@ -152,7 +152,7 @@ function CourseInner() {
             ) : (
               <>
                 <h2 className="text-[22px] font-extrabold">Start Level {course.level}</h2>
-                <EnrollButton course={course} label="Enroll in this course" className="mt-4" firstLessonId={lessons[0]?.id} onEnrolled={reload} />
+                <EnrollButton course={course} label="Enroll in this course" className="mt-4" firstLessonId={sp.get("lesson") ?? lessons[0]?.id} onEnrolled={reload} />
                 {!data.canEnroll.ok && data.canEnroll.reason && <p className="mt-2 text-xs text-ink-muted">{data.canEnroll.reason}</p>}
               </>
             )}

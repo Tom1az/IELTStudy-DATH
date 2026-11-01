@@ -1087,11 +1087,12 @@ paths:
         - Each answer must fit its question type: a string, or for `matching` an object of item id → choice id (400 otherwise).
         - Grading: option ids and `true`/`false`/`not_given` must match exactly; gap-fill answers match any accepted answer,
           ignoring case and extra spaces; `matching` is all or nothing (every item right, and no extra items).
-        - The server grades the answers; the client never sends `isCorrect`. Grading, logging and (Phase 3) the mastery update happen in one transaction.
+        - The server grades the answers; the client never sends `isCorrect`. Grading and logging happen in one transaction. The mastery update runs
+          afterwards in the Advanced service, so it can fail without losing the grade; `GET /attempts/{attemptId}` retries it.
         - Submitting twice returns 409.
-        - Time limit: a late submit is never rejected. It is graded with the answers it contains ("graded as far as the learner got").
-          The client should send its answers when its own timer reaches zero. An attempt that is never submitted is closed by the server
-          with score 0 the next time it is opened (see startAttempt and getAttempt), and a submit after that returns 409.
+        - Time limit: a submit after the limit plus the 30-second grace period returns 409, and the attempt is closed with score 0.
+          The diagnostic is exempt. The client should send its answers when its own timer reaches zero. An attempt that is never submitted
+          is closed the same way the next time it is opened (see startAttempt and getAttempt).
 
         `masteryChanges` and `recommendations` are empty until Phase 3.
       requestBody:
@@ -2302,12 +2303,15 @@ components:
         lesson:
           oneOf:
             - type: object
-              required: [lessonId, title, courseId, courseTitle]
+              required: [lessonId, title, courseId, courseTitle, isEnrolled]
               properties:
                 lessonId: { type: integer }
                 title: { type: string }
                 courseId: { type: integer }
                 courseTitle: { type: string }
+                isEnrolled:
+                  type: boolean
+                  description: Whether the learner is enrolled in the course. They must enrol before opening the lesson.
             - type: "null"
         quiz:
           oneOf:

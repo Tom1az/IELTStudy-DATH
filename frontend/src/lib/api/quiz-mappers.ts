@@ -158,3 +158,12 @@ export function toSections(quiz: BackendQuizForLearner, skill?: SkillCategory): 
   }
   return sections;
 }
+
+/** Question ids in the order they were answered. Answers restored from a draft have no touch, so they go last. */
+export function answerOrder(touchOrder: string[], answers: Record<string, string>): string[] {
+  const order = [...touchOrder];
+  for (const id of Object.keys(answers)) {
+    if (!order.includes(id)) order.push(id);
+  }
+  return order;
+}

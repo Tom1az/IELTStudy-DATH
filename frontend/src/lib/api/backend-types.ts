@@ -236,7 +236,7 @@ export interface BackendMastery {
 export interface BackendRecommendation {
   recommendationId: number;
   type: "lesson" | "quiz";
-  lesson: { lessonId: number; title: string; courseId: number; courseTitle: string } | null;
+  lesson: { lessonId: number; title: string; courseId: number; courseTitle: string; isEnrolled: boolean } | null;
   quiz: { quizId: number; title: string } | null;
   skill: { skillId: number; skillCode: string; name: string };
   masteryProb: number;

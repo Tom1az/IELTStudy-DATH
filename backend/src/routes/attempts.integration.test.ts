@@ -448,8 +448,8 @@ describe("GET /api/v1/me/attempts", () => {
   });
 });
 
-// Time limit rule (services/attempts.ts, closeAttemptIfTimeIsUp): a late submit is graded
-// with the answers it contains, and an unsubmitted attempt is closed with score 0.
+// Time limit rule (services/attempts.ts, closeAttemptIfTimeIsUp): a late submit is rejected,
+// and a late or unsubmitted attempt is closed with score 0.
 describe("quiz time limit", () => {
   // Gives the quiz a time limit and moves the attempt's start back in time. started_at can't be
   // set through the ORM (the database fills it in), so it is moved back in SQL.
@@ -470,7 +470,7 @@ describe("quiz time limit", () => {
   const getResult = (attemptId: number, userId: number) =>
     request(app).get(`/api/v1/attempts/${attemptId}`).set("Authorization", authHeader(userId));
 
-  it("still grades a late submit, with the answers it contains", async () => {
+  it("rejects a submit after the deadline and the grace period, and closes the attempt", async () => {
     const { quiz, learner, tfng } = await setUp();
     await setLimit(quiz.quizId, 60);
     const attemptId = await startAttempt(quiz.quizId, learner.userId);
@@ -480,11 +480,25 @@ describe("quiz time limit", () => {
       { questionId: tfng.questionId, answer: "true" },
     ]);
 
+    expect(res.status).toBe(409);
+    const closed = await getResult(attemptId, learner.userId);
+    expect(closed.body.result.attempt.totalScore).toBe(0);
+    const rows = await db.orm.public.QuestionResponses.where({ attemptId }).all();
+    expect(rows).toHaveLength(0);
+  });
+
+  it("still grades a submit inside the grace period", async () => {
+    const { quiz, learner, tfng } = await setUp();
+    await setLimit(quiz.quizId, 60);
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+    await startedAgo(attemptId, 70);
+
+    const res = await submit(attemptId, learner.userId, [
+      { questionId: tfng.questionId, answer: "true" },
+    ]);
+
     expect(res.status).toBe(200);
     expect(res.body.result.attempt.totalScore).toBe(1);
-    // Only the one answer that was sent is logged; the skipped questions have no row
-    const rows = await db.orm.public.QuestionResponses.where({ attemptId }).all();
-    expect(rows).toHaveLength(1);
   });
 
   it("closes an unsubmitted attempt that ran out of time when it is opened again", async () => {

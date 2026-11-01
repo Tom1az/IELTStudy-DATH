@@ -2,6 +2,7 @@
 // (Attempts) and docs/ERD.md ("Rules the database enforces", "One completed diagnostic").
 import { and } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
+import { assertLessonUnlocked } from "./advanced-client.ts";
 import { isUniqueViolation } from "../utils/db-errors.ts";
 import { httpError } from "../utils/http-error.ts";
 import type { PublicUser } from "../utils/public-user.ts";
@@ -35,11 +36,11 @@ type GradedResponse = {
 const GRACE_SECONDS = 30;
 
 // The time limit rule (spec: quizzes have an optional time limit, enforced by the server):
-// - A submit that arrives late is still graded with whatever answers it contains
-//   ("graded as far as the learner got"). It is never rejected.
-// - An attempt that is never submitted is closed by the server the next time anyone opens it,
-//   with score 0, because the server only receives answers at submit time. Its completed_at
-//   is the deadline, not the moment we noticed.
+// - A submit that arrives after the deadline and the grace period is rejected (409), because
+//   its answers could have been given at any time after the deadline.
+// - An attempt that is late or never submitted is closed by the server the next time anyone
+//   touches it, with score 0, because the server only receives answers at submit time. Its
+//   completed_at is the deadline, not the moment we noticed.
 // - Not for the diagnostic: an empty, completed diagnostic would block a retake for good (409)
 //   and seed the learner's mastery with zeros.
 // Returns true if this call closed the attempt.
@@ -97,12 +98,21 @@ const findOpenAttempt = async (userId: number, quizId: number) => {
 
 // POST /quizzes/{quizId}/attempts. Resumes the learner's unfinished attempt if there is one
 // (`created: false`), otherwise starts a new one (`created: true`).
-export const startOrResumeAttempt = async (quizId: number, user: PublicUser) => {
+export const startOrResumeAttempt = async (
+  quizId: number,
+  user: PublicUser,
+  authorization: string | undefined,
+) => {
   // Same access rule as the quiz's learner view: 404 if the course isn't visible, 403 if the
   // learner isn't enrolled. The diagnostic has no course, so every learner may take it.
   const { quiz, course } = await findVisibleQuiz(quizId, user);
   if (course !== null) {
     await assertCanStudy(course, user);
+    await assertLessonUnlocked(
+      { lessonId: quiz.lessonId!, courseId: course.courseId },
+      user,
+      authorization,
+    );
   }
 
   // One completed diagnostic per learner (docs/ERD.md): it seeds their starting mastery
@@ -150,8 +160,8 @@ export const startOrResumeAttempt = async (quizId: number, user: PublicUser) => 
 
 // POST /attempts/{attemptId}/submit. Grades every answer, then closes the attempt and logs one
 // question_responses row per answer, all in one transaction. Skipped questions get no row and
-// count as wrong. Returns the closed attempt. A late submit is graded like any other: it
-// grades what the learner got to (time limit rule: closeAttemptIfTimeIsUp).
+// count as wrong. Returns the closed attempt. A late submit never gets here: the controller
+// closes it first (time limit rule: closeAttemptIfTimeIsUp).
 export const submitAttempt = async (
   attempt: { attemptId: number; quizId: number; completedAt: Temporal.Instant | null },
   responses: SubmittedResponse[],
@@ -215,7 +225,6 @@ export const submitAttempt = async (
       await tx.orm.public.QuestionResponses.create({ attemptId: attempt.attemptId, ...row });
     }
 
-    // Phase 3: the BKT mastery update (services/bkt.ts) goes here, in the same transaction
     // We closed this row a moment ago in this transaction, so it exists
     const closed = await tx.orm.public.QuizAttempts.first({ attemptId: attempt.attemptId });
     return closed!;
