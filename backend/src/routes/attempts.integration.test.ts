@@ -447,3 +447,121 @@ describe("GET /api/v1/me/attempts", () => {
     expect(res.status).toBe(403);
   });
 });
+
+// Time limit rule (services/attempts.ts, closeAttemptIfTimeIsUp): a late submit is graded
+// with the answers it contains, and an unsubmitted attempt is closed with score 0.
+describe("quiz time limit", () => {
+  // Gives the quiz a time limit and moves the attempt's start back in time. started_at can't be
+  // set through the ORM (the database fills it in), so it is moved back in SQL.
+  const setLimit = async (quizId: number, seconds: number) => {
+    await db.orm.public.Quizzes.where({ quizId }).update({ timeLimitSeconds: seconds });
+  };
+  const startedAgo = async (attemptId: number, seconds: number) => {
+    await db.runtime().execute(
+      db.raw.sql`
+        UPDATE quiz_attempts
+        SET started_at = started_at - make_interval(secs => ${seconds})
+        WHERE attempt_id = ${attemptId}
+      `
+        .affectedCount()
+        .build(),
+    );
+  };
+  const getResult = (attemptId: number, userId: number) =>
+    request(app).get(`/api/v1/attempts/${attemptId}`).set("Authorization", authHeader(userId));
+
+  it("still grades a late submit, with the answers it contains", async () => {
+    const { quiz, learner, tfng } = await setUp();
+    await setLimit(quiz.quizId, 60);
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+    await startedAgo(attemptId, 600);
+
+    const res = await submit(attemptId, learner.userId, [
+      { questionId: tfng.questionId, answer: "true" },
+    ]);
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.attempt.totalScore).toBe(1);
+    // Only the one answer that was sent is logged; the skipped questions have no row
+    const rows = await db.orm.public.QuestionResponses.where({ attemptId }).all();
+    expect(rows).toHaveLength(1);
+  });
+
+  it("closes an unsubmitted attempt that ran out of time when it is opened again", async () => {
+    const { quiz, learner } = await setUp();
+    await setLimit(quiz.quizId, 60);
+    const oldId = await startAttempt(quiz.quizId, learner.userId);
+    await startedAgo(oldId, 600);
+
+    const again = await start(quiz.quizId, learner.userId);
+
+    // A fresh attempt, not the expired one
+    expect(again.status).toBe(201);
+    expect(again.body.attempt.attemptId).not.toBe(oldId);
+    const old = await getResult(oldId, learner.userId);
+    expect(old.body.result.attempt.completedAt).not.toBeNull();
+    expect(old.body.result.attempt.totalScore).toBe(0);
+    const rows = await db.orm.public.QuestionResponses.where({ attemptId: oldId }).all();
+    expect(rows).toHaveLength(0);
+    // The closed attempt can't be submitted afterwards
+    const lateSubmit = await submit(oldId, learner.userId, []);
+    expect(lateSubmit.status).toBe(409);
+  });
+
+  it("closes an expired attempt when it is read", async () => {
+    const { quiz, learner } = await setUp();
+    await setLimit(quiz.quizId, 60);
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+    await startedAgo(attemptId, 600);
+
+    const res = await getResult(attemptId, learner.userId);
+
+    expect(res.status).toBe(200);
+    expect(res.body.result.attempt.completedAt).not.toBeNull();
+    expect(res.body.result.attempt.totalScore).toBe(0);
+  });
+
+  it("leaves an attempt alone while there is time, and during the grace period", async () => {
+    const { quiz, learner } = await setUp();
+    await setLimit(quiz.quizId, 60);
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+
+    // 10 seconds in, and 70 seconds in (10 seconds over, inside the 30-second grace)
+    for (const secondsAgo of [10, 60]) {
+      await startedAgo(attemptId, secondsAgo);
+      const res = await start(quiz.quizId, learner.userId);
+      expect(res.status).toBe(200);
+      expect(res.body.attempt.attemptId).toBe(attemptId);
+      expect(res.body.attempt.completedAt).toBeNull();
+    }
+  });
+
+  it("never closes a quiz without a time limit", async () => {
+    const { quiz, learner } = await setUp();
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+    await startedAgo(attemptId, 86400);
+
+    const res = await start(quiz.quizId, learner.userId);
+
+    expect(res.status).toBe(200);
+    expect(res.body.attempt.attemptId).toBe(attemptId);
+  });
+
+  it("never auto-closes the diagnostic, so it can still be completed", async () => {
+    const { instructor, tfng, learner } = await setUp();
+    const diagnostic = await createTestQuiz({
+      createdById: instructor.userId,
+      kind: "diagnostic",
+      questionIds: [tfng.questionId],
+    });
+    await setLimit(diagnostic.quizId, 60);
+    const attemptId = await startAttempt(diagnostic.quizId, learner.userId);
+    await startedAgo(attemptId, 600);
+
+    const res = await start(diagnostic.quizId, learner.userId);
+
+    expect(res.status).toBe(200);
+    expect(res.body.attempt.attemptId).toBe(attemptId);
+    expect(res.body.attempt.completedAt).toBeNull();
+  });
+});

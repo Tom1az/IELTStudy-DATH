@@ -2,7 +2,12 @@ import type { Request, Response } from "express";
 import { and } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
 import { buildAttemptResult, buildAttemptSummaries, toAttempt } from "../services/attempt-views.ts";
-import { findOwnAttempt, startOrResumeAttempt, submitAttempt } from "../services/attempts.ts";
+import {
+  closeAttemptIfTimeIsUp,
+  findOwnAttempt,
+  startOrResumeAttempt,
+  submitAttempt,
+} from "../services/attempts.ts";
 import type { SubmittedResponse } from "../services/attempts.ts";
 import { buildQuiz } from "../services/quiz-views.ts";
 
@@ -37,7 +42,11 @@ const submitMyAttempt = async (req: Request, res: Response) => {
 
 // The graded result once submitted; before that, the open attempt without answers
 const getAttempt = async (req: Request, res: Response) => {
-  const attempt = await findOwnAttempt(req.value!.params!.attemptId, req.user!);
+  let attempt = await findOwnAttempt(req.value!.params!.attemptId, req.user!);
+  // An unfinished attempt that ran out of time is closed here, so it shows as submitted
+  if (await closeAttemptIfTimeIsUp(attempt)) {
+    attempt = await findOwnAttempt(attempt.attemptId, req.user!);
+  }
 
   return res.status(200).json({
     result: await buildAttemptResult(attempt),
