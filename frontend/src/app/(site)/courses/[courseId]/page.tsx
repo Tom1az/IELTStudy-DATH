@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useParams, useRouter, useSearchParams } from "next/navigation";
+import { Check, CheckCircle2, ChevronDown, Lock, LogOut, PlayCircle } from "lucide-react";
+import { Avatar, ConfirmDialog, ErrorState, PageLoader, ProgressBar, useToast } from "@/components/ui";
 import { Suspense, useEffect, useState } from "react";
-import { Check, CheckCircle2, ChevronDown, Lock, PlayCircle } from "lucide-react";
 import { catalogApi } from "@/lib/api";
 import type { CourseDetail } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { LEVEL_THEME, SKILL_META, cx, plural } from "@/lib/format";
-import { Avatar, ErrorState, PageLoader, ProgressBar } from "@/components/ui";
 import { SkillTile } from "@/components/SkillIcon";
 import { EnrollButton } from "@/components/EnrollButton";
 import { SiteFooter } from "@/components/layout/SiteHeader";
@@ -90,6 +90,23 @@ function CourseInner() {
   const { courseId } = useParams<{ courseId: string }>();
   const sp = useSearchParams();
   const router = useRouter();
+  const toast = useToast();
+  const [leaving, setLeaving] = useState(false);
+  const [pending, setPending] = useState(false);
+
+  const leave = async () => {
+    setPending(true);
+    try {
+      await catalogApi.leave(courseId);
+      toast("You left this course.");
+      setLeaving(false);
+      reload();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setPending(false);
+    }
+  };
   const { data, error, loading, reload } = useAsync(() => catalogApi.get(courseId), [courseId]);
 
   // "Continue learning" (?continue=1) jumps to the first open lesson that isn't completed
@@ -148,6 +165,9 @@ function CourseInner() {
                 <div className="mt-1.5"><ProgressBar value={done} max={lessons.length} color="bg-brand" track="bg-brand-tint" label="Course progress" /></div>
                 <Link href={`/courses/${course.id}?continue=1`} className="btn-primary mt-4 w-full">{enrollment.status === "completed" ? "Review lessons" : "Continue learning"}</Link>
                 <Link href="/practice" className="btn-outline mt-2.5 w-full">Practice quizzes</Link>
+                <button className="btn-ghost mt-2.5 w-full text-danger hover:bg-danger-tint" onClick={() => setLeaving(true)}>
+                  <LogOut className="h-4 w-4" /> Leave course
+                </button>
               </>
             ) : (
               <>
@@ -159,6 +179,9 @@ function CourseInner() {
           </div>
         </aside>
       </div>
+      <ConfirmDialog open={leaving} onClose={() => setLeaving(false)} danger pending={pending}
+        title="Leave this course?" confirmLabel="Leave course" onConfirm={leave}
+        body={<>You can enroll again later. Your lesson progress and quiz history are kept.</>} />
       <SiteFooter />
     </>
   );

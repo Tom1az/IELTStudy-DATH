@@ -240,6 +240,10 @@ export const catalogApi = {
     return skills.map(toSkill);
   },
 
+  async leave(courseId: string) {
+    await backendRequest("DELETE", `/courses/${courseId}/enroll`);
+  },
+  
   async get(courseId: string): Promise<CourseDetail> {
     const [course, lessons, categories] = await Promise.all([loadCourse(courseId), loadLessons(courseId), loadCategories()]);
     return {

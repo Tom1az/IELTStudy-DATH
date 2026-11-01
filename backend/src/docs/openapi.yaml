@@ -520,6 +520,24 @@ paths:
         "401": { $ref: "#/components/responses/Unauthorized" }
         "403": { $ref: "#/components/responses/Forbidden" }
         "404": { $ref: "#/components/responses/NotFound" }
+    delete:
+      tags: [Courses]
+      operationId: leaveCourse
+      summary: Leave a course
+      description: "Roles: learner. Deletes the enrolment only; lesson progress and attempts are kept. 404 if the learner is not enrolled."
+      responses:
+        "200":
+          description: Left the course
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [message]
+                properties:
+                  message: { type: string }
+        "401": { $ref: "#/components/responses/Unauthorized" }
+        "403": { $ref: "#/components/responses/Forbidden" }
+        "404": { $ref: "#/components/responses/NotFound" }
 
   # ---------------------------------------------------------------------------
   # Lessons
