@@ -118,7 +118,7 @@ jobs:
       - run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [backend, advanced, frontend]
     services:
       postgres:
