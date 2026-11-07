@@ -22,10 +22,12 @@ export default defineConfig({
       DATABASE_URL: testDatabaseUrl,
       JWT_SECRET: "test-jwt-secret",
       // Blank, so a real Supabase key in .env can never be used by a test run. Route tests use
-      // src/test/fake-storage.ts; services/storage.test.ts mocks the Supabase client.
+      // src/test/fake-storage.ts; services/storage.unit.test.ts mocks the Supabase client.
       SUPABASE_URL: "",
       SUPABASE_SERVICE_ROLE_KEY: "",
       SUPABASE_STORAGE_BUCKET: "",
+      // Tests never call the Advanced service
+      ADVANCED_SERVICE_URL: "",
     },
     // Applies migrations to the test database once per run
     globalSetup: ["./src/test/global-setup.ts"],

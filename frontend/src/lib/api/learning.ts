@@ -1,6 +1,7 @@
+import { SKILL_CATEGORIES } from "@/lib/types";
 import type { Course, Enrollment, Lesson, Paginated, Recommendation, Skill, SkillCategory, User } from "@/lib/types";
 import type {
-  BackendAttemptSummary, BackendCourse, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendRecommendation, BackendSkill,
+  BackendAttemptSummary, BackendCourse, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendMastery, BackendRecommendation, BackendSkill,
 } from "./backend-types";
 import { ApiError, backendRequest, getToken } from "./client";
 import { authApi } from "./auth";
@@ -75,6 +76,43 @@ export interface LessonView {
   unlocked: boolean;
   prevId?: string;
   nextId?: string;
+}
+
+/** One micro-skill in the mastery map. `mastery` is 0..1. */
+export interface MasterySkill {
+  skillId: string;
+  name: string;
+  category: SkillCategory;
+  mastery: number;
+  observations: number;
+  updatedAt: string;
+}
+
+export interface MasteryData {
+  skills: MasterySkill[];
+  /** Estimated band per skill category. Null until every category has been measured. */
+  bands: Record<SkillCategory, number> | null;
+  overall: number | null;
+}
+
+/** Below this mastery a skill counts as weak and triggers remedial recommendations (spec: 0.65). */
+export const WEAK_MASTERY = 0.65;
+
+// Bands run from about 3 to 7.5 in this app: band = 3 + mastery * 4.5, rounded to the nearest half
+const BAND_MIN = 3;
+const BAND_RANGE = 4.5;
+const toBand = (mastery: number) => Math.round((BAND_MIN + Math.min(1, Math.max(0, mastery)) * BAND_RANGE) * 2) / 2;
+
+/** Averages the micro-skills of each category into an estimated band. */
+export function masteryToBands(skills: MasterySkill[]): Pick<MasteryData, "bands" | "overall"> {
+  const bands = {} as Record<SkillCategory, number>;
+  for (const category of SKILL_CATEGORIES) {
+    const inCategory = skills.filter((s) => s.category === category);
+    if (inCategory.length === 0) return { bands: null, overall: null };
+    bands[category] = toBand(inCategory.reduce((sum, s) => sum + s.mastery, 0) / inCategory.length);
+  }
+  const overall = Math.round((SKILL_CATEGORIES.reduce((sum, c) => sum + bands[c], 0) / SKILL_CATEGORIES.length) * 2) / 2;
+  return { bands, overall };
 }
 
 export interface DashboardData {
@@ -169,15 +207,40 @@ function summarize(course: BackendCourse, lessons: BackendLesson[], categories: 
   };
 }
 
-/** `GET /recommendations` is built in Phase 3. Until then it is a 404, and the dashboard says so. */
-async function loadRecommendations(categories: SkillCategories): Promise<Recommendation[] | null> {
+/**
+ * Phase 3 data (mastery, recommendations) comes from the separate Advanced service. When it isn't
+ * running, the proxy answers 404 or 5xx (or the request fails outright). That must not break the
+ * dashboard, so those cases mean "not available" (null) and the page says so.
+ */
+async function optionalAdvanced<T>(call: () => Promise<T>): Promise<T | null> {
   try {
-    const res = await backendRequest<{ recommendations: BackendRecommendation[] }>("GET", "/recommendations");
-    return res.recommendations.map((r) => toRecommendation(r, categories));
+    return await call();
   } catch (e) {
-    if (e instanceof ApiError && e.status === 404) return null;
+    if (e instanceof ApiError && (e.status === 404 || e.status >= 500)) return null;
+    if (!(e instanceof ApiError) && e instanceof TypeError) return null; // network failure
     throw e;
   }
+}
+
+/** `GET /recommendations` (Advanced service). Null while it isn't available. */
+async function loadRecommendations(categories: SkillCategories): Promise<Recommendation[] | null> {
+  const res = await optionalAdvanced(() => backendRequest<{ recommendations: BackendRecommendation[] }>("GET", "/recommendations"));
+  return res ? res.recommendations.map((r) => toRecommendation(r, categories)) : null;
+}
+
+/** `GET /me/mastery` (Advanced service). Null while it isn't available. */
+async function loadMastery(): Promise<MasteryData | null> {
+  const res = await optionalAdvanced(() => backendRequest<{ mastery: BackendMastery[] }>("GET", "/me/mastery"));
+  if (!res) return null;
+  const skills: MasterySkill[] = res.mastery.map((m) => ({
+    skillId: String(m.skillId),
+    name: m.name,
+    category: m.category,
+    mastery: m.masteryProb,
+    observations: m.observations,
+    updatedAt: m.updatedAt,
+  }));
+  return { skills, ...masteryToBands(skills) };
 }
 
 /* ───────── Catalog ───────── */
@@ -240,6 +303,10 @@ export const catalogApi = {
     return skills.map(toSkill);
   },
 
+  async leave(courseId: string) {
+    await backendRequest("DELETE", `/courses/${courseId}/enroll`);
+  },
+  
   async get(courseId: string): Promise<CourseDetail> {
     const [course, lessons, categories] = await Promise.all([loadCourse(courseId), loadLessons(courseId), loadCategories()]);
     return {
@@ -268,14 +335,26 @@ export const lessonApi = {
    * started (`in_progress`). It is never sent again, because that would undo `completed`.
    */
   async get(courseId: string, lessonId: string): Promise<LessonView> {
+    // A locked lesson answers 403, and the page then shows its lock card. It is told apart from
+    // "not enrolled" (also 403) by the lesson list, which marks it as locked.
+    let forbidden: ApiError | null = null;
     const [detail, course, lessons, categories] = await Promise.all([
-      backendRequest<{ lesson: BackendLessonDetail }>("GET", `/lessons/${lessonId}`).then((r) => r.lesson),
+      backendRequest<{ lesson: BackendLessonDetail }>("GET", `/lessons/${lessonId}`).then((r) => r.lesson).catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 403) {
+          forbidden = e;
+          return null;
+        }
+        throw e;
+      }),
       loadCourse(courseId),
       loadLessons(courseId),
       loadCategories(),
     ]);
 
-    if (course.isEnrolled && detail.progress === null) {
+    const locked = lessons.find((l) => String(l.lessonId) === lessonId && l.locked);
+    if (!detail && !(course.isEnrolled && locked)) throw forbidden;
+
+    if (detail && course.isEnrolled && detail.progress === null) {
       await backendRequest("PUT", `/lessons/${lessonId}/progress`, { status: "in_progress" }).catch(() => {});
     }
 
@@ -284,18 +363,19 @@ export const lessonApi = {
     const index = flat.findIndex((l) => l.id === lessonId);
     // Remedial lessons are not in the syllabus, so they have no position
     const order = index >= 0 ? flat[index].order : 1;
-    const passages: LessonPassage[] = detail.passages.map((p) => ({ id: String(p.passageId), type: p.type, title: p.title, content: p.content, mediaUrl: p.mediaUrl }));
-    const quiz = detail.quizzes[0];
+    const passages: LessonPassage[] = (detail?.passages ?? []).map((p) => ({ id: String(p.passageId), type: p.type, title: p.title, content: p.content, mediaUrl: p.mediaUrl }));
+    const quiz = detail?.quizzes[0];
+    const lesson = detail ?? { ...locked!, content: null };
 
     return {
       course: toCourse(course),
-      lesson: toLesson(detail, lessonCategory(detail, categories), order),
+      lesson: toLesson(lesson, lessonCategory(lesson, categories), order),
       passages,
       sections,
       enrollment: course.isEnrolled ? toEnrollment({ courseId: course.courseId, lessons }) : null,
       progress: coreProgress(lessons),
       practice: quiz ? { id: String(quiz.quizId), title: quiz.title, questions: quiz.questionCount, minutes: quiz.timeLimitSeconds ? Math.round(quiz.timeLimitSeconds / 60) : 0 } : null,
-      unlocked: !detail.locked,
+      unlocked: !!detail && !detail.locked,
       prevId: index > 0 ? flat[index - 1].id : undefined,
       nextId: index >= 0 && index < flat.length - 1 ? flat[index + 1].id : undefined,
     };
@@ -311,6 +391,11 @@ export const lessonApi = {
 /* ───────── Dashboard ───────── */
 
 export const meApi = {
+  /** My skill map. Null while the Advanced service isn't available. */
+  mastery(): Promise<MasteryData | null> {
+    return loadMastery();
+  },
+
   async dashboard(): Promise<DashboardData> {
     const [user, enrollmentsRes, attemptsRes, categories] = await Promise.all([
       authApi.me(),
@@ -319,7 +404,7 @@ export const meApi = {
       loadCategories(),
     ]);
     if (!user) throw new ApiError(401, "HTTP_401", "Please log in");
-    const upNext = await loadRecommendations(categories);
+    const [upNext, mastery] = await Promise.all([loadRecommendations(categories), loadMastery()]);
 
     const enrollments = enrollmentsRes.enrollments;
     const lessonLists = await Promise.all(enrollments.map((e) => loadLessons(e.course.courseId)));
@@ -376,8 +461,8 @@ export const meApi = {
     return {
       user,
       continue: cont,
-      bands: null,
-      overall: null,
+      bands: mastery?.bands ?? null,
+      overall: mastery?.overall ?? null,
       courses,
       upNext,
       recent,

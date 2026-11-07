@@ -17,8 +17,8 @@ export default defineConfig({
     launchOptions: process.env.PW_CHROMIUM_PATH ? { executablePath: process.env.PW_CHROMIUM_PATH } : {},
   },
   projects: [
-    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /mobile\.spec\.ts/ },
-    { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.spec\.ts/ },
+    { name: "desktop", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } }, testIgnore: /mobile\.e2e\.spec\.ts/ },
+    { name: "mobile", use: { ...devices["Pixel 7"] }, testMatch: /mobile\.e2e\.spec\.ts/ },
   ],
   webServer: process.env.BASE_URL ? undefined : { command: `npm run build && npm run start -- -p ${PORT}`, url: BASE_URL, reuseExistingServer: true, timeout: 240_000 },
 });

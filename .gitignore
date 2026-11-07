@@ -1,4 +1,5 @@
 node_modules/
+.DS_Store
 yarn.lock
 .env
 dist/
@@ -12,3 +13,8 @@ CLAUDE.local.md
 backend/src/prisma/contract.d.ts
 backend/src/prisma/contract.json
 tiendo.md
+# Claude Code files: local only, not shared on the remote
+CLAUDE.md
+docs/CLAUDE_CODE_GUIDE.md
+.mcp.json
+graphify-out/

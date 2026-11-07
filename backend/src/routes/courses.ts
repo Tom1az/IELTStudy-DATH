@@ -62,6 +62,7 @@ router.post(
   coursesController.archiveCourse,
 );
 router.post("/:courseId/enroll", authorize("learner"), courseId, coursesController.enrollInCourse);
+router.delete("/:courseId/enroll", authorize("learner"), courseId, coursesController.leaveCourse);
 
 // Lessons are listed and created under their course
 router

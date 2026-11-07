@@ -10,7 +10,7 @@ The REST API for IELTStudy, an adaptive IELTS learning platform. It handles:
 - **Grading:** answers are graded on the server when an attempt is submitted, and every response is logged.
 - **Admin:** manage user roles, deactivate accounts, review courses and view usage stats.
 
-The Bayesian Knowledge Tracing engine and the recommendations are planned for Phase 3 and are not built yet (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)). The product spec is [`../specs.md`](../specs.md).
+The Bayesian Knowledge Tracing engine and the recommendations run as a separate service in [`../advanced/`](../advanced/), which this API calls after a quiz submit and when it serves lessons (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)). The product spec is [`../specs.md`](../specs.md).
 
 ## Tech stack
 
@@ -222,7 +222,7 @@ For more detail, see [`../docs/ERD.md`](../docs/ERD.md) (data model and invarian
 
 ## Deployment
 
-There is no deployment setup yet. Docker, CI, CORS, helmet and rate limiting are planned for Phase 7 (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)). With what exists today, a deploy to a server works like this:
+The hosted setup (Docker, Render, Vercel and the GitHub Actions workflows) is in [`../docs/DEPLOYMENT.md`](../docs/DEPLOYMENT.md). CORS, helmet and rate limiting are planned for Phase 7 (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)). With what exists today, a deploy to a server works like this:
 
 1. Install Node.js 26.8.2 or newer. There is no build step: Node runs the TypeScript source directly.
 2. Install the dependencies:

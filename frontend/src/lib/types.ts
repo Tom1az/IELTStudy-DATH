@@ -134,6 +134,7 @@ export interface Recommendation {
   kind: "lesson" | "practice";
   targetId: string; // lesson id or quiz id
   courseId: string;
+  enrolled: boolean; // a lesson opens only once I'm enrolled in its course
   title: string;
   skill: SkillCategory;
   score: number;

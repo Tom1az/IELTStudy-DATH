@@ -5,6 +5,7 @@ import { httpError } from "../utils/http-error.ts";
 import { getLearnerMastery, processAttemptMastery } from "../services/bkt.ts";
 import { computeCourseLessonGates, getLearnerGoalAndProgress } from "../services/gating.ts";
 import {
+  buildRecommendationViews,
   generateRecommendationsForLearner,
   getLatestRecommendations,
   markRecommendationClicked,
@@ -36,6 +37,16 @@ const clickRecommendation = async (req: Request, res: Response) => {
   });
 };
 
+// An attempt without evidence changes no mastery, so it has nothing to recommend either
+const processAndRecommend = async (attemptId: number, userId: number) => {
+  const masteryChanges = await processAttemptMastery(attemptId);
+  const recommendations =
+    masteryChanges.length > 0
+      ? await generateRecommendationsForLearner(userId, { sourceAttemptId: attemptId })
+      : [];
+  return { masteryChanges, recommendations };
+};
+
 const processPlacement = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const diagnostic = await orm.Quizzes.first({ kind: "diagnostic" });
@@ -51,10 +62,10 @@ const processPlacement = async (req: Request, res: Response) => {
     throw httpError(409, "Complete and submit the diagnostic quiz first");
   }
 
-  const masteryChanges = await processAttemptMastery(completedAttempt.attemptId);
-  const recommendations = await generateRecommendationsForLearner(userId, {
-    sourceAttemptId: completedAttempt.attemptId,
-  });
+  const { masteryChanges, recommendations } = await processAndRecommend(
+    completedAttempt.attemptId,
+    userId,
+  );
 
   return res.status(200).json({
     attemptId: completedAttempt.attemptId,
@@ -78,16 +89,63 @@ const processAttempt = async (req: Request, res: Response) => {
     throw httpError(409, "Attempt has not been submitted yet");
   }
 
-  const masteryChanges = await processAttemptMastery(attemptId);
-  const recommendations = await generateRecommendationsForLearner(attempt.userId, {
-    sourceAttemptId: attemptId,
-  });
+  const { masteryChanges, recommendations } = await processAndRecommend(attemptId, attempt.userId);
 
   return res.status(200).json({
     attemptId,
     masteryChanges,
     recommendations,
     message: "Attempt mastery processed",
+  });
+};
+
+// Read-only: what BKT already stored for a submitted attempt (skill changes + the recommendations it
+// produced). Unlike `processAttempt` it never recomputes mastery, so it is safe to call every time
+// the post-quiz review is opened.
+const getAttemptOutcome = async (req: Request, res: Response) => {
+  const attemptId = req.value!.params!.attemptId;
+  const attempt = await orm.QuizAttempts.first({ attemptId });
+  if (!attempt) {
+    throw httpError(404, "Attempt not found");
+  }
+  if (req.user!.role !== "admin" && attempt.userId !== req.user!.userId) {
+    throw httpError(403, "This is another learner's attempt");
+  }
+  if (attempt.completedAt === null) {
+    throw httpError(409, "Attempt has not been submitted yet");
+  }
+
+  const stored = (Array.isArray(attempt.masteryChanges) ? attempt.masteryChanges : []) as unknown as Array<{
+    skillId: number;
+    before: number | null;
+    after: number;
+  }>;
+  const skillIds = stored.map((c) => c.skillId);
+  const skills = skillIds.length > 0 ? await orm.Skills.where((s) => s.skillId.in(skillIds)).all() : [];
+  const skillById = new Map(skills.map((s) => [s.skillId, s]));
+
+  const masteryChanges = [];
+  for (const change of stored) {
+    const skill = skillById.get(change.skillId);
+    if (!skill) continue;
+    masteryChanges.push({
+      skillId: change.skillId,
+      skillCode: skill.skillCode,
+      name: skill.name,
+      before: change.before,
+      after: change.after,
+    });
+  }
+
+  const rows = await orm.Recommendations.where({ userId: attempt.userId, sourceAttemptId: attemptId })
+    .orderBy((r) => r.rank.asc())
+    .all();
+
+  return res.status(200).json({
+    attemptId,
+    masteryChanges,
+    recommendations: await buildRecommendationViews(rows),
+    message: "Attempt mastery",
   });
 };
 
@@ -104,6 +162,11 @@ const getMyProgress = async (req: Request, res: Response) => {
 
 const getCourseGates = async (req: Request, res: Response) => {
   const courseId = req.value!.params!.courseId;
+  // Same 404 as the core API for a course the learner can't see, so this never reveals one
+  const course = await orm.Courses.first({ courseId });
+  if (!course || course.status !== "approved") {
+    throw httpError(404, "Course not found");
+  }
   const gatesMap = await computeCourseLessonGates(req.user!.userId, courseId);
   return res.status(200).json({
     courseId,
@@ -118,6 +181,7 @@ export default {
   clickRecommendation,
   processPlacement,
   processAttempt,
+  getAttemptOutcome,
   getMyProgress,
   getCourseGates,
 };

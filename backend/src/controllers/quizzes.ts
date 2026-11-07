@@ -94,7 +94,11 @@ const createQuiz = async (req: Request, res: Response) => {
 
 // Authors get the questions with answers; everyone else gets the learner view
 const getQuiz = async (req: Request, res: Response) => {
-  const { quiz, view } = await findQuizForViewer(req.value!.params!.quizId, req.user!);
+  const { quiz, view } = await findQuizForViewer(
+    req.value!.params!.quizId,
+    req.user!,
+    req.headers.authorization,
+  );
 
   return res.status(200).json({
     quiz: await buildQuiz(quiz, view),

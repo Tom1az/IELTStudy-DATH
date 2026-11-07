@@ -240,7 +240,7 @@ No new dependencies (`bcrypt` and `jsonwebtoken` were already installed) and no 
 4. **Routes:** `POST /auth/register`, `POST /auth/login` (ported from MiniMemoryZone `auth.js`, with the contract's changes), `GET /me` and `PATCH /me`. Remove `routes/user.ts` and `controllers/user.ts`.
 5. **Contract:** delete the deprecated `/users` paths, their tag and the `LegacyUser` / `LegacyValidationError` components. Note on `/me` that a deactivated account's token gets 401. Version `0.2.1`.
 6. **Test database:** `vitest.config.ts` (requires `TEST_DATABASE_URL`, refuses to run if it equals `DATABASE_URL`, runs files one at a time), `src/test/global-setup.ts` (`prisma db migrate`), `src/test/setup.ts` (closes the pool), `src/test/db.ts` (`resetDb`, `createTestUser`, `authHeader`).
-7. **Tests:** `routes/auth.test.ts`, `routes/me.test.ts`, `middlewares/auth.test.ts`, and an updated `app.test.ts`.
+7. **Tests:** `routes/auth.integration.test.ts`, `routes/me.integration.test.ts`, `middlewares/auth.integration.test.ts`, and an updated `app.integration.test.ts`.
 8. **Docs:** `backend/CLAUDE.md` conventions, the root `CLAUDE.md` test command, two new rules in `docs/ERD.md`, `.env.example`.
 
 ### Outcome
@@ -253,7 +253,7 @@ Deviations from the plan, and details settled while implementing:
 - **Duplicate email race.** Prisma 8 throws a `SqlQueryError` with `sqlState: "23505"` when the `UNIQUE` index rejects an insert (checked with a throwaway probe). `register` maps it to the same 409, and a test sends two sign-ups at once and expects one 201 and one 409.
 - **Login timing.** For an unknown email, login still runs one `bcrypt.compare` against a fixed dummy hash, so response time doesn't reveal which emails have accounts. This applies the contract's "same answer" rule to timing as well.
 - **Deactivated token → 401** with the message "This account is deactivated" (login gives 403). `/me` only lists 401 in the contract, and the token has stopped working, so 401 fits. Recorded in the `/me` description.
-- **Role-change test** is in `middlewares/auth.test.ts` (a learner promoted to admin passes `authorize("admin")` on the very next request with the old token), not in `me.test.ts`. That's where the behaviour lives.
+- **Role-change test** is in `middlewares/auth.integration.test.ts` (a learner promoted to admin passes `authorize("admin")` on the very next request with the old token), not in `me.integration.test.ts`. That's where the behaviour lives.
 - **Migration output** from the test global setup is captured and printed only on failure. vitest 5 crashes while printing a global-setup error (`code.charCodeAt is not a function`), so the setup also logs a plain message.
 
 Left open:
@@ -359,7 +359,7 @@ No schema change.
 3. `services/course-views.ts`: `buildPassages` / `buildPassage` sign every passage's `mediaPath` in one batch. `GET /lessons/{id}` and the passage handlers use them.
 4. Tests never reach Supabase:
    - `vitest.config.ts` blanks the `SUPABASE_*` variables.
-   - `services/storage.test.ts` mocks `@supabase/supabase-js`.
+   - `services/storage.unit.test.ts` mocks `@supabase/supabase-js`.
    - Route tests mock `services/storage.ts` with `src/test/fake-storage.ts`.
 5. Docs: contract v0.2.3 (`mediaUrl` note, private bucket), `.env.example`, `docs/ERD.md`, `backend/CLAUDE.md`.
 
@@ -474,8 +474,8 @@ New:
 - `src/controllers/questions.ts`, `src/controllers/quizzes.ts` (which includes `getDiagnostic`).
 - `src/routes/questions.ts` (`authenticate` and `authorize("instructor", "admin")` on the whole router), `src/routes/quizzes.ts` (roles per route, as in `routes/courses.ts`), `src/routes/diagnostic.ts`.
 - Tests:
-  - `src/services/questions.test.ts`: pure unit tests of the shape and weight rules;
-  - `src/routes/questions.test.ts` and `src/routes/quizzes.test.ts`, with `fake-storage` mocked because quiz views contain passages.
+  - `src/services/questions.unit.test.ts`: pure unit tests of the shape and weight rules;
+  - `src/routes/questions.integration.test.ts` and `src/routes/quizzes.integration.test.ts`, with `fake-storage` mocked because quiz views contain passages.
 
 Changed:
 - `src/app.ts`: mount `/api/v1/questions`, `/api/v1/quizzes` and `/api/v1/diagnostic`.
@@ -617,7 +617,7 @@ No schema change, and no new dependency.
 New:
 - `src/services/grading.ts`, `src/services/attempts.ts`, `src/services/attempt-views.ts`;
 - `src/controllers/attempts.ts`, `src/routes/attempts.ts`;
-- tests: `src/services/grading.test.ts` and `src/routes/attempts.test.ts`.
+- tests: `src/services/grading.unit.test.ts` and `src/routes/attempts.integration.test.ts`.
 
 Changed:
 - `src/routes/quizzes.ts` (start), `src/routes/me.ts` (`/me/attempts`), `src/app.ts` (mount);
@@ -668,8 +668,8 @@ Left open:
 - **`timeLimitSeconds` isn't enforced** by the server. The frontend timer is expected to submit when time runs out.
 
 Follow-up (2026-10-24, approved by the owner): **`changeCourseStatus` had the same race.** It used `.where(...).update()`, so two status changes at the same moment could both succeed, for example an admin approving while the owner withdraws.
-- The existing HTTP race test in `routes/courses.test.ts` passed only because the two requests rarely overlap closely enough.
-- The new `src/services/courses.test.ts` calls the service directly, 10 rounds of approve and reject in parallel. It failed on the old code (both won) and passes with the fix.
+- The existing HTTP race test in `routes/courses.integration.test.ts` passed only because the two requests rarely overlap closely enough.
+- The new `src/services/courses.integration.test.ts` calls the service directly, 10 rounds of approve and reject in parallel. It failed on the old code (both won) and passes with the fix.
 - The fix is the same `updateAndCount` pattern, plus a reload of the row.
 - Every other `update()` in the code filters by primary key only, so none of them has this race.
 
@@ -696,7 +696,7 @@ The owner also asked for a new effort rule in the root `CLAUDE.md` (Effort guide
 | Validator schemas, routes, `controllers/admin.ts` | `medium` | Copies the `routes/me.ts` / `controllers/me.ts` pattern |
 | Self-update 409 rule and deactivation | `medium` | Rule decided in the plan; `authenticate` already reloads the user |
 | `services/stats.ts` | `medium` | Aggregate pattern; zero-fill and the 7-day window are easy to get wrong |
-| `routes/admin.test.ts` | `medium` | Standard supertest suite |
+| `routes/admin.integration.test.ts` | `medium` | Standard supertest suite |
 | `openapi.yaml` wording and version | `low` | Two sentences, no shape change |
 | `backend/CLAUDE.md`, Outcome, `ROADMAP.md` tick | `low` | Mechanical |
 | Optional `/code-review` of the role-change code | `high` | Review rule: auth code needs `high` or above |
@@ -722,12 +722,12 @@ The owner also asked for a new effort rule in the root `CLAUDE.md` (Effort guide
 
 ### Files
 
-`src/routes/admin.ts`, `src/controllers/admin.ts` (new), `src/services/stats.ts` (new), `src/utils/validator.ts` (`userRole`, `adminUsersQuerySchema`, `adminUserUpdateSchema`), `src/docs/openapi.yaml` (wording, v0.2.6), `src/routes/admin.test.ts` (new), `backend/CLAUDE.md`, root `CLAUDE.md` (effort rule).
+`src/routes/admin.ts`, `src/controllers/admin.ts` (new), `src/services/stats.ts` (new), `src/utils/validator.ts` (`userRole`, `adminUsersQuerySchema`, `adminUserUpdateSchema`), `src/docs/openapi.yaml` (wording, v0.2.6), `src/routes/admin.integration.test.ts` (new), `backend/CLAUDE.md`, root `CLAUDE.md` (effort rule).
 
 ### Outcome
 
 Done 2026-10-24.
-- **Checks:** typecheck and lint are clean, and 187 tests pass across 17 files (22 new in `routes/admin.test.ts`). Redocly lint is valid, with only the known `license` warning. The contract is v0.2.6.
+- **Checks:** typecheck and lint are clean, and 187 tests pass across 17 files (22 new in `routes/admin.integration.test.ts`). Redocly lint is valid, with only the known `license` warning. The contract is v0.2.6.
 - **Manual run:** a script in the scratchpad ran the real app on a real port against the test database (wiped before and after) and drove it with `fetch`. Every step returned the expected status:
   1. The admin lists all users (no `hashedPass`), and `?role=learner&isActive=true` returns only the learner.
   2. The learner gets 403 on `/instructor/courses`. After the admin promotes them, the same token gets 200.
@@ -735,7 +735,7 @@ Done 2026-10-24.
   4. The admin's PATCH on their own account gives 409.
   5. `/admin/stats` returns zero-filled groups and the right counts. The deactivated user's token gets 401.
 
-To read it: `src/controllers/admin.ts` (the list and the self-update rule), then `src/services/stats.ts` (each count has a comment saying what it counts), then `src/routes/admin.test.ts` (the stats test sets up data where each number is different, so a wrong window or a double count shows up).
+To read it: `src/controllers/admin.ts` (the list and the self-update rule), then `src/services/stats.ts` (each count has a comment saying what it counts), then `src/routes/admin.integration.test.ts` (the stats test sets up data where each number is different, so a wrong window or a double count shows up).
 
 Deviation from the plan:
 - **The 8-days-ago attempt in the stats test is moved back in SQL.** The plan assumed a `Temporal.Instant` could be passed to `db.raw.sql`. The runtime rejects it ("unsupported JS value type for raw-SQL interpolation"). The test now shifts `started_at` and `completed_at` together with `- interval '8 days'`, which also keeps the `completed_at >= started_at` check. `backend/CLAUDE.md` notes this, and the counting pattern.
@@ -743,3 +743,25 @@ Deviation from the plan:
 Left open:
 - **Two admins demoting each other at the same moment** could leave zero admins. Preventing it needs row locks for a case that can't happen with one admin. Accepted.
 - **`activeLearnersLast7Days`** counts users who completed an attempt, whatever their role is now. A learner promoted to instructor this week still counts. Accepted: the number answers "how many people studied this week".
+
+## Task: Server-side quiz time limit (after Phase 2, for the interim report)
+
+Approved 2026-11-01 (owner's rule: "graded as far as the learner got; the attempt submits itself").
+
+### Plan
+
+The assignment requires a time limit that the server enforces (`proposal_VI.md` §4.4). Before this task only the client timer ran. No schema change: `quizzes.time_limit_seconds` and `quiz_attempts.started_at` already exist.
+
+- **A late submit is rejected with 409** and the attempt is closed with score 0 (changed from "graded, never rejected" after review: an API client could submit full marks days late).
+- **An attempt nobody submits is closed by the server** (`closeAttemptIfTimeIsUp` in `services/attempts.ts`) when it is next opened, by `POST /quizzes/{id}/attempts` or `GET /attempts/{id}`. Score 0 and no response rows, because the server only receives answers at submit time. `completed_at` is the deadline, not the moment it was noticed. A learner who starts the quiz again gets a fresh attempt.
+- **Grace period:** 30 seconds after the limit (`GRACE_SECONDS`), for network delay.
+- **Not applied to the diagnostic:** an empty completed diagnostic would block a retake (409) and seed mastery with zeros.
+- The close is one `UPDATE ... WHERE completed_at IS NULL` (`updateAndCount`), so it cannot race with a submit.
+
+### Outcome
+
+Done 2026-11-01.
+- **Checks:** typecheck and lint are clean, 193 tests pass across 17 files (6 new, in `routes/attempts.integration.test.ts`, describe "quiz time limit"). Redocly lint is valid. `openapi.yaml` text updated for `startAttempt`, `getAttempt` and `submitAttempt`; no new endpoint, so the contract version is unchanged.
+- **Files:** `src/services/attempts.ts`, `src/controllers/attempts.ts`, `src/routes/attempts.integration.test.ts`, `src/docs/openapi.yaml`.
+- **Known limit:** the server cannot see answers before the learner submits. If the learner's browser dies, the answers given so far are lost and the attempt scores 0. (Before the 409 rule) a late submit could also contain answers given after the deadline, because the server cannot tell when each answer was given (`responseTimeSeconds` is sent by the client). Closing both gaps needs answers saved while the learner works (autosave), which needs a new column or table and is left for later.
+- **Frontend:** nothing changes for it to keep working. It should send the answers when its own timer reaches zero (the "auto-submit" the learner sees).

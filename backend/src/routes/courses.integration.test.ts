@@ -456,3 +456,32 @@ describe("POST /api/v1/courses/:courseId/enroll", () => {
     expect(asInstructor.status).toBe(403);
   });
 });
+
+describe("DELETE /api/v1/courses/:courseId/enroll", () => {
+  it("leaves with 200, then returns 404 because the learner is no longer enrolled", async () => {
+    const { user: instructor } = await createTestUser({ role: "instructor" });
+    const { user: learner } = await createTestUser();
+    const course = await createTestCourse({ instructorId: instructor.userId, status: "approved" });
+    await enrollTestUser(learner.userId, course.courseId);
+    const asLearner = authHeader(learner.userId);
+
+    const first = await request(app)
+      .delete(`/api/v1/courses/${course.courseId}/enroll`)
+      .set("Authorization", asLearner);
+    expect(first.status).toBe(200);
+
+    const second = await request(app)
+      .delete(`/api/v1/courses/${course.courseId}/enroll`)
+      .set("Authorization", asLearner);
+    expect(second.status).toBe(404);
+  });
+
+  it("returns 403 for non-learners", async () => {
+    const { user: instructor } = await createTestUser({ role: "instructor" });
+    const course = await createTestCourse({ instructorId: instructor.userId, status: "approved" });
+    const res = await request(app)
+      .delete(`/api/v1/courses/${course.courseId}/enroll`)
+      .set("Authorization", authHeader(instructor.userId));
+    expect(res.status).toBe(403);
+  });
+});

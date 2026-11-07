@@ -10,38 +10,26 @@ export type LessonGateStatus = {
   reason: string | null;
 };
 
-export const computeCourseLessonGates = async (
-  userId: number,
-  courseId: number,
-): Promise<Map<number, LessonGateStatus>> => {
+type GateLesson = {
+  lessonId: number;
+  title: string;
+  kind: "core" | "remedial";
+  orderIndex: number;
+};
+
+// The unlock rule for the lessons of one course. Remedial lessons are always open; a core lesson
+// opens when the core lesson before it is completed or all that lesson's skills are mastered.
+export const gateCourseLessons = (
+  lessons: GateLesson[],
+  completedLessonIds: Set<number>,
+  masteryBySkill: Map<number, number>,
+  skillsByLesson: Map<number, Array<{ skillId: number }>>,
+): Map<number, LessonGateStatus> => {
   const gates = new Map<number, LessonGateStatus>();
 
-  const lessons = await orm.Lessons.where({ courseId })
-    .orderBy([(l) => l.kind.asc(), (l) => l.orderIndex.asc(), (l) => l.lessonId.asc()])
-    .all();
-
-  if (lessons.length === 0) return gates;
-
-  const coreLessons = lessons.filter((l) => l.kind === "core");
-  const lessonIds = lessons.map((l) => l.lessonId);
-
-  const [progressRows, lessonSkills, masteryRows] = await Promise.all([
-    orm.LessonProgress.where((p) => and(p.userId.eq(userId), p.lessonId.in(lessonIds))).all(),
-    orm.LessonSkills.where((ls) => ls.lessonId.in(lessonIds)).all(),
-    orm.UserSkillMastery.where({ userId }).all(),
-  ]);
-
-  const completedSet = new Set(
-    progressRows.filter((p) => p.status === "completed").map((p) => p.lessonId),
-  );
-  const masteryBySkill = new Map(masteryRows.map((m) => [m.skillId, m.masteryProb]));
-
-  const skillsByLesson = new Map<number, number[]>();
-  for (const ls of lessonSkills) {
-    const list = skillsByLesson.get(ls.lessonId) ?? [];
-    list.push(ls.skillId);
-    skillsByLesson.set(ls.lessonId, list);
-  }
+  const coreLessons = lessons
+    .filter((l) => l.kind === "core")
+    .sort((a, b) => a.orderIndex - b.orderIndex || a.lessonId - b.lessonId);
 
   for (const lesson of lessons) {
     if (lesson.kind === "remedial") {
@@ -57,11 +45,11 @@ export const computeCourseLessonGates = async (
     }
 
     const prev = coreLessons[i - 1]!;
-    const prevCompleted = completedSet.has(prev.lessonId);
-    const prevSkillIds = skillsByLesson.get(prev.lessonId) ?? [];
+    const prevCompleted = completedLessonIds.has(prev.lessonId);
+    const prevSkills = skillsByLesson.get(prev.lessonId) ?? [];
     const prevSkillsMastered =
-      prevSkillIds.length > 0 &&
-      prevSkillIds.every((skId) => (masteryBySkill.get(skId) ?? 0) >= MASTERY_THRESHOLD);
+      prevSkills.length > 0 &&
+      prevSkills.every((sk) => (masteryBySkill.get(sk.skillId) ?? 0) >= MASTERY_THRESHOLD);
 
     const unlocked = prevCompleted || prevSkillsMastered;
     gates.set(current.lessonId, {
@@ -76,16 +64,34 @@ export const computeCourseLessonGates = async (
   return gates;
 };
 
-export const isLessonLockedForLearner = async (
+export const computeCourseLessonGates = async (
   userId: number,
-  lessonId: number,
-): Promise<LessonGateStatus> => {
-  const lesson = await orm.Lessons.first({ lessonId });
-  if (!lesson || lesson.kind === "remedial") {
-    return { lessonId, locked: false, reason: null };
+  courseId: number,
+): Promise<Map<number, LessonGateStatus>> => {
+  const lessons = await orm.Lessons.where({ courseId }).all();
+  if (lessons.length === 0) return new Map();
+
+  const lessonIds = lessons.map((l) => l.lessonId);
+
+  const [progressRows, lessonSkills, masteryRows] = await Promise.all([
+    orm.LessonProgress.where((p) => and(p.userId.eq(userId), p.lessonId.in(lessonIds))).all(),
+    orm.LessonSkills.where((ls) => ls.lessonId.in(lessonIds)).all(),
+    orm.UserSkillMastery.where({ userId }).all(),
+  ]);
+
+  const completedSet = new Set(
+    progressRows.filter((p) => p.status === "completed").map((p) => p.lessonId),
+  );
+  const masteryBySkill = new Map(masteryRows.map((m) => [m.skillId, m.masteryProb]));
+
+  const skillsByLesson = new Map<number, Array<{ skillId: number }>>();
+  for (const ls of lessonSkills) {
+    const list = skillsByLesson.get(ls.lessonId) ?? [];
+    list.push({ skillId: ls.skillId });
+    skillsByLesson.set(ls.lessonId, list);
   }
-  const gates = await computeCourseLessonGates(userId, lesson.courseId);
-  return gates.get(lessonId) ?? { lessonId, locked: false, reason: null };
+
+  return gateCourseLessons(lessons, completedSet, masteryBySkill, skillsByLesson);
 };
 
 export const getLearnerGoalAndProgress = async (userId: number) => {

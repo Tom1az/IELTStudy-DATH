@@ -277,6 +277,20 @@ const enrollInCourse = async (req: Request, res: Response) => {
   });
 };
 
+const leaveCourse = async (req: Request, res: Response) => {
+  const userId = req.user!.userId;
+  const courseId: number = req.value!.params!.courseId;
+
+  const enrollment = await Enrollments.first({ userId, courseId });
+  if (!enrollment) {
+    throw httpError(404, "You are not enrolled in this course");
+  }
+
+  await Enrollments.where({ userId, courseId }).delete();
+
+  return res.status(200).json({ message: "Left the course" });
+};
+
 export default {
   listCatalog,
   listMyCourses,
@@ -291,4 +305,5 @@ export default {
   rejectCourse,
   archiveCourse,
   enrollInCourse,
+  leaveCourse,
 };

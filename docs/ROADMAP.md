@@ -97,6 +97,25 @@ Owned by another team member, so Phase 4 work goes ahead without it. Until it la
 - [ ] helmet, CORS, rate limiting, `/security-review`
 - [ ] Demo seed data, final report
 
+## Backlog (after the interim report, not yet scheduled into a phase)
+
+Required by the course brief (`proposal_VI.md`) but not built yet. Plan each item before starting, and add it to `specs.md` first if the spec does not mention it.
+
+- [ ] Server-side search and pagination (brief §4.2). Today no endpoint paginates: `GET /courses` has only `?level=`, and search and paging run in the frontend over the full list (`frontend/src/app/(site)/courses/page.tsx`). Add `?q=&page=&pageSize=` to `GET /courses`, then `/admin/users`, `/admin/courses` and `/me/attempts`. Responses gain `page`, `totalPages` and `total`. Contract first in `openapi.yaml`, tests, no schema change. Then drop the client-side paging.
+- [ ] Leave a course (brief §4.3): `DELETE /courses/{courseId}/enroll`, learner only, only when enrolled. Today `/courses/{courseId}/enroll` has only `POST`. No schema change (delete the `enrollments` row). Decide first whether lesson progress is kept. Add a "Leave" button on the course page.
+- [ ] Password recovery (brief §4.1): request and reset endpoints, and wire the existing `/forgot-password` and `/reset-password` pages (5-line placeholders today). Needs a table for reset tokens (schema change, needs approval) and a way to send email (log the token in development; pick a mail service for deployment).
+- [ ] Instructor review of attempts (brief §4.4): the instructor lists learners' attempts on their quizzes, grades and writes feedback. Needs a feedback column or table (schema change). Wire `/instructor/grading` and `/instructor/learners`, which are placeholders today.
+- [ ] Lesson discussion or Q&A (brief §4.5): new table for comments (schema change), endpoints, and a UI on the lesson page.
+- [ ] Notifications (brief §4.5): new table (schema change). Create one when a course is approved or rejected, when new content is published, and when a result or feedback is ready. Wire `/notifications`, a placeholder today.
+- [ ] Report inappropriate content (brief §4.5): new table (schema change), a report button on comments and content, and the admin handling page `/admin/reports` (placeholder today).
+- [ ] Admin audit log (brief §4.6): new table (schema change), written when an admin changes a role, deactivates a user, or approves, rejects or archives a course. Wire `/admin/audit` (placeholder today).
+- [ ] Admin reports (brief §4.6): check that `GET /admin/stats` covers enrolments, completion rate and learning results; add what is missing.
+- [ ] Autosave answers while a quiz is open: the time limit now closes an unsubmitted attempt with score 0 and cannot tell when answers were given (`docs/plans/phase-2-core-apis.md`, "Server-side quiz time limit"). Needs a column or table (schema change).
+- [ ] BKT and recommender integration into the core app: the existing Phase 3 tasks cover it. Port or adapt `advanced/` to the Prisma schema and JWT, add `mastery_history` if needed, and call it from `submitAttempt`.
+  - **Decision (2026-11-01):** until the interim report, BKT and the recommender stay in `advanced/`, a separate service on port 4001 that shares the database and `JWT_SECRET`, and the backend calls it through `services/advanced-client.ts` (fails soft). After the interim, port it into `backend/src/services/` (`bkt.ts`, `recommender.ts`, `gating.ts`) and run the mastery update inside the submit transaction. Why: one Prisma schema instead of a copy, no duplicated auth/JWT code, an atomic update, no extra HTTP hop, one server to deploy, and a failure is visible instead of swallowed. When ported, remove `ADVANCED_SERVICE_URL` and `advanced-client.ts`, and add the code to the backend tests and CI. Mention this as a known limitation and planned step in the interim report.
+
+Several items need schema changes. Send them to the owner as one combined proposal, so there is one migration (`backend/CLAUDE.md`: schema changes need approval).
+
 ## Verification
 
 | Phase | Done when |
