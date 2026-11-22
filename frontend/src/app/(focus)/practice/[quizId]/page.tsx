@@ -1,7 +1,7 @@
 "use client";
 
 import { useParams, useRouter } from "next/navigation";
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { practiceApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { RequireRole } from "@/lib/auth-context";
@@ -13,11 +13,22 @@ function Runner() {
   const router = useRouter();
   const toast = useToast();
   const { data, error, loading, reload } = useAsync(() => practiceApi.start(quizId), [quizId]);
+  // The "we brought your answers back" message belongs to the attempt, not to every render
+  const announced = useRef<string | null>(null);
 
   const attemptId = data?.attempt.id;
   const onSave = useCallback(async (answers: Record<string, string>, remaining: number) => {
-    if (attemptId) await practiceApi.save(attemptId, answers, remaining);
+    if (!attemptId) return;
+    return practiceApi.save(attemptId, answers, remaining);
   }, [attemptId]);
+
+  useEffect(() => {
+    if (!data || !attemptId || announced.current === attemptId) return;
+    announced.current = attemptId;
+    if (data.restoredFrom) {
+      toast(data.restoredFrom === "server" ? "Your saved answers are back." : "Restored the answers saved in this browser.", "info");
+    }
+  }, [data, attemptId, toast]);
 
   if (loading && !data) return <PageLoader label="Preparing your quiz…" />;
   if (error || !data) return <ErrorState error={error} onRetry={reload} />;
@@ -36,7 +47,7 @@ function Runner() {
       // A quiz without a time limit can't be switched to timed mode
       allowUntimed={seconds > 0}
       onSave={onSave}
-      onExit={() => { toast("Your answers are saved in this browser. You can resume any time.", "info"); router.push(exitTo); }}
+      onExit={() => { toast("Your answers are saved. You can resume any time.", "info"); router.push(exitTo); }}
       onSubmit={async (answers, timings, touchOrder) => {
         try {
           const res = await practiceApi.submit(attempt.id, answers, timings, touchOrder);

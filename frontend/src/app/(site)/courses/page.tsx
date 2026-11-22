@@ -52,7 +52,7 @@ function CoursesInner() {
           <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by skill">
             {(["all", ...SKILL_CATEGORIES] as Filter[]).map((s) => (
               <button key={s} onClick={() => setSkill(s)} aria-pressed={skill === s}
-                className={cx("h-[38px] rounded-full border-[1.5px] px-4 text-sm font-semibold transition-colors", skill === s ? "border-brand bg-brand text-white" : "border-line bg-white text-ink hover:border-brand")}>
+                className={cx("h-[38px] rounded-full border-[1.5px] px-4 text-sm font-semibold transition duration-150 ease-swift active:scale-95", skill === s ? "border-brand bg-brand text-white" : "border-line bg-white text-ink hover:border-brand hover:bg-brand-tint")}>
                 {s === "all" ? "All skills" : SKILL_META[s].label}
               </button>
             ))}
@@ -63,7 +63,7 @@ function CoursesInner() {
 
         {/* Lesson search results */}
         {searching && data && (
-          <section className="mt-8 rounded-2xl border border-line bg-white" aria-live="polite">
+          <section className="mt-8 animate-rise rounded-2xl border border-line bg-white" aria-live="polite">
             <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
               <p className="text-sm font-semibold">{plural(data.lessons.total, "lesson")} {dq ? <>match “{dq}”</> : <>in {SKILL_META[skill as SkillCategory].label}</>}</p>
               <button className="text-sm font-semibold text-brand hover:underline" onClick={() => { setQ(""); setSkill("all"); }}>Clear</button>
@@ -77,7 +77,7 @@ function CoursesInner() {
                   const open = !!course?.enrollment;
                   return (
                     <li key={h.lessonId}>
-                      <Link href={open ? `/learn/${h.courseId}/${h.lessonId}` : `/courses/${h.courseId}#${h.skill}`} className="flex items-center gap-4 px-5 py-3.5 hover:bg-ivory">
+                      <Link href={open ? `/learn/${h.courseId}/${h.lessonId}` : `/courses/${h.courseId}#${h.skill}`} className="flex items-center gap-4 px-5 py-3.5 transition-colors duration-150 hover:bg-ivory">
                         <SkillChip skill={h.skill} />
                         <div className="min-w-0 flex-1">
                           <p className="truncate text-sm font-semibold">{h.title}</p>
@@ -95,13 +95,13 @@ function CoursesInner() {
         )}
 
         {/* Course rows */}
-        <div className="mt-10 space-y-5">
+        <div className="stagger mt-10 space-y-5">
           {loading && !data
             ? [1, 2, 3].map((i) => <Skeleton key={i} className="h-[214px]" />)
             : data?.courses.map((c) => {
                 const t = LEVEL_THEME[c.level] ?? LEVEL_THEME[2];
                 return (
-                  <article key={c.id} className="grid overflow-hidden rounded-2xl border border-line bg-white md:grid-cols-[230px_1fr_220px] lg:grid-cols-[260px_1fr_240px]">
+                  <article key={c.id} className="grid overflow-hidden rounded-2xl border border-line bg-white transition duration-200 ease-swift hover:border-brand/30 hover:shadow-lift md:grid-cols-[230px_1fr_220px] lg:grid-cols-[260px_1fr_240px]">
                     <div className={cx("flex flex-col p-5 md:min-h-[214px]", t.panel)}>
                       <p className={cx("text-[11px] font-semibold uppercase tracking-eyebrow", c.level === 1 ? "text-vanilla-ink" : "text-white")}>Level {c.level}</p>
                       <h2 className={cx("mt-1 break-words text-[26px] font-extrabold leading-tight lg:text-[30px]", t.title)}>{c.title}</h2>
@@ -111,7 +111,7 @@ function CoursesInner() {
                       <p className="text-sm leading-relaxed text-ink-muted">{c.description}</p>
                       <div className="mt-4 grid gap-2.5 sm:grid-cols-2">
                         {SKILL_CATEGORIES.filter((s) => c.skillCounts[s] > 0).map((s) => (
-                          <Link href={`/courses/${c.id}#${s}`} key={s} className={cx("flex items-center justify-between rounded-lg border border-line px-3 py-2.5 transition-opacity hover:border-brand/30", skill !== "all" && skill !== s && "opacity-40")}>
+                          <Link href={`/courses/${c.id}#${s}`} key={s} className={cx("flex items-center justify-between rounded-lg border border-line px-3 py-2.5 transition duration-200 ease-swift hover:border-brand/30 hover:bg-brand-tint", skill !== "all" && skill !== s && "opacity-40")}>
                             <SkillChip skill={s} />
                             <span className="text-xs text-ink-muted">{plural(c.skillCounts[s], "lesson")}</span>
                           </Link>
