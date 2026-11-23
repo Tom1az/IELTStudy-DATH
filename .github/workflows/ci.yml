@@ -166,8 +166,15 @@ jobs:
           (cd backend && PORT=3000 node src/server.ts) &
           (cd advanced && PORT=4001 node src/server.ts) &
           npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/ http-get://localhost:4001/
-      - run: npx playwright install --with-deps chromium
+      - name: Cache the Playwright browser
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-ubuntu-24.04-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Install the Playwright browser
         working-directory: frontend
+        timeout-minutes: 8
+        run: npx playwright install --with-deps chromium
       # Playwright builds and starts the frontend itself (playwright.config.ts)
       - run: npm run test:e2e
         working-directory: frontend
