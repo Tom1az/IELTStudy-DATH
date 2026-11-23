@@ -121,6 +121,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     needs: [backend, advanced, frontend]
+    # The browsers ship inside this image, so the job never downloads them: the Playwright
+    # CDN stalled at 100% on every attempt from these runners. Bump the tag together with
+    # the frontend's playwright version.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.0-noble
+      options: --user 1001
     services:
       postgres:
         image: postgres:18
@@ -134,7 +140,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy
+      # From inside a job container a service answers to its own name, not to localhost
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ieltstudy
       JWT_SECRET: ci-e2e-secret
       SEED_PASSWORD: ci-seed-password
       BACKEND_URL: http://localhost:3000
@@ -166,28 +173,6 @@ jobs:
           (cd backend && PORT=3000 node src/server.ts) &
           (cd advanced && PORT=4001 node src/server.ts) &
           npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/ http-get://localhost:4001/
-      - name: Cache the Playwright browser
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/ms-playwright
-          key: playwright-ubuntu-24.04-${{ hashFiles('frontend/package-lock.json') }}
-      - name: Install the Playwright system dependencies
-        working-directory: frontend
-        run: npx playwright install-deps chromium
-      # The CDN download stalls now and then and has no timeout of its own, so each
-      # attempt is capped and retried rather than left to hang the job.
-      - name: Install the Playwright browser
-        working-directory: frontend
-        timeout-minutes: 12
-        run: |
-          for attempt in 1 2 3; do
-            echo "Download attempt $attempt"
-            if timeout -k 10 180 npx playwright install chromium; then
-              exit 0
-            fi
-            echo "Stalled, retrying"
-          done
-          exit 1
       # Playwright builds and starts the frontend itself (playwright.config.ts)
       - run: npm run test:e2e
         working-directory: frontend
