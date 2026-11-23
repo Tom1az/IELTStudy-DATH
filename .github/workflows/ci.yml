@@ -171,10 +171,23 @@ jobs:
         with:
           path: ~/.cache/ms-playwright
           key: playwright-ubuntu-24.04-${{ hashFiles('frontend/package-lock.json') }}
+      - name: Install the Playwright system dependencies
+        working-directory: frontend
+        run: npx playwright install-deps chromium
+      # The CDN download stalls now and then and has no timeout of its own, so each
+      # attempt is capped and retried rather than left to hang the job.
       - name: Install the Playwright browser
         working-directory: frontend
-        timeout-minutes: 8
-        run: npx playwright install --with-deps chromium
+        timeout-minutes: 12
+        run: |
+          for attempt in 1 2 3; do
+            echo "Download attempt $attempt"
+            if timeout -k 10 180 npx playwright install chromium; then
+              exit 0
+            fi
+            echo "Stalled, retrying"
+          done
+          exit 1
       # Playwright builds and starts the frontend itself (playwright.config.ts)
       - run: npm run test:e2e
         working-directory: frontend
