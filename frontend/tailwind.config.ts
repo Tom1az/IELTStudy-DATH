@@ -29,8 +29,34 @@ const config: Config = {
         sans: ['"Plus Jakarta Sans"', "system-ui", "sans-serif"],
       },
       borderRadius: { xl: "12px", "2xl": "16px" },
-      boxShadow: { card: "0 1px 2px rgba(52,59,27,0.04)" },
+      boxShadow: {
+        card: "0 1px 2px rgba(52,59,27,0.04)",
+        // Used on hover/open states only, so a raised surface reads as raised
+        lift: "0 10px 24px -14px rgba(52,59,27,0.35)",
+        pop: "0 18px 40px -20px rgba(52,59,27,0.45)",
+      },
       letterSpacing: { eyebrow: "0.08em" },
+      // One easing for everything that moves: decelerating, no overshoot except on toasts
+      transitionTimingFunction: { swift: "cubic-bezier(0.22,0.61,0.36,1)" },
+      keyframes: {
+        rise: { from: { opacity: "0", transform: "translateY(10px)" }, to: { opacity: "1", transform: "none" } },
+        fade: { from: { opacity: "0" }, to: { opacity: "1" } },
+        // Dialogs: a sheet sliding up on phones, a small zoom on wider screens
+        sheet: { from: { opacity: "0", transform: "translateY(16px) scale(0.98)" }, to: { opacity: "1", transform: "none" } },
+        toast: { from: { opacity: "0", transform: "translateY(14px) scale(0.96)" }, to: { opacity: "1", transform: "none" } },
+        // The navigation drawer on phones
+        drawer: { from: { transform: "translateX(-100%)" }, to: { transform: "none" } },
+        // The sweep across a loading placeholder
+        shimmer: { from: { transform: "translateX(-100%)" }, to: { transform: "translateX(100%)" } },
+      },
+      animation: {
+        rise: "rise 0.42s cubic-bezier(0.22,0.61,0.36,1) both",
+        fade: "fade 0.25s ease-out both",
+        sheet: "sheet 0.26s cubic-bezier(0.22,0.61,0.36,1) both",
+        toast: "toast 0.3s cubic-bezier(0.2,1.1,0.4,1) both",
+        drawer: "drawer 0.24s cubic-bezier(0.22,0.61,0.36,1) both",
+        shimmer: "shimmer 1.7s infinite",
+      },
     },
   },
   plugins: [],

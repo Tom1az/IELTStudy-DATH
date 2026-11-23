@@ -45,7 +45,7 @@ export function LearnerShell({ children }: { children: ReactNode }) {
           <p className="text-[10px] font-bold uppercase tracking-eyebrow text-ink-muted">Your workspace</p>
           {NAV.map((n) => (
             <Link key={n.href} href={n.href} aria-current={isActive(n) ? "page" : undefined}
-              className={cx("flex h-12 items-center gap-3.5 rounded-lg px-3.5 text-sm transition-colors", isActive(n) ? "bg-brand font-bold text-white" : "font-medium text-ink hover:bg-brand-tint")}>
+              className={cx("flex h-12 items-center gap-3.5 rounded-lg px-3.5 text-sm transition duration-150 ease-swift", isActive(n) ? "bg-brand font-bold text-white" : "font-medium text-ink hover:translate-x-0.5 hover:bg-brand-tint")}>
               {n.icon}
               {n.label}
             </Link>
@@ -74,14 +74,14 @@ export function LearnerShell({ children }: { children: ReactNode }) {
 
         {user && (
           <div className="flex items-center gap-3">
-            <Link href="/profile" className="flex min-w-0 flex-1 items-center gap-3" aria-label="Profile and settings">
+            <Link href="/profile" className="flex min-w-0 flex-1 items-center gap-3 rounded-lg transition-opacity hover:opacity-80" aria-label="Profile and settings">
               <Avatar name={user.name} size={40} />
               <span className="min-w-0">
                 <span className="block truncate text-[13px] font-bold">{user.name}</span>
                 <span className="block text-[11px] text-ink-muted">Learner</span>
               </span>
             </Link>
-            <button onClick={doLogout} className="rounded-lg p-2 text-ink-muted hover:bg-brand-tint hover:text-ink" aria-label="Log out" title="Log out">
+            <button onClick={doLogout} className="rounded-lg p-2 text-ink-muted transition-colors duration-150 hover:bg-brand-tint hover:text-ink" aria-label="Log out" title="Log out">
               <LogOut className="h-4 w-4" />
             </button>
           </div>
@@ -97,17 +97,19 @@ export function LearnerShell({ children }: { children: ReactNode }) {
           )}
         </header>
 
-        {/* Bottom padding keeps content clear of the phone bottom bar */}
-        <main id="main" className="flex-1 pb-24 lg:pb-0">{children}</main>
+        {/* Bottom padding keeps content clear of the phone bottom bar.
+            Keyed on the path so moving between pages fades rather than snaps. */}
+        <main id="main" key={pathname} className="flex-1 animate-rise pb-24 lg:pb-0">{children}</main>
       </div>
 
       {/* Phone bottom navigation */}
       <nav className="fixed inset-x-0 bottom-0 z-40 border-t border-line bg-white pb-[env(safe-area-inset-bottom)] lg:hidden" aria-label="Mobile">
-        <div className="mx-auto flex max-w-md justify-between px-3 pt-2.5 pb-2">
+        <div className="mx-auto flex max-w-md justify-between px-3 pb-2 pt-2.5">
           {NAV.map((n) => (
             <Link key={n.href} href={n.href} aria-current={isActive(n) ? "page" : undefined}
-              className={cx("flex w-16 flex-col items-center gap-1 text-[10px]", isActive(n) ? "font-bold text-brand" : "font-medium text-ink-muted")}>
-              {n.icon}
+              className={cx("flex w-16 flex-col items-center gap-1 text-[10px] transition-colors duration-150", isActive(n) ? "font-bold text-brand" : "font-medium text-ink-muted")}>
+              {/* The active icon sits a touch larger, which reads faster than colour alone on a small screen */}
+              <span className={cx("transition-transform duration-200 ease-swift", isActive(n) && "scale-110")}>{n.icon}</span>
               {n.label}
             </Link>
           ))}
