@@ -168,14 +168,19 @@ jobs:
         run: |
           npx prisma db migrate --db "$DATABASE_URL" --yes --quiet > /dev/null
           npm run seed
-      - name: Start the backend and Advanced
+      - name: Run the end-to-end tests
         run: |
-          (cd backend && PORT=3000 node src/server.ts) &
-          (cd advanced && PORT=4001 node src/server.ts) &
+          (cd backend && PORT=3000 node src/server.ts > /tmp/backend.log 2>&1 &)
+          (cd advanced && PORT=4001 node src/server.ts > /tmp/advanced.log 2>&1 &)
           npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/ http-get://localhost:4001/
-      # Playwright builds and starts the frontend itself (playwright.config.ts)
-      - run: npm run test:e2e
-        working-directory: frontend
+          cd frontend && npm run test:e2e
+      - name: Show the server logs
+        if: failure()
+        run: |
+          echo "=== backend ==="
+          cat /tmp/backend.log || true
+          echo "=== advanced ==="
+          cat /tmp/advanced.log || true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
