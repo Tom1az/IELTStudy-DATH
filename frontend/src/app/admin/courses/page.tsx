@@ -1,29 +1,48 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { Archive, CheckCircle2, Eye, XCircle } from "lucide-react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { Archive, CheckCircle2, Eye, Search, XCircle } from "lucide-react";
 import { adminApi, ApiError } from "@/lib/api";
 import type { AdminCourse } from "@/lib/api";
 import { SKILL_CATEGORIES } from "@/lib/types";
-import { useAsync } from "@/lib/hooks";
+import { useAsync, useDebounced } from "@/lib/hooks";
 import { SKILL_META, cx, fmtDate, timeAgo } from "@/lib/format";
-import { ConfirmDialog, EmptyState, ErrorState, Modal, PageHeader, PageLoader, Spinner, TextArea, useToast } from "@/components/ui";
+import { ConfirmDialog, EmptyState, ErrorState, Modal, PageHeader, PageLoader, Pagination, Spinner, TextArea, useToast } from "@/components/ui";
 import { CourseStatusPill } from "@/components/studio/CourseStatusPill";
 
 export default function AdminCourses() {
+  return <Suspense><AdminCoursesInner /></Suspense>;
+}
+
+function AdminCoursesInner() {
   const toast = useToast();
-  const { data, error, loading, reload } = useAsync(() => adminApi.courses(), []);
+  const router = useRouter();
+  const sp = useSearchParams();
+  const [q, setQ] = useState(sp.get("q") ?? "");
+  const [page, setPage] = useState(Math.max(1, Number(sp.get("page") ?? 1) || 1));
+  const dq = useDebounced(q);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (dq) params.set("q", dq);
+    if (page > 1) params.set("page", String(page));
+    router.replace(`/admin/courses${params.toString() ? `?${params}` : ""}`, { scroll: false });
+  }, [dq, page, router]);
+
+  // The review queue (all of it) and one page of every course, both from the backend
+  const queue = useAsync(() => adminApi.courses({ status: "pending_review", pageSize: 100 }), []);
+  const { data: all, error, loading, reload: reloadAll } = useAsync(() => adminApi.courses({ q: dq, page, pageSize: 10 }), [dq, page]);
+  const reload = (silent?: boolean) => { queue.reload(silent); reloadAll(silent); };
   const [review, setReview] = useState<{ course: AdminCourse; decision: "approve" | "reject" } | null>(null);
   const [feedback, setFeedback] = useState("");
   const [err, setErr] = useState<string>();
   const [pending, setPending] = useState(false);
   const [archiving, setArchiving] = useState<AdminCourse | null>(null);
 
-  if (loading && !data) return <PageLoader />;
-  if (error || !data) return <ErrorState error={error} onRetry={reload} />;
-  const waiting = data.filter((c) => c.status === "pending");
-  const others = data.filter((c) => c.status !== "pending");
+  if ((loading && !all) || (queue.loading && !queue.data)) return <PageLoader />;
+  if (error || queue.error || !all || !queue.data) return <ErrorState error={error ?? queue.error} onRetry={() => reload()} />;
+  const waiting = queue.data.items;
 
   const submit = async () => {
     if (!review) return;
@@ -79,12 +98,16 @@ export default function AdminCourses() {
         </div>
       )}
 
-      <h2 className="mb-3 mt-10 text-xl font-extrabold">All courses</h2>
+      <div className="mb-3 mt-10 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <h2 className="text-xl font-extrabold">All courses ({all.total})</h2>
+        <label className="relative w-full sm:w-72"><span className="sr-only">Search courses</span><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" /><input className="input pl-9" placeholder="Search title, description or lesson" value={q} onChange={(e) => { setQ(e.target.value); setPage(1); }} /></label>
+      </div>
       <div className="overflow-x-auto rounded-2xl border border-line bg-white">
         <table className="table-base min-w-[760px]">
           <thead><tr><th>Course</th><th>Instructor</th><th>Status</th><th>Lessons</th><th>Updated</th><th /></tr></thead>
           <tbody>
-            {others.map((c) => (
+            {all.items.length === 0 && <tr><td colSpan={6}><EmptyState title="No courses match" /></td></tr>}
+            {all.items.map((c) => (
               <tr key={c.id}>
                 <td><p className="font-semibold">{c.title}</p><p className="text-xs text-ink-muted">Level {c.level} · {c.levelName}</p></td>
                 <td>{c.instructorName}</td>
@@ -98,6 +121,7 @@ export default function AdminCourses() {
           </tbody>
         </table>
       </div>
+      <div className="mt-4"><Pagination page={all.page} totalPages={all.totalPages} onChange={setPage} /></div>
 
       <Modal open={!!review} onClose={() => setReview(null)} title={review?.decision === "approve" ? `Approve ${review?.course.title}?` : `Request changes to ${review?.course.title}`}
         footer={<><button className="btn-ghost" onClick={() => setReview(null)}>Cancel</button><button className={review?.decision === "approve" ? "btn-primary" : "btn-danger"} onClick={submit} disabled={pending}>{pending && <Spinner className="h-4 w-4" />}{review?.decision === "approve" ? "Approve" : "Send feedback"}</button></>}>

@@ -281,7 +281,7 @@ paths:
       summary: List all courses (the review queue)
       description: |
         Roles: admin. Use `?status=pending_review` for the courses waiting for review. With `status`, the oldest submission comes first;
-        without it, newest course first. `q` matches the title or the description (case-insensitive).
+        without it, newest course first. `q` matches the title, the description or a lesson title (case-insensitive).
       parameters:
         - name: status
           in: query
@@ -460,7 +460,7 @@ paths:
       summary: The course catalog (approved courses)
       description: |
         Roles: learner, instructor, admin. `isEnrolled` tells a learner whether they are enrolled.
-        Easiest level first, then by title. `q` matches the title or the description (case-insensitive).
+        Oldest course first. `q` matches the title, the description or a lesson title (case-insensitive).
       parameters:
         - name: level
           in: query
@@ -1657,11 +1657,14 @@ paths:
       tags: [Attempts]
       operationId: listMyAttempts
       summary: My attempt history
-      description: "Roles: learner. Newest first. With `quizId`, only that quiz's attempts (an empty list if there are none)."
+      description: "Roles: learner. Newest first. With `quizId`, only that quiz's attempts (an empty list if there are none); with `status`, only open or only completed ones."
       parameters:
         - name: quizId
           in: query
           schema: { type: integer, minimum: 1 }
+        - name: status
+          in: query
+          schema: { type: string, enum: [in_progress, completed] }
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/PageSize"
       responses:

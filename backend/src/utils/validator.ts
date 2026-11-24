@@ -1,5 +1,6 @@
 import Joi from "joi";
 import type { NextFunction, Request, Response } from "express";
+import { pageQuery, searchQuery } from "./pagination.ts";
 
 // The contract's 400 shape: `{ error: { message, details } }`, one detail per invalid field.
 // `abortEarly: false` makes Joi report every invalid field, not just the first one.
@@ -182,6 +183,8 @@ const schemas = {
     role: userRole,
     // Joi turns the query strings "true" and "false" into booleans
     isActive: Joi.boolean(),
+    ...searchQuery,
+    ...pageQuery,
   }),
 
   adminUserUpdateSchema: Joi.object()
@@ -216,10 +219,14 @@ const schemas = {
 
   catalogQuerySchema: Joi.object().keys({
     level: courseLevel,
+    ...searchQuery,
+    ...pageQuery,
   }),
 
   courseStatusQuerySchema: Joi.object().keys({
     status: courseStatus,
+    ...searchQuery,
+    ...pageQuery,
   }),
 
   // ----- Lessons -----
@@ -338,6 +345,14 @@ const schemas = {
 
   myAttemptsQuerySchema: Joi.object().keys({
     quizId: Joi.number().integer().positive(),
+    status: Joi.string().valid("in_progress", "completed"),
+    ...pageQuery,
+  }),
+
+  // ----- Notifications -----
+  notificationsQuerySchema: Joi.object().keys({
+    unread: Joi.boolean(),
+    ...pageQuery,
   }),
 
   // ----- Uploads -----

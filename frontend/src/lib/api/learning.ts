@@ -3,7 +3,8 @@ import type { Course, Enrollment, Lesson, Paginated, Recommendation, Skill, Skil
 import type {
   BackendAttemptSummary, BackendCourse, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendMastery, BackendRecommendation, BackendSkill,
 } from "./backend-types";
-import { ApiError, backendRequest, getToken } from "./client";
+import { ApiError, backendRequest, fetchAllPages, getToken } from "./client";
+import type { PageMeta } from "./client";
 import { authApi } from "./auth";
 import {
   buildSyllabus, lessonCategory, toCourse, toEnrollment, toLesson, toRecommendation, toSkill, toSkillCategories, type SkillCategories,
@@ -246,33 +247,47 @@ async function loadMastery(): Promise<MasteryData | null> {
 /* ───────── Catalog ───────── */
 
 export const catalogApi = {
-  /** The course catalog, plus a search over lesson titles (by text and/or skill), paged. */
-  async list(params: { q?: string; skill?: SkillCategory | "all"; page?: number; pageSize?: number } = {}) {
+  /**
+   * One page of the course catalog. The backend searches (`q` matches a course's title,
+   * description or any lesson title) and pages; the matching lessons of the courses on this
+   * page are listed as `lessons`. The skill filter only highlights: every course trains all
+   * four skills.
+   */
+  async list(params: { q?: string; skill?: SkillCategory | "all"; page?: number; pageSize?: number } = {}): Promise<{
+    courses: CourseSummary[];
+    coursesPage: Paginated<CourseSummary>;
+    lessons: LessonHit[];
+  }> {
     const page = Math.max(1, params.page ?? 1);
-    const pageSize = params.pageSize ?? 8;
-    const emptyHits: Paginated<LessonHit> = { items: [], page, pageSize, total: 0, totalPages: 1 };
+    const pageSize = params.pageSize ?? 20;
+    const empty: Paginated<CourseSummary> = { items: [], page, pageSize, total: 0, totalPages: 1 };
 
     // The catalog needs a token (only /auth/* is public), so logged-out visitors see no courses
-    if (!getToken()) return { courses: [] as CourseSummary[], lessons: emptyHits };
+    if (!getToken()) return { courses: [], coursesPage: empty, lessons: [] };
 
-    const [res, categories] = await Promise.all([backendRequest<{ courses: BackendCourse[] }>("GET", "/courses"), loadCategories()]);
-    // One lesson list per course, to count lessons per skill and to search lesson titles
+    const q = (params.q ?? "").trim();
+    const query = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    if (q) query.set("q", q);
+    const [res, categories] = await Promise.all([
+      backendRequest<PageMeta & { courses: BackendCourse[] }>("GET", `/courses?${query}`),
+      loadCategories(),
+    ]);
+    // One lesson list per course, to count lessons per skill and to list the matching lessons
     const lessonLists = await Promise.all(res.courses.map((c) => loadLessons(c.courseId)));
 
-    const q = (params.q ?? "").trim().toLowerCase();
+    const needle = q.toLowerCase();
     const skill = params.skill && params.skill !== "all" ? params.skill : undefined;
     const courses: CourseSummary[] = [];
     const hits: LessonHit[] = [];
 
     for (let i = 0; i < res.courses.length; i++) {
       const summary = summarize(res.courses[i], lessonLists[i], categories);
-      if (skill && summary.skillCounts[skill] === 0) continue;
       courses.push(summary);
-      if (!q && !skill) continue;
+      if (!needle && !skill) continue;
       for (const section of buildSyllabus(lessonLists[i], categories)) {
         if (skill && section.skill !== skill) continue;
         for (const entry of section.entries) {
-          if (q && !entry.lesson.title.toLowerCase().includes(q)) continue;
+          if (needle && !entry.lesson.title.toLowerCase().includes(needle)) continue;
           hits.push({
             lessonId: String(entry.lesson.lessonId),
             courseId: summary.id,
@@ -285,16 +300,12 @@ export const catalogApi = {
         }
       }
     }
-    courses.sort((a, b) => a.level - b.level);
 
-    const lessons: Paginated<LessonHit> = {
-      items: hits.slice((page - 1) * pageSize, page * pageSize),
-      page,
-      pageSize,
-      total: hits.length,
-      totalPages: Math.max(1, Math.ceil(hits.length / pageSize)),
+    return {
+      courses,
+      coursesPage: { items: courses, page: res.page, pageSize: res.pageSize, total: res.total, totalPages: res.totalPages },
+      lessons: hits,
     };
-    return { courses, lessons };
   },
 
   /** The micro-skill taxonomy. */
@@ -400,7 +411,7 @@ export const meApi = {
     const [user, enrollmentsRes, attemptsRes, categories] = await Promise.all([
       authApi.me(),
       backendRequest<{ enrollments: BackendEnrollment[] }>("GET", "/me/enrollments"),
-      backendRequest<{ attempts: BackendAttemptSummary[] }>("GET", "/me/attempts"),
+      fetchAllPages<BackendAttemptSummary>("/me/attempts", "attempts").then((attempts) => ({ attempts })),
       loadCategories(),
     ]);
     if (!user) throw new ApiError(401, "HTTP_401", "Please log in");

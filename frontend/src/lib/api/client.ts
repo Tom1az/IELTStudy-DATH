@@ -111,3 +111,25 @@ export async function optional<T>(call: () => Promise<T>): Promise<T | null> {
     throw e;
   }
 }
+
+/** The `PageMeta` the backend puts next to every paged list. */
+export interface PageMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+}
+
+/**
+ * Reads every page of a paged list endpoint (the backend allows at most 100 rows a page).
+ * For screens that need the whole list, e.g. to compute best scores over all my attempts.
+ */
+export async function fetchAllPages<T>(path: string, key: string): Promise<T[]> {
+  const rows: T[] = [];
+  const sep = path.includes("?") ? "&" : "?";
+  for (let page = 1; ; page++) {
+    const res = await backendRequest<PageMeta & Record<string, unknown>>("GET", `${path}${sep}page=${page}&pageSize=100`);
+    rows.push(...((res[key] as T[]) ?? []));
+    if (page >= res.totalPages) return rows;
+  }
+}

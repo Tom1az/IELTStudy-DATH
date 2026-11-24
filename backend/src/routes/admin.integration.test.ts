@@ -41,7 +41,7 @@ describe("admin routes: roles", () => {
 });
 
 describe("GET /api/v1/admin/users", () => {
-  it("lists every user in id order, with exactly the contract's User fields", async () => {
+  it("lists users newest first, with exactly the contract's User fields and the page meta", async () => {
     const { user: admin } = await createTestUser({ role: "admin" });
     await createTestUser();
     await createTestUser({ role: "instructor" });
@@ -51,7 +51,8 @@ describe("GET /api/v1/admin/users", () => {
       .set("Authorization", authHeader(admin.userId));
 
     expect(res.status).toBe(200);
-    expect(res.body.users.map((u: { userId: number }) => u.userId)).toEqual([1, 2, 3]);
+    expect(res.body.users.map((u: { userId: number }) => u.userId)).toEqual([3, 2, 1]);
+    expect(res.body).toMatchObject({ page: 1, pageSize: 20, total: 3, totalPages: 1 });
     for (const user of res.body.users) {
       expect(Object.keys(user).sort()).toEqual(
         ["createdAt", "email", "fullName", "isActive", "role", "targetBand", "userId"].sort(),
@@ -70,8 +71,8 @@ describe("GET /api/v1/admin/users", () => {
       .get("/api/v1/admin/users?role=learner")
       .set("Authorization", header);
     expect(learners.body.users.map((u: { userId: number }) => u.userId)).toEqual([
-      learner.userId,
       inactive.userId,
+      learner.userId,
     ]);
 
     const deactivated = await request(app)
@@ -87,10 +88,57 @@ describe("GET /api/v1/admin/users", () => {
     expect(both.body.users.map((u: { userId: number }) => u.userId)).toEqual([instructor.userId]);
   });
 
+  it("searches the email and the full name, case-insensitively", async () => {
+    const { user: admin } = await createTestUser({ role: "admin" });
+    const { user: alice } = await createTestUser({ email: "alice.smith@test.dev" });
+    await createTestUser({ email: "bob@test.dev" });
+    await db.orm.public.Users.where({ userId: alice.userId }).update({
+      fullName: "Alice Nguyen" as never,
+    });
+    const header = authHeader(admin.userId);
+
+    const byEmail = await request(app).get("/api/v1/admin/users?q=SMITH").set("Authorization", header);
+    expect(byEmail.body.users.map((u: { userId: number }) => u.userId)).toEqual([alice.userId]);
+
+    const byName = await request(app).get("/api/v1/admin/users?q=nguyen").set("Authorization", header);
+    expect(byName.body.users.map((u: { userId: number }) => u.userId)).toEqual([alice.userId]);
+
+    // `%` and `_` are searched as text, not as wildcards
+    const wildcard = await request(app).get("/api/v1/admin/users?q=%25").set("Authorization", header);
+    expect(wildcard.body.users).toEqual([]);
+    expect(wildcard.body).toMatchObject({ total: 0, totalPages: 1 });
+  });
+
+  it("pages the list: first page, last page, a page past the end", async () => {
+    const { user: admin } = await createTestUser({ role: "admin" });
+    for (let i = 0; i < 4; i++) await createTestUser();
+    const header = authHeader(admin.userId);
+
+    const first = await request(app)
+      .get("/api/v1/admin/users?page=1&pageSize=2")
+      .set("Authorization", header);
+    expect(first.body.users.map((u: { userId: number }) => u.userId)).toEqual([5, 4]);
+    expect(first.body).toMatchObject({ page: 1, pageSize: 2, total: 5, totalPages: 3 });
+
+    const last = await request(app)
+      .get("/api/v1/admin/users?page=3&pageSize=2")
+      .set("Authorization", header);
+    expect(last.body.users.map((u: { userId: number }) => u.userId)).toEqual([1]);
+
+    const past = await request(app)
+      .get("/api/v1/admin/users?page=9&pageSize=2")
+      .set("Authorization", header);
+    expect(past.status).toBe(200);
+    expect(past.body.users).toEqual([]);
+    expect(past.body).toMatchObject({ page: 9, total: 5, totalPages: 3 });
+  });
+
   it.each([
     ["an unknown role", "?role=superuser"],
     ["a non-boolean isActive", "?isActive=maybe"],
     ["an unknown filter", "?email=a@test.dev"],
+    ["a pageSize above 100", "?pageSize=101"],
+    ["page 0", "?page=0"],
   ])("returns 400 for %s", async (_label, query) => {
     const { user: admin } = await createTestUser({ role: "admin" });
 

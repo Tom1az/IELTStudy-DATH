@@ -352,6 +352,75 @@ describe("GET /api/v1/courses (catalog)", () => {
 
     expect(res.body.courses[0].lessonCount).toBe(1);
   });
+
+  it("searches the title and description, and pages the result", async () => {
+    const { user: instructor } = await createTestUser({ role: "instructor" });
+    const { user: learner } = await createTestUser();
+    const ids: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const course = await createTestCourse({ instructorId: instructor.userId, status: "approved" });
+      ids.push(course.courseId);
+    }
+    await db.orm.public.Courses.where({ courseId: ids[1]! }).update({
+      title: "Reading for Band 7" as never,
+    });
+    await db.orm.public.Courses.where({ courseId: ids[2]! }).update({
+      description: "Advanced READING strategies",
+    });
+    const header = authHeader(learner.userId);
+
+    const search = await request(app).get("/api/v1/courses?q=reading").set("Authorization", header);
+    expect(search.body.courses.map((c: { courseId: number }) => c.courseId)).toEqual([ids[1], ids[2]]);
+    expect(search.body).toMatchObject({ page: 1, pageSize: 20, total: 2, totalPages: 1 });
+
+    await createTestLesson({ courseId: ids[0]!, title: "True / False / Not Given drills" });
+    const byLesson = await request(app).get("/api/v1/courses?q=not%20given").set("Authorization", header);
+    expect(byLesson.body.courses.map((c: { courseId: number }) => c.courseId)).toEqual([ids[0]]);
+
+    const none = await request(app).get("/api/v1/courses?q=zzz").set("Authorization", header);
+    expect(none.body.courses).toEqual([]);
+    expect(none.body.total).toBe(0);
+
+    const second = await request(app)
+      .get("/api/v1/courses?page=2&pageSize=2")
+      .set("Authorization", header);
+    expect(second.body.courses.map((c: { courseId: number }) => c.courseId)).toEqual([ids[2]]);
+    expect(second.body).toMatchObject({ page: 2, pageSize: 2, total: 3, totalPages: 2 });
+
+    const tooBig = await request(app).get("/api/v1/courses?pageSize=500").set("Authorization", header);
+    expect(tooBig.status).toBe(400);
+  });
+});
+
+describe("GET /api/v1/admin/courses (paging)", () => {
+  it("lists newest first without a status, filters by status and q, and pages", async () => {
+    const { user: admin } = await createTestUser({ role: "admin" });
+    const { user: instructor } = await createTestUser({ role: "instructor" });
+    const draft = await createTestCourse({ instructorId: instructor.userId });
+    const approved = await createTestCourse({ instructorId: instructor.userId, status: "approved" });
+    const pending = await createTestCourse({ instructorId: instructor.userId, status: "pending_review" });
+    await db.orm.public.Courses.where({ courseId: pending.courseId }).update({
+      title: "Speaking drills" as never,
+    });
+    const header = authHeader(admin.userId);
+
+    const all = await request(app).get("/api/v1/admin/courses").set("Authorization", header);
+    expect(all.body.courses.map((c: { courseId: number }) => c.courseId)).toEqual([
+      pending.courseId,
+      approved.courseId,
+      draft.courseId,
+    ]);
+    expect(all.body.total).toBe(3);
+
+    const q = await request(app).get("/api/v1/admin/courses?q=speaking").set("Authorization", header);
+    expect(q.body.courses.map((c: { courseId: number }) => c.courseId)).toEqual([pending.courseId]);
+
+    const paged = await request(app)
+      .get("/api/v1/admin/courses?status=approved&pageSize=1")
+      .set("Authorization", header);
+    expect(paged.body.courses.map((c: { courseId: number }) => c.courseId)).toEqual([approved.courseId]);
+    expect(paged.body).toMatchObject({ total: 1, totalPages: 1, pageSize: 1 });
+  });
 });
 
 describe("DELETE /api/v1/courses/:courseId", () => {

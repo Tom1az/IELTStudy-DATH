@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import type { Varchar } from "@prisma/orm-postgres/target/codec-types";
+import { and, or } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
 import { buildCourse, buildCourses, buildEnrollments } from "../services/course-views.ts";
 import {
@@ -13,25 +14,53 @@ import type { CourseLevel, CourseStatus } from "../services/courses.ts";
 import { isUniqueViolation } from "../utils/db-errors.ts";
 import { varchar } from "../utils/db-types.ts";
 import { httpError } from "../utils/http-error.ts";
+import { likePattern, pageMeta, pageWindow } from "../utils/pagination.ts";
+import type { PageQuery } from "../utils/pagination.ts";
 
 const Courses = db.orm.public.Courses;
 const Lessons = db.orm.public.Lessons;
 const Enrollments = db.orm.public.Enrollments;
 
 // The approved catalog, optionally filtered by level
-const listCatalog = async (req: Request, res: Response) => {
-  const { level }: { level?: CourseLevel } = req.value!.query;
+// Filters shared by the catalog and the admin list: a status, a level, and `q` against the
+// title, the description or any lesson title. Only the filters that were given go into the
+// WHERE clause.
+const courseFilter = (filters: { status?: CourseStatus; level?: CourseLevel; q?: string }) => {
+  const pattern = likePattern(filters.q);
+  return Courses.where((c) =>
+    and(
+      filters.status ? c.status.eq(filters.status) : c.courseId.isNotNull(),
+      filters.level ? c.targetLevel.eq(filters.level) : c.courseId.isNotNull(),
+      pattern
+        ? or(
+            c.title.ilike(pattern),
+            c.description.ilike(pattern),
+            c.lessons.some((l) => l.title.ilike(pattern)),
+          )
+        : c.courseId.isNotNull(),
+    ),
+  );
+};
 
-  const rows = level
-    ? await Courses.where({ status: "approved", targetLevel: level })
-        .orderBy((c) => c.courseId.asc())
-        .all()
-    : await Courses.where({ status: "approved" })
-        .orderBy((c) => c.courseId.asc())
-        .all();
+const countCourses = async (filtered: ReturnType<typeof courseFilter>) => {
+  const { count } = await filtered.aggregate((agg) => ({ count: agg.count() }));
+  return count;
+};
+
+// The approved courses, one page at a time, oldest course first
+const listCatalog = async (req: Request, res: Response) => {
+  const { level, q, ...paging }: { level?: CourseLevel; q?: string } & PageQuery = req.value!.query;
+
+  const filtered = courseFilter({ status: "approved", level, q });
+  const { limit, offset } = pageWindow(paging);
+  const [total, rows] = await Promise.all([
+    countCourses(filtered),
+    filtered.orderBy((c) => c.courseId.asc()).limit(limit).offset(offset).all(),
+  ]);
 
   return res.status(200).json({
     courses: await buildCourses(rows, req.user!),
+    ...pageMeta(total, paging),
     message: "Approved courses",
   });
 };
@@ -48,18 +77,25 @@ const listMyCourses = async (req: Request, res: Response) => {
   });
 };
 
-// Every course, for admins. `?status=pending_review` is the review queue, oldest submission first.
+// Every course, for admins. `?status=pending_review` is the review queue, oldest submission
+// first; without a status, the newest course first.
 const listAllCourses = async (req: Request, res: Response) => {
-  const { status }: { status?: CourseStatus } = req.value!.query;
+  const { status, q, ...paging }: { status?: CourseStatus; q?: string } & PageQuery =
+    req.value!.query;
 
-  const rows = status
-    ? await Courses.where({ status })
-        .orderBy([(c) => c.submittedAt.asc({ nulls: "last" }), (c) => c.courseId.asc()])
-        .all()
-    : await Courses.orderBy((c) => c.courseId.asc()).all();
+  const filtered = courseFilter({ status, q });
+  const ordered = status
+    ? filtered.orderBy([(c) => c.submittedAt.asc({ nulls: "last" }), (c) => c.courseId.asc()])
+    : filtered.orderBy((c) => c.courseId.desc());
+  const { limit, offset } = pageWindow(paging);
+  const [total, rows] = await Promise.all([
+    countCourses(filtered),
+    ordered.limit(limit).offset(offset).all(),
+  ]);
 
   return res.status(200).json({
     courses: await buildCourses(rows, req.user!),
+    ...pageMeta(total, paging),
     message: "Courses",
   });
 };

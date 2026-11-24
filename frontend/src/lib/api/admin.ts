@@ -1,6 +1,7 @@
 import type { AccountStatus, Course, Paginated, Role, SkillCategory, User } from "@/lib/types";
 import type { BackendAdminStats, BackendCourse, BackendLesson, BackendSkill, BackendUser } from "./backend-types";
 import { backendRequest, optional } from "./client";
+import type { PageMeta } from "./client";
 import { lessonCategory, toCourse, toSkillCategories, toUser } from "./mappers";
 
 /**
@@ -71,24 +72,18 @@ function toAuditEntry(row: BackendAuditEntry): AuditEntry {
 }
 
 export const adminApi = {
-  /** The users table. The backend filters by role and status; search and paging run here. */
+  /** The users table, newest account first. Filters, search and paging all run on the backend. */
   async users(params: { q?: string; role?: Role | "all"; status?: AccountStatus | "all"; page?: number; pageSize?: number } = {}): Promise<Paginated<User>> {
-    const query = new URLSearchParams();
+    const query = new URLSearchParams({ page: String(Math.max(1, params.page ?? 1)), pageSize: String(params.pageSize ?? 10) });
     if (params.role && params.role !== "all") query.set("role", params.role);
     if (params.status === "active") query.set("isActive", "true");
     if (params.status === "suspended") query.set("isActive", "false");
-    const qs = query.toString();
-    const res = await backendRequest<{ users: BackendUser[] }>("GET", `/admin/users${qs ? `?${qs}` : ""}`);
-
-    const q = (params.q ?? "").trim().toLowerCase();
-    const matches = res.users.filter((u) => !q || u.fullName.toLowerCase().includes(q) || u.email.toLowerCase().includes(q));
-    // The API lists the oldest account first; the table shows the newest first
-    matches.reverse();
-    const page = Math.max(1, params.page ?? 1);
-    const pageSize = params.pageSize ?? 10;
+    const q = (params.q ?? "").trim();
+    if (q) query.set("q", q);
+    const res = await backendRequest<PageMeta & { users: BackendUser[] }>("GET", `/admin/users?${query}`);
     // `placementDone` doesn't matter on this page, so it isn't looked up for each learner
-    const items = matches.slice((page - 1) * pageSize, page * pageSize).map((u) => toUser(u, u.role !== "learner"));
-    return { items, page, pageSize, total: matches.length, totalPages: Math.max(1, Math.ceil(matches.length / pageSize)) };
+    const items = res.users.map((u) => toUser(u, u.role !== "learner"));
+    return { items, page: res.page, pageSize: res.pageSize, total: res.total, totalPages: res.totalPages };
   },
 
   /** Role changes and deactivation share one endpoint. Admins can't change their own account (409). */
@@ -103,26 +98,31 @@ export const adminApi = {
     return toUser(res.user, res.user.role !== "learner");
   },
 
-  /** Every course, with lesson counts per skill. Waiting for review first, then by level. */
-  async courses(): Promise<AdminCourse[]> {
+  /**
+   * One page of courses with lesson counts per skill. With `status`, only that status (the
+   * review queue is `pending_review`, oldest submission first); otherwise newest course first.
+   */
+  async courses(params: { q?: string; status?: "pending_review" | "approved" | "draft" | "rejected" | "archived"; page?: number; pageSize?: number } = {}): Promise<Paginated<AdminCourse>> {
+    const query = new URLSearchParams({ page: String(Math.max(1, params.page ?? 1)), pageSize: String(params.pageSize ?? 10) });
+    if (params.status) query.set("status", params.status);
+    const q = (params.q ?? "").trim();
+    if (q) query.set("q", q);
     const [res, skills] = await Promise.all([
-      backendRequest<{ courses: BackendCourse[] }>("GET", "/admin/courses"),
+      backendRequest<PageMeta & { courses: BackendCourse[] }>("GET", `/admin/courses?${query}`),
       backendRequest<{ skills: BackendSkill[] }>("GET", "/skills"),
     ]);
     const categories = toSkillCategories(skills.skills);
     const lessonLists = await Promise.all(res.courses.map((c) => backendRequest<{ lessons: BackendLesson[] }>("GET", `/courses/${c.courseId}/lessons`).then((r) => r.lessons)));
 
-    const list: AdminCourse[] = [];
+    const items: AdminCourse[] = [];
     for (let i = 0; i < res.courses.length; i++) {
       const counts: Record<SkillCategory, number> = { listening: 0, reading: 0, writing: 0, speaking: 0 };
       for (const lesson of lessonLists[i]) {
         if (lesson.kind === "core") counts[lessonCategory(lesson, categories)] += 1;
       }
-      list.push({ ...toCourse(res.courses[i]), instructorName: res.courses[i].instructor.fullName, lessonCount: res.courses[i].lessonCount, skillCounts: counts });
+      items.push({ ...toCourse(res.courses[i]), instructorName: res.courses[i].instructor.fullName, lessonCount: res.courses[i].lessonCount, skillCounts: counts });
     }
-    const order = ["pending", "published", "hidden", "draft", "rejected"];
-    list.sort((a, b) => order.indexOf(a.status) - order.indexOf(b.status) || a.level - b.level);
-    return list;
+    return { items, page: res.page, pageSize: res.pageSize, total: res.total, totalPages: res.totalPages };
   },
 
   /** Approve (feedback optional) or reject (feedback required) a course waiting for review. */

@@ -114,6 +114,7 @@ model Courses {
   updatedAt      temporal.updatedAt() @map("updated_at")
   instructor     Users                @relation("CourseInstructor", fields: [instructorId], references: [userId])
   reviewedBy     Users?               @relation("CourseReviewer", fields: [reviewedById], references: [userId], onDelete: SetNull)
+  lessons        Lessons[]
 
   @@index([instructorId])
   @@index([status])

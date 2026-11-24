@@ -12,6 +12,8 @@ import {
 import type { SubmittedResponse } from "../services/attempts.ts";
 import { buildQuiz } from "../services/quiz-views.ts";
 import { httpError } from "../utils/http-error.ts";
+import { pageMeta, pageWindow } from "../utils/pagination.ts";
+import type { PageQuery } from "../utils/pagination.ts";
 
 const orm = db.orm.public;
 
@@ -91,19 +93,40 @@ const getAttempt = async (req: Request, res: Response) => {
   });
 };
 
-// My attempt history, newest first, optionally for one quiz
+// My attempt history, newest first, one page at a time, optionally for one quiz or status
 const listMyAttempts = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
-  const { quizId }: { quizId?: number } = req.value!.query ?? {};
+  const {
+    quizId,
+    status,
+    ...paging
+  }: { quizId?: number; status?: "in_progress" | "completed" } & PageQuery = req.value!.query;
 
-  const query =
-    quizId === undefined
-      ? orm.QuizAttempts.where({ userId })
-      : orm.QuizAttempts.where((a) => and(a.userId.eq(userId), a.quizId.eq(quizId)));
-  const rows = await query.orderBy([(a) => a.startedAt.desc(), (a) => a.attemptId.desc()]).all();
+  // Only the filters that were given go into the WHERE clause
+  const query = orm.QuizAttempts.where((a) =>
+    and(
+      a.userId.eq(userId),
+      quizId !== undefined ? a.quizId.eq(quizId) : a.attemptId.isNotNull(),
+      status === "completed"
+        ? a.completedAt.isNotNull()
+        : status === "in_progress"
+          ? a.completedAt.isNull()
+          : a.attemptId.isNotNull(),
+    ),
+  );
+  const { limit, offset } = pageWindow(paging);
+  const [{ count }, rows] = await Promise.all([
+    query.aggregate((agg) => ({ count: agg.count() })),
+    query
+      .orderBy([(a) => a.startedAt.desc(), (a) => a.attemptId.desc()])
+      .limit(limit)
+      .offset(offset)
+      .all(),
+  ]);
 
   return res.status(200).json({
     attempts: await buildAttemptSummaries(rows),
+    ...pageMeta(count, paging),
     message: "My attempts",
   });
 };

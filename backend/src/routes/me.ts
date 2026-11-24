@@ -1,9 +1,10 @@
 import express from "express";
 import { authenticate, authorize } from "../middlewares/auth.ts";
-import { validateBody, validateQuery, schemas } from "../utils/validator.ts";
+import { validateBody, validateParams, validateQuery, schemas } from "../utils/validator.ts";
 
 import attemptsController from "../controllers/attempts.ts";
 import meController from "../controllers/me.ts";
+import notificationsController from "../controllers/notifications.ts";
 
 const router = express.Router();
 
@@ -24,6 +25,20 @@ router.get(
   authorize("learner"),
   validateQuery(schemas.myAttemptsQuerySchema),
   attemptsController.listMyAttempts,
+);
+
+// Every role gets notifications
+router.get(
+  "/notifications",
+  validateQuery(schemas.notificationsQuerySchema),
+  notificationsController.listMine,
+);
+// Before the `/:notificationId` route, so "read-all" is never read as an id
+router.post("/notifications/read-all", notificationsController.markEveryRead);
+router.patch(
+  "/notifications/:notificationId/read",
+  validateParams(schemas.idSchema, "notificationId"),
+  notificationsController.markOneRead,
 );
 
 export default router;

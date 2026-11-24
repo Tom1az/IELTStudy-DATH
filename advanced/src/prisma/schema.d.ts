@@ -1166,8 +1166,9 @@ export namespace Models {
     title: Varchar<255>;
     updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
     instructor: public_Users;
+    lessons: public_Lessons[];
     reviewedBy: public_Users | null;
-    readonly [RelationKeys]?: 'instructor' | 'reviewedBy';
+    readonly [RelationKeys]?: 'instructor' | 'lessons' | 'reviewedBy';
   };
   export type public_Enrollments = {
     completedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -3976,6 +3977,17 @@ type ContractBase = Omit<
                 readonly on: {
                   readonly localFields: readonly ['instructorId'];
                   readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly lessons: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Lessons';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['courseId'];
+                  readonly targetFields: readonly ['courseId'];
                 };
               };
               readonly reviewedBy: {

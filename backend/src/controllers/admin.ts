@@ -1,27 +1,48 @@
 import type { Request, Response } from "express";
+import { and, or } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
 import { getUsageStats } from "../services/stats.ts";
 import { httpError } from "../utils/http-error.ts";
 import { toPublicUser } from "../utils/public-user.ts";
 import type { UserRole } from "../utils/public-user.ts";
+import { likePattern, pageMeta, pageWindow } from "../utils/pagination.ts";
+import type { PageQuery } from "../utils/pagination.ts";
 
 const Users = db.orm.public.Users;
 
-// Every user, oldest account first, optionally filtered by role and/or active status
+// One page of users, newest account first, optionally filtered by role, active status and `q`
+// (email or full name)
 const listUsers = async (req: Request, res: Response) => {
-  const { role, isActive }: { role?: UserRole; isActive?: boolean } = req.value!.query;
+  const {
+    role,
+    isActive,
+    q,
+    ...paging
+  }: { role?: UserRole; isActive?: boolean; q?: string } & PageQuery = req.value!.query;
 
   // Only the filters that were given go into the WHERE clause
-  const filter: { role?: UserRole; isActive?: boolean } = {};
-  if (role !== undefined) filter.role = role;
-  if (isActive !== undefined) filter.isActive = isActive;
+  const pattern = likePattern(q);
+  const filtered = Users.where((u) =>
+    and(
+      role !== undefined ? u.role.eq(role) : u.userId.isNotNull(),
+      isActive !== undefined ? u.isActive.eq(isActive) : u.userId.isNotNull(),
+      pattern ? or(u.email.ilike(pattern), u.fullName.ilike(pattern)) : u.userId.isNotNull(),
+    ),
+  );
 
-  const rows = await Users.where(filter)
-    .orderBy((u) => u.userId.asc())
-    .all();
+  const { limit, offset } = pageWindow(paging);
+  const [{ count }, rows] = await Promise.all([
+    filtered.aggregate((agg) => ({ count: agg.count() })),
+    filtered
+      .orderBy((u) => u.userId.desc())
+      .limit(limit)
+      .offset(offset)
+      .all(),
+  ]);
 
   return res.status(200).json({
     users: rows.map(toPublicUser),
+    ...pageMeta(count, paging),
     message: "Users",
   });
 };

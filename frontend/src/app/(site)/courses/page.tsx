@@ -22,7 +22,7 @@ function CoursesInner() {
   const { user } = useAuth();
   const [q, setQ] = useState(sp.get("q") ?? "");
   const [skill, setSkill] = useState<Filter>((sp.get("skill") as Filter) ?? "all");
-  const [page, setPage] = useState(Number(sp.get("page") ?? 1));
+  const [page, setPage] = useState(Math.max(1, Number(sp.get("page") ?? 1) || 1));
   const dq = useDebounced(q, 250);
 
   useEffect(() => setPage(1), [dq, skill]);
@@ -34,6 +34,7 @@ function CoursesInner() {
     router.replace(`/courses${params.toString() ? "?" + params : ""}`, { scroll: false });
   }, [dq, skill, page, router]);
 
+  // Search and paging run on the backend; the skill filter only highlights
   const { data, error, loading, reload } = useAsync(() => catalogApi.list({ q: dq, skill, page, pageSize: 6 }), [dq, skill, page]);
   const searching = !!dq || skill !== "all";
 
@@ -47,7 +48,7 @@ function CoursesInner() {
           <label className="relative block w-full lg:w-[440px]">
             <span className="sr-only">Search lessons or topics</span>
             <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-ink-soft" aria-hidden />
-            <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Search lessons or topics, e.g. True / False / Not Given" className="input h-[42px] rounded-lg border-line pl-10" />
+            <input value={q} onChange={(e) => setQ(e.target.value)} type="search" placeholder="Search courses or lessons, e.g. True / False / Not Given" className="input h-[42px] rounded-lg border-line pl-10" />
           </label>
           <div className="flex flex-wrap gap-2" role="group" aria-label="Filter by skill">
             {(["all", ...SKILL_CATEGORIES] as Filter[]).map((s) => (
@@ -65,14 +66,14 @@ function CoursesInner() {
         {searching && data && (
           <section className="mt-8 animate-rise rounded-2xl border border-line bg-white" aria-live="polite">
             <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
-              <p className="text-sm font-semibold">{plural(data.lessons.total, "lesson")} {dq ? <>match “{dq}”</> : <>in {SKILL_META[skill as SkillCategory].label}</>}</p>
+              <p className="text-sm font-semibold">{plural(data.lessons.length, "lesson")} {dq ? <>match “{dq}”</> : <>in {SKILL_META[skill as SkillCategory].label}</>}{data.coursesPage.totalPages > 1 && " on this page"}</p>
               <button className="text-sm font-semibold text-brand hover:underline" onClick={() => { setQ(""); setSkill("all"); }}>Clear</button>
             </div>
-            {data.lessons.items.length === 0 ? (
+            {data.lessons.length === 0 ? (
               <EmptyState title="No lessons found">Try a question type such as “Matching headings” or a skill like “Speaking”.</EmptyState>
             ) : (
               <ul className="divide-y divide-line">
-                {data.lessons.items.map((h) => {
+                {data.lessons.map((h) => {
                   const course = data.courses.find((c) => c.id === h.courseId);
                   const open = !!course?.enrollment;
                   return (
@@ -90,7 +91,6 @@ function CoursesInner() {
                 })}
               </ul>
             )}
-            <div className="border-t border-line py-3"><Pagination page={data.lessons.page} totalPages={data.lessons.totalPages} onChange={setPage} /></div>
           </section>
         )}
 
@@ -131,8 +131,11 @@ function CoursesInner() {
           {/* The catalog needs a token, so logged-out visitors are asked to log in */}
           {data && data.courses.length === 0 && (!user
             ? <EmptyState title="Log in to see the courses" action={<Link href="/login?next=/courses" className="btn-primary">Log in</Link>} />
-            : <EmptyState title="No courses for this filter" />)}
+            : <EmptyState title={dq ? `No course or lesson matches “${dq}”` : "No courses yet"} />)}
         </div>
+        {data && data.coursesPage.totalPages > 1 && (
+          <div className="mt-6"><Pagination page={data.coursesPage.page} totalPages={data.coursesPage.totalPages} onChange={setPage} /></div>
+        )}
 
         {/* Placement CTA */}
         {!(user?.role === "learner" && user.placementDone) && (

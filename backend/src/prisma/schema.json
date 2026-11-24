@@ -794,6 +794,21 @@
                   "namespace": "public"
                 }
               },
+              "lessons": {
+                "cardinality": "1:N",
+                "on": {
+                  "localFields": [
+                    "courseId"
+                  ],
+                  "targetFields": [
+                    "courseId"
+                  ]
+                },
+                "to": {
+                  "model": "Lessons",
+                  "namespace": "public"
+                }
+              },
               "reviewedBy": {
                 "cardinality": "N:1",
                 "nullable": true,

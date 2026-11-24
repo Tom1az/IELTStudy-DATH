@@ -101,14 +101,15 @@ Owned by another team member, so Phase 4 work goes ahead without it. Until it la
 ## Phase 7 — Hardening and deployment (spec weeks 49–50)
 
 - [ ] Dockerfile, GitHub Actions CI, Vercel deploy
-- [ ] helmet, CORS, rate limiting, `/security-review`
+- [x] helmet, CORS, rate limiting (`middlewares/security.ts`: login 10/15 min, forgot 5/h, reset 10/h per IP)
+- [ ] `/security-review`
 - [ ] Demo seed data, final report
 
 ## Backlog (after the interim report, not yet scheduled into a phase)
 
 Required by the course brief (`proposal_VI.md`) but not built yet. Plan each item before starting, and add it to `specs.md` first if the spec does not mention it.
 
-- [ ] Server-side search and pagination (brief §4.2). Today no endpoint paginates: `GET /courses` has only `?level=`, and search and paging run in the frontend over the full list (`frontend/src/app/(site)/courses/page.tsx`). Add `?q=&page=&pageSize=` to `GET /courses`, then `/admin/users`, `/admin/courses` and `/me/attempts`. Responses gain `page`, `totalPages` and `total`. Contract first in `openapi.yaml`, tests, no schema change. Then drop the client-side paging.
+- [x] Server-side search and pagination (brief §4.2). Done 2026-11-24: `utils/pagination.ts`, `q`/`page`/`pageSize` on `/courses` (also matches lesson titles), `/admin/users`, `/admin/courses`, `/me/attempts` (+ `status`); the frontend pages through the API. Today no endpoint paginates: `GET /courses` has only `?level=`, and search and paging run in the frontend over the full list (`frontend/src/app/(site)/courses/page.tsx`). Add `?q=&page=&pageSize=` to `GET /courses`, then `/admin/users`, `/admin/courses` and `/me/attempts`. Responses gain `page`, `totalPages` and `total`. Contract first in `openapi.yaml`, tests, no schema change. Then drop the client-side paging.
 - [ ] Leave a course (brief §4.3): `DELETE /courses/{courseId}/enroll`, learner only, only when enrolled. Today `/courses/{courseId}/enroll` has only `POST`. No schema change (delete the `enrollments` row). Decide first whether lesson progress is kept. Add a "Leave" button on the course page.
 - [ ] Password recovery (brief §4.1): request and reset endpoints, and wire the existing `/forgot-password` and `/reset-password` pages (5-line placeholders today). Needs a table for reset tokens (schema change, needs approval) and a way to send email (log the token in development; pick a mail service for deployment).
 - [ ] Instructor review of attempts (brief §4.4): the instructor lists learners' attempts on their quizzes, grades and writes feedback. Needs a feedback column or table (schema change). Wire `/instructor/grading` and `/instructor/learners`, which are placeholders today.

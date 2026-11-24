@@ -1,8 +1,9 @@
-import type { PracticeSet, QuizAttempt, Recommendation, SkillCategory } from "@/lib/types";
+import type { Paginated, PracticeSet, QuizAttempt, Recommendation, SkillCategory } from "@/lib/types";
 import type {
   BackendAnswer, BackendAttempt, BackendAttemptResult, BackendAttemptSummary, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendQuizForLearner, BackendSkill,
 } from "./backend-types";
-import { ApiError, backendRequest, optional } from "./client";
+import { ApiError, backendRequest, fetchAllPages, optional } from "./client";
+import type { PageMeta } from "./client";
 import { meApi } from "./learning";
 import { buildSyllabus, lessonCategory, toCourse, toRecommendation, toSkillCategories, type SkillCategories } from "./mappers";
 import { answerOrder, toBackendAnswer, toSections, toUiAnswer } from "./quiz-mappers";
@@ -274,7 +275,7 @@ export const practiceApi = {
   async list(params: { skill?: SkillCategory | "all"; courseId?: string } = {}): Promise<PracticeListItem[]> {
     const [enrollmentsRes, attemptsRes, categories] = await Promise.all([
       backendRequest<{ enrollments: BackendEnrollment[] }>("GET", "/me/enrollments"),
-      backendRequest<{ attempts: BackendAttemptSummary[] }>("GET", "/me/attempts"),
+      fetchAllPages<BackendAttemptSummary>("/me/attempts", "attempts").then((attempts) => ({ attempts })),
       loadCategories(),
     ]);
 
@@ -422,18 +423,25 @@ export const practiceApi = {
     return withBands(buildResult(res.result, quiz, categories));
   },
 
-  /** My finished attempts, newest first. */
-  async history(): Promise<HistoryRow[]> {
-    const [attemptsRes, practice] = await Promise.all([
-      backendRequest<{ attempts: BackendAttemptSummary[] }>("GET", "/me/attempts"),
-      practiceApi.list({}),
-    ]);
+  /**
+   * My finished attempts, newest first. With `page`, one page from the backend; without it,
+   * every finished attempt (for the accuracy trend chart).
+   */
+  async history(params: { page?: number; pageSize?: number } = {}): Promise<Paginated<HistoryRow>> {
+    const paged = params.page !== undefined;
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = params.pageSize ?? 12;
+    const attemptsCall = paged
+      ? backendRequest<PageMeta & { attempts: BackendAttemptSummary[] }>("GET", `/me/attempts?status=completed&page=${page}&pageSize=${pageSize}`)
+      : fetchAllPages<BackendAttemptSummary>("/me/attempts?status=completed", "attempts").then(
+          (attempts): PageMeta & { attempts: BackendAttemptSummary[] } => ({ attempts, page: 1, pageSize: attempts.length || 1, total: attempts.length, totalPages: 1 }),
+        );
+    const [attemptsRes, practice] = await Promise.all([attemptsCall, practiceApi.list({})]);
     // The practice list knows each quiz's skill and course; the attempt summary doesn't
     const quizInfo = new Map(practice.map((p) => [p.quiz.id, p]));
 
     const rows: HistoryRow[] = [];
     for (const a of attemptsRes.attempts) {
-      if (a.status !== "completed") continue;
       const info = quizInfo.get(String(a.quizId));
       const isDiagnostic = a.quiz.kind === "diagnostic";
       rows.push({
@@ -446,7 +454,7 @@ export const practiceApi = {
         kind: isDiagnostic ? "placement" : "practice",
       });
     }
-    return rows;
+    return { items: rows, page: attemptsRes.page, pageSize: attemptsRes.pageSize, total: attemptsRes.total, totalPages: attemptsRes.totalPages };
   },
 
   /* ───────── Diagnostic (placement quiz) ───────── */

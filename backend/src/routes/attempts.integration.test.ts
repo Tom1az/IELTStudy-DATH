@@ -435,6 +435,22 @@ describe("GET /api/v1/me/attempts", () => {
       .set("Authorization", authHeader(learner.userId));
     expect(none.status).toBe(200);
     expect(none.body.attempts).toEqual([]);
+    expect(none.body).toMatchObject({ page: 1, total: 0, totalPages: 1 });
+
+    const paged = await request(app)
+      .get("/api/v1/me/attempts?page=2&pageSize=1")
+      .set("Authorization", authHeader(learner.userId));
+    expect(paged.body.attempts.map((a: { attemptId: number }) => a.attemptId)).toEqual([first]);
+    expect(paged.body).toMatchObject({ page: 2, pageSize: 1, total: 2, totalPages: 2 });
+
+    const done = await request(app)
+      .get("/api/v1/me/attempts?status=completed")
+      .set("Authorization", authHeader(learner.userId));
+    expect(done.body.attempts.map((a: { attemptId: number }) => a.attemptId)).toEqual([first]);
+    const open = await request(app)
+      .get("/api/v1/me/attempts?status=in_progress")
+      .set("Authorization", authHeader(learner.userId));
+    expect(open.body.attempts.map((a: { attemptId: number }) => a.attemptId)).toEqual([second]);
   });
 
   it("is for learners only (403)", async () => {

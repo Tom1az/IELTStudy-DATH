@@ -17,6 +17,7 @@ import questionsRoute from "./routes/questions.ts";
 import quizzesRoute from "./routes/quizzes.ts";
 import skillsRoute from "./routes/skills.ts";
 import uploadsRoute from "./routes/uploads.ts";
+import { corsMiddleware, helmetMiddleware } from "./middlewares/security.ts";
 import { httpError } from "./utils/http-error.ts";
 import type { HttpError } from "./utils/http-error.ts";
 
@@ -27,9 +28,15 @@ const openapiDoc = YAML.parse(
   fs.readFileSync(new URL("./docs/openapi.yaml", import.meta.url), "utf8"),
 );
 
+// Render (and most hosts) put a proxy in front of the app. Trusting the first hop makes req.ip the
+// client's address, which the rate limits key on.
+app.set("trust proxy", 1);
+
 // Middlewares, client -> middlewares -> server (handled in controllers)
 if (process.env.NODE_ENV !== "test") app.use(logger("dev"));
-app.use(express.json());
+app.use(helmetMiddleware());
+app.use(corsMiddleware());
+app.use(express.json({ limit: "200kb" }));
 
 // API docs
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiDoc));

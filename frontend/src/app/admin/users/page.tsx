@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
 import { Search } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import type { AccountStatus, Role, User } from "@/lib/types";
@@ -10,14 +11,29 @@ import { fmtDate } from "@/lib/format";
 import { Avatar, ConfirmDialog, EmptyState, ErrorState, PageHeader, PageLoader, Pagination, Select, StatusPill, useToast } from "@/components/ui";
 
 export default function UsersPage() {
+  return <Suspense><UsersInner /></Suspense>;
+}
+
+function UsersInner() {
   const { user: me } = useAuth();
   const toast = useToast();
-  const [q, setQ] = useState("");
-  const [role, setRole] = useState<Role | "all">("all");
-  const [status, setStatus] = useState<AccountStatus | "all">("all");
-  const [page, setPage] = useState(1);
+  const router = useRouter();
+  const sp = useSearchParams();
+  // The filters live in the URL, so a reload or a shared link keeps them
+  const [q, setQ] = useState(sp.get("q") ?? "");
+  const [role, setRole] = useState<Role | "all">((sp.get("role") as Role | null) ?? "all");
+  const [status, setStatus] = useState<AccountStatus | "all">((sp.get("status") as AccountStatus | null) ?? "all");
+  const [page, setPage] = useState(Math.max(1, Number(sp.get("page") ?? 1) || 1));
   const [confirm, setConfirm] = useState<{ user: User; kind: "suspend" | "activate" } | null>(null);
   const dq = useDebounced(q);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (dq) params.set("q", dq);
+    if (role !== "all") params.set("role", role);
+    if (status !== "all") params.set("status", status);
+    if (page > 1) params.set("page", String(page));
+    router.replace(`/admin/users${params.toString() ? `?${params}` : ""}`, { scroll: false });
+  }, [dq, role, status, page, router]);
   const { data, error, loading, reload } = useAsync(() => adminApi.users({ q: dq, role, status, page }), [dq, role, status, page]);
 
   const changeRole = async (u: User, r: Role) => {

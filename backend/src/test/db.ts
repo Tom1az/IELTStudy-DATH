@@ -89,10 +89,11 @@ export const createTestLesson = async (options: {
   kind?: "core" | "remedial";
   orderIndex?: number;
   skillIds?: number[];
+  title?: string;
 }) => {
   const lesson = await db.orm.public.Lessons.create({
     courseId: options.courseId,
-    title: varchar<255>("Test lesson"),
+    title: varchar<255>(options.title ?? "Test lesson"),
     content: "Lesson body",
     kind: options.kind ?? "core",
     orderIndex: options.orderIndex ?? 0,
