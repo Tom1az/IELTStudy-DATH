@@ -255,8 +255,8 @@ function buildResult(result: BackendAttemptResult, quiz: BackendQuizForLearner, 
 }
 
 /**
- * Fills in the estimated bands from my current mastery (Advanced service). They stay null when
- * that service isn't available or I haven't been measured in all four skills yet.
+ * Fills in the estimated bands from my current mastery. They stay null until I have been
+ * measured in all four skills.
  */
 async function withBands(result: AttemptResult): Promise<AttemptResult> {
   const mastery = await meApi.mastery().catch(() => null);

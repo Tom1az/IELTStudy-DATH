@@ -101,7 +101,7 @@ function ResultInner() {
   const questions = sections.flatMap((s) => s.questions);
   const accuracy = attempt.totalScore / Math.max(1, attempt.maxScore);
   const resp = Object.fromEntries(attempt.responses.map((r) => [r.questionId, r]));
-  // No mastery changes means skill tracking (BKT, Phase 3) isn't running yet
+  // No mastery changes: the attempt had no answers, so BKT had nothing to learn from
   const tracking = changes.length > 0;
   const hasPassages = sections.some((s) => s.passage.paragraphs.length > 0 || s.passage.kind === "listening");
   const top = recommendations.length > 0 ? recommendations[0] : null;
@@ -164,7 +164,7 @@ function ResultInner() {
                 <p className="text-[11px] leading-normal text-ink-muted">Bayesian Knowledge Tracing updated each micro-skill tagged on these questions, from your answers, not just your score.</p>
               </>
             ) : (
-              <p className="text-sm text-ink-muted">Skill tracking is not available yet, so this attempt didn&apos;t change your skill map.</p>
+              <p className="text-sm text-ink-muted">This attempt had no answers, so it didn&apos;t change your skill map.</p>
             )}
           </section>
         </div>
@@ -177,7 +177,7 @@ function ResultInner() {
               <Sparkles className="h-[18px] w-[18px]" aria-hidden />
             </div>
             {!tracking ? (
-              <p className="text-sm text-white/90">Recommendations are not available yet.</p>
+              <p className="text-sm text-white/90">No new recommendations from this attempt.</p>
             ) : top ? (
               <>
                 <p className="text-[21px] font-extrabold leading-tight">{top.title}</p>

@@ -102,7 +102,7 @@ function SkillCompass({ d }: { d: DashboardData }) {
       </div>
       <div className="card flex flex-col gap-4 p-6">
         {bands === null ? (
-          <p className="text-sm text-ink-muted">Skill estimates are not available yet. They will appear here once skill tracking is switched on.</p>
+          <p className="text-sm text-ink-muted">Your band estimates appear once all four skills have been measured. <Link href="/placement" className="link">Take the placement quiz</Link> to start.</p>
         ) : (
           <>
             <div className="flex items-baseline justify-between">
@@ -189,7 +189,7 @@ function Dashboard() {
             <h3 className="text-sm">Up next</h3>
             <div className="mt-4">
               {d.upNext === null ? (
-                <p className="text-sm text-ink-muted">Recommendations are not available yet.</p>
+                <p className="text-sm text-ink-muted">Recommendations appear after your placement quiz.</p>
               ) : moreRecs.length > 0 ? (
                 <RecommendationList items={moreRecs} compact />
               ) : d.upNext.length > 0 ? (

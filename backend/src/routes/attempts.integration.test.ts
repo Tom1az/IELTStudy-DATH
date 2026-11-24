@@ -194,7 +194,10 @@ describe("POST /api/v1/attempts/:attemptId/submit", () => {
     const result = res.body.result;
     expect(result.attempt).toMatchObject({ status: "completed", totalScore: 3, maxScore: 3 });
     expect(result.scorePercent).toBe(100);
-    expect(result.masteryChanges).toEqual([]);
+    // BKT ran in the same transaction: the question's skill was measured. No lesson is tagged
+    // with it, so there is nothing to recommend.
+    expect(result.masteryChanges).toHaveLength(1);
+    expect(result.masteryChanges[0].before).toBeNull();
     expect(result.recommendations).toEqual([]);
 
     // Responses come in quiz order; attemptOrder is the order they were sent in
@@ -577,6 +580,32 @@ describe("quiz time limit", () => {
     expect(res.body.attempt.attemptId).toBe(attemptId);
   });
 
+  it("grades only the answers autosaved before the deadline when it closes an attempt", async () => {
+    const { quiz, learner, tfng, choice } = await setUp();
+    await setLimit(quiz.quizId, 60);
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+    await startedAgo(attemptId, 600);
+    const row = (await db.orm.public.QuizAttempts.first({ attemptId }))!;
+    const at = (seconds: number) =>
+      Temporal.Instant.fromEpochMilliseconds(row.startedAt.epochMilliseconds + seconds * 1000).toString();
+    // tfng was answered (correctly) 20 s in; the choice question 200 s in, long after the deadline
+    await db.orm.public.QuizAttempts.where({ attemptId }).update({
+      draftAnswers: {
+        [tfng.questionId]: { answer: "true", savedAt: at(20) },
+        [choice.questionId]: { answer: "B", savedAt: at(200) },
+      },
+    });
+
+    const res = await getResult(attemptId, learner.userId);
+
+    expect(res.body.result.attempt.status).toBe("completed");
+    expect(res.body.result.attempt.totalScore).toBe(1);
+    const rows = await db.orm.public.QuestionResponses.where({ attemptId }).all();
+    expect(rows.map((r) => r.questionId)).toEqual([tfng.questionId]);
+    // The answers are evidence, so BKT ran in the same transaction
+    expect(res.body.result.masteryChanges).toHaveLength(1);
+  });
+
   it("never auto-closes the diagnostic, so it can still be completed", async () => {
     const { instructor, tfng, learner } = await setUp();
     const diagnostic = await createTestQuiz({
@@ -593,5 +622,66 @@ describe("quiz time limit", () => {
     expect(res.status).toBe(200);
     expect(res.body.attempt.attemptId).toBe(attemptId);
     expect(res.body.attempt.completedAt).toBeNull();
+  });
+});
+
+describe("autosave (PUT / GET /api/v1/attempts/:attemptId/answers)", () => {
+  const save = (attemptId: number, userId: number, responses: object[]) =>
+    request(app)
+      .put(`/api/v1/attempts/${attemptId}/answers`)
+      .set("Authorization", authHeader(userId))
+      .send({ responses, remainingSeconds: 123 });
+  const load = (attemptId: number, userId: number) =>
+    request(app).get(`/api/v1/attempts/${attemptId}/answers`).set("Authorization", authHeader(userId));
+
+  it("saves the answers, keeps an unchanged answer's savedAt, and reads them back", async () => {
+    const { quiz, learner, tfng, choice } = await setUp();
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+
+    const first = await save(attemptId, learner.userId, [{ questionId: tfng.questionId, answer: "true" }]);
+    expect(first.status).toBe(200);
+    expect(first.body.savedAt).toBeTruthy();
+    const before = await load(attemptId, learner.userId);
+    const firstSavedAt = before.body.responses[0].savedAt;
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    await save(attemptId, learner.userId, [
+      { questionId: tfng.questionId, answer: "true" },
+      { questionId: choice.questionId, answer: "A" },
+    ]);
+    const after = await load(attemptId, learner.userId);
+    expect(after.status).toBe(200);
+    expect(after.body.responses).toEqual([
+      { questionId: tfng.questionId, answer: "true", savedAt: firstSavedAt },
+      { questionId: choice.questionId, answer: "A", savedAt: expect.any(String) },
+    ]);
+    expect(after.body.responses[1].savedAt > firstSavedAt).toBe(true);
+    // No time limit, so no time left to report; the client's remainingSeconds is ignored
+    expect(after.body.remainingSeconds).toBeNull();
+    expect(after.body.savedAt).not.toBeNull();
+  });
+
+  it("reports the server's time left on a timed quiz", async () => {
+    const { quiz, learner } = await setUp();
+    await db.orm.public.Quizzes.where({ quizId: quiz.quizId }).update({ timeLimitSeconds: 600 });
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+    const res = await load(attemptId, learner.userId);
+    expect(res.body.remainingSeconds).toBeGreaterThan(590);
+    expect(res.body.remainingSeconds).toBeLessThanOrEqual(600);
+    expect(res.body.responses).toEqual([]);
+    expect(res.body.savedAt).toBeNull();
+  });
+
+  it("rejects a question outside the quiz (400), another learner (403), and a submitted attempt (409)", async () => {
+    const { quiz, learner, tfng } = await setUp();
+    const { user: other } = await createTestUser();
+    const attemptId = await startAttempt(quiz.quizId, learner.userId);
+
+    expect((await save(attemptId, learner.userId, [{ questionId: 9999, answer: "x" }])).status).toBe(400);
+    expect((await save(attemptId, other.userId, [])).status).toBe(403);
+
+    await submit(attemptId, learner.userId, [{ questionId: tfng.questionId, answer: "true" }]);
+    const late = await save(attemptId, learner.userId, [{ questionId: tfng.questionId, answer: "false" }]);
+    expect(late.status).toBe(409);
   });
 });

@@ -41,12 +41,10 @@ jobs:
           npm ci
           npx prisma db migrate --db "$DATABASE_URL" --yes --quiet > /dev/null
 
-      - name: Deploy Advanced and the backend to Render
+      - name: Deploy the backend to Render
         env:
-          ADVANCED_HOOK: ${{ secrets.RENDER_ADVANCED_DEPLOY_HOOK }}
           BACKEND_HOOK: ${{ secrets.RENDER_BACKEND_DEPLOY_HOOK }}
         run: |
-          curl --fail --silent --show-error -X POST "$ADVANCED_HOOK" > /dev/null
           curl --fail --silent --show-error -X POST "$BACKEND_HOOK" > /dev/null
 
       - name: Deploy the frontend to Vercel

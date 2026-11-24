@@ -29,6 +29,7 @@ jobs:
           --health-retries 10
     env:
       TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
+      BLANK_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_blank
     defaults:
       run:
         working-directory: backend
@@ -40,64 +41,20 @@ jobs:
           cache: npm
           cache-dependency-path: backend/package-lock.json
       - run: npm ci
+      # The Docker image only has backend/, so it reads its own copy of the fitted parameters
+      - name: Check the BKT parameter copies match
+        run: cmp ../ml/output/bkt_params.json src/config/bkt-params.json
       - run: npm run typecheck
       - run: npm run lint
-      - run: npm test
-
-  advanced:
-    runs-on: ubuntu-latest
-    services:
-      postgres:
-        image: postgres:18
-        env:
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ieltstudy_test
-        ports: ["5432:5432"]
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version-file: .node-version
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            advanced/package-lock.json
-      # The two services share one database, so their copies of the contract must match
-      - name: Check the Prisma contract copies match
+      # Every migration must apply to an empty database, and the seed must run on the result
+      - name: Migrate a blank database and seed it
         run: |
-          node -e '
-            const { readFileSync } = require("node:fs");
-            const { isDeepStrictEqual } = require("node:util");
-            const read = (dir) => JSON.parse(readFileSync(`${dir}/src/prisma/schema.json`, "utf8"));
-            if (!isDeepStrictEqual(read("backend"), read("advanced"))) {
-              console.error("advanced/src/prisma/schema.json differs from the backend copy");
-              process.exit(1);
-            }
-          '
-          cmp backend/src/prisma/schema.d.ts advanced/src/prisma/schema.d.ts
-      # Advanced has no migrations of its own: the backend owns the schema
-      - name: Migrate the test database
-        working-directory: backend
-        run: |
-          npm ci
-          npx prisma db migrate --db "$TEST_DATABASE_URL" --yes --quiet > /dev/null
-        env:
-          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
-      - run: npm ci
-        working-directory: advanced
-      - run: npm run typecheck
-        working-directory: advanced
+          PGPASSWORD=postgres psql -h localhost -U postgres -c "CREATE DATABASE ieltstudy_blank"
+          npx prisma db migrate --db "$BLANK_DATABASE_URL" --yes --quiet > /dev/null
+          DATABASE_URL="$BLANK_DATABASE_URL" SEED_PASSWORD=ci-seed-password npm run seed
       - run: npm test
-        working-directory: advanced
+      # The simulated evaluation (Phase 6): hybrid vs sequential vs popularity
       - run: npm run eval
-        working-directory: advanced
 
   frontend:
     runs-on: ubuntu-latest
@@ -120,7 +77,7 @@ jobs:
   e2e:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    needs: [backend, advanced, frontend]
+    needs: [backend, frontend]
     # The browsers ship inside this image, so the job never downloads them: the Playwright
     # CDN stalled at 100% on every attempt from these runners. Bump the tag together with
     # the frontend's playwright version.
@@ -145,8 +102,6 @@ jobs:
       JWT_SECRET: ci-e2e-secret
       SEED_PASSWORD: ci-seed-password
       BACKEND_URL: http://localhost:3000
-      ADVANCED_URL: http://localhost:4001
-      ADVANCED_SERVICE_URL: http://localhost:4001
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -155,12 +110,9 @@ jobs:
           cache: npm
           cache-dependency-path: |
             backend/package-lock.json
-            advanced/package-lock.json
             frontend/package-lock.json
       - run: npm ci
         working-directory: backend
-      - run: npm ci
-        working-directory: advanced
       - run: npm ci
         working-directory: frontend
       - name: Migrate and seed
@@ -171,16 +123,13 @@ jobs:
       - name: Run the end-to-end tests
         run: |
           (cd backend && PORT=3000 node src/server.ts > /tmp/backend.log 2>&1 &)
-          (cd advanced && PORT=4001 node src/server.ts > /tmp/advanced.log 2>&1 &)
-          npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/ http-get://localhost:4001/
+          npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/
           cd frontend && npm run test:e2e
       - name: Show the server logs
         if: failure()
         run: |
           echo "=== backend ==="
           cat /tmp/backend.log || true
-          echo "=== advanced ==="
-          cat /tmp/advanced.log || true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -193,4 +142,3 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker build -t ieltstudy-backend backend
-      - run: docker build -t ieltstudy-advanced advanced

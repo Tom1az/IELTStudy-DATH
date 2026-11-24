@@ -1,5 +1,5 @@
 import { pathToFileURL } from "node:url";
-import { SEED_SKILL_CODES, getBktParams, MASTERY_THRESHOLD } from "../config/bkt-params.ts";
+import { FITTED_SKILL_CODES, getBktParams, MASTERY_THRESHOLD } from "../services/bkt-params.ts";
 import { computeBktStep } from "../services/bkt.ts";
 
 const createRng = (seed: number) => {
@@ -26,7 +26,7 @@ type Strategy = "hybrid" | "sequential" | "popularity";
 
 export const runSimulation = (seed = 42, numLearners = 200, maxSteps = 40) => {
   const rng = createRng(seed);
-  const numSkills = SEED_SKILL_CODES.length;
+  const numSkills = FITTED_SKILL_CODES.length;
 
   const catalog: SimLesson[] = [];
   for (let i = 0; i < 120; i++) {
@@ -75,7 +75,7 @@ export const runSimulation = (seed = 42, numLearners = 200, maxSteps = 40) => {
       for (let s = 0; s < numSkills; s++) {
         const p = Math.max(0.1, Math.min(0.85, 0.25 + lRng() * 0.5));
         trueMastery.push(p);
-        const params = getBktParams(SEED_SKILL_CODES[s]!.code);
+        const params = getBktParams(FITTED_SKILL_CODES[s]!);
         const isCorrect = lRng() < p * (1 - params.pSlip) + (1 - p) * params.pGuess;
         estMastery.push(computeBktStep(params.pInit, isCorrect, 1.0, params, true));
       }
@@ -116,7 +116,7 @@ export const runSimulation = (seed = 42, numLearners = 200, maxSteps = 40) => {
           trueMastery[s1]! + (1 - trueMastery[s1]!) * chosen.gainFactor,
         );
 
-        const params = getBktParams(SEED_SKILL_CODES[s1]!.code);
+        const params = getBktParams(FITTED_SKILL_CODES[s1]!);
         const correct =
           lRng() < trueMastery[s1]! * (1 - params.pSlip) + (1 - trueMastery[s1]!) * params.pGuess;
         estMastery[s1] = computeBktStep(estMastery[s1]!, correct, 1.0, params, false);

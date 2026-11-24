@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { getBktParams } from "../config/bkt-params.ts";
+import { getBktParams } from "./bkt-params.ts";
 import { runSimulation } from "../eval/simulator.ts";
-import { computeBktStep } from "../services/bkt.ts";
+import { computeBktStep } from "./bkt.ts";
 
-describe("BKT Math & Simulation Unit Tests (100% Standalone)", () => {
+describe("BKT update and the simulated evaluation", () => {
   it("increases mastery probability on a correct answer and decreases on an incorrect answer", () => {
     const params = getBktParams("W_INVERSION");
     const afterCorrect = computeBktStep(params.pInit, true, 1.0, params, false);

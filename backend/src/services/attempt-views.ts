@@ -2,6 +2,8 @@
 // rows, loading related rows for a whole list with one IN query per table, as
 // services/course-views.ts does.
 import { db } from "../prisma/db.ts";
+import { describeChanges } from "./bkt.ts";
+import { getAttemptRecommendations } from "./recommender.ts";
 import type { Json } from "./questions.ts";
 import { buildQuizSummaries, loadQuestionSkillTags, loadQuizQuestions } from "./quiz-views.ts";
 import type { QuizSummary } from "./quiz-views.ts";
@@ -93,10 +95,9 @@ export const buildAttemptResult = async (row: AttemptRow) => {
     quiz: summary,
     scorePercent: toScorePercent(row),
     responses: isCompleted ? await buildResponseResults(row) : [],
-    // Phase 3: BKT fills these in the submit transaction. Until then they are empty, as the
-    // contract says.
-    masteryChanges: [],
-    recommendations: [],
+    // Saved by the submit transaction (services/attempts.ts, finishAttempt)
+    masteryChanges: isCompleted ? await describeChanges(orm, row.masteryChanges) : [],
+    recommendations: isCompleted ? await getAttemptRecommendations(row.userId, row.attemptId) : [],
   };
 };
 

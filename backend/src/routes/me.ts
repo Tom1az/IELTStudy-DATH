@@ -3,6 +3,7 @@ import { authenticate, authorize } from "../middlewares/auth.ts";
 import { validateBody, validateParams, validateQuery, schemas } from "../utils/validator.ts";
 
 import attemptsController from "../controllers/attempts.ts";
+import learningController from "../controllers/learning.ts";
 import meController from "../controllers/me.ts";
 import notificationsController from "../controllers/notifications.ts";
 
@@ -18,6 +19,9 @@ router
 
 // Only learners enroll in courses
 router.get("/enrollments", authorize("learner"), meController.listMyEnrollments);
+
+// BKT mastery per skill (the radar chart)
+router.get("/mastery", authorize("learner"), learningController.getMyMastery);
 
 // Only learners take quizzes
 router.get(

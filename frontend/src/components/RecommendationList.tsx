@@ -8,8 +8,9 @@ import { SKILL_META, cx } from "@/lib/format";
 
 export function recHref(r: Recommendation) {
   if (r.kind === "practice") return `/practice/${r.targetId}`;
-  // Not enrolled yet: the course page offers to enrol, then opens this lesson
-  return r.enrolled ? `/learn/${r.courseId}/${r.targetId}` : `/courses/${r.courseId}?lesson=${r.targetId}`;
+  // Every recommended lesson can be opened: core lessons only come from my enrolled courses, and
+  // remedial lessons are open to every learner without enrolling (docs/ROADMAP.md, Decisions)
+  return `/learn/${r.courseId}/${r.targetId}`;
 }
 
 /** Recommendation rows with their human-readable rationale. Opening one records a click (for the evaluation). */

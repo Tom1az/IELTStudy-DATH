@@ -208,31 +208,15 @@ function summarize(course: BackendCourse, lessons: BackendLesson[], categories: 
   };
 }
 
-/**
- * Phase 3 data (mastery, recommendations) comes from the separate Advanced service. When it isn't
- * running, the proxy answers 404 or 5xx (or the request fails outright). That must not break the
- * dashboard, so those cases mean "not available" (null) and the page says so.
- */
-async function optionalAdvanced<T>(call: () => Promise<T>): Promise<T | null> {
-  try {
-    return await call();
-  } catch (e) {
-    if (e instanceof ApiError && (e.status === 404 || e.status >= 500)) return null;
-    if (!(e instanceof ApiError) && e instanceof TypeError) return null; // network failure
-    throw e;
-  }
+/** `GET /recommendations`: up to 3 lessons for my weak skills (BKT, in the backend). */
+async function loadRecommendations(categories: SkillCategories): Promise<Recommendation[]> {
+  const res = await backendRequest<{ recommendations: BackendRecommendation[] }>("GET", "/recommendations");
+  return res.recommendations.map((r) => toRecommendation(r, categories));
 }
 
-/** `GET /recommendations` (Advanced service). Null while it isn't available. */
-async function loadRecommendations(categories: SkillCategories): Promise<Recommendation[] | null> {
-  const res = await optionalAdvanced(() => backendRequest<{ recommendations: BackendRecommendation[] }>("GET", "/recommendations"));
-  return res ? res.recommendations.map((r) => toRecommendation(r, categories)) : null;
-}
-
-/** `GET /me/mastery` (Advanced service). Null while it isn't available. */
-async function loadMastery(): Promise<MasteryData | null> {
-  const res = await optionalAdvanced(() => backendRequest<{ mastery: BackendMastery[] }>("GET", "/me/mastery"));
-  if (!res) return null;
+/** `GET /me/mastery`: my BKT mastery per skill. Empty until I finish the placement quiz. */
+async function loadMastery(): Promise<MasteryData> {
+  const res = await backendRequest<{ mastery: BackendMastery[] }>("GET", "/me/mastery");
   const skills: MasterySkill[] = res.mastery.map((m) => ({
     skillId: String(m.skillId),
     name: m.name,
@@ -402,7 +386,7 @@ export const lessonApi = {
 /* ───────── Dashboard ───────── */
 
 export const meApi = {
-  /** My skill map. Null while the Advanced service isn't available. */
+  /** My skill map (BKT mastery per skill). */
   mastery(): Promise<MasteryData | null> {
     return loadMastery();
   },

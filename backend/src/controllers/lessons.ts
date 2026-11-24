@@ -2,10 +2,9 @@ import type { Request, Response } from "express";
 import type { Varchar } from "@prisma/orm-postgres/target/codec-types";
 import { and } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
-import { assertLessonUnlocked, fetchCourseGates } from "../services/advanced-client.ts";
+import { assertCanOpenLesson, computeCourseLessonGates } from "../services/gating.ts";
 import { buildLessonDetail, buildLessons, toProgress } from "../services/course-views.ts";
 import {
-  assertCanStudy,
   assertCourseOwner,
   assertEditable,
   findVisibleCourse,
@@ -42,18 +41,15 @@ const listLessons = async (req: Request, res: Response) => {
 
   const lessons = await buildLessons(rows, req.user!);
 
-  // Phase 3: the Advanced service decides which lessons a learner has unlocked yet. If it isn't
-  // available, nothing is locked.
+  // Which lessons this learner has unlocked yet (services/gating.ts)
   if (req.user!.role === "learner") {
-    const gates = await fetchCourseGates(course.courseId, req.headers.authorization);
-    if (gates) {
-      return res.status(200).json({
-        lessons: lessons.map((lesson) =>
-          gates.get(lesson.lessonId)?.locked ? { ...lesson, locked: true } : lesson,
-        ),
-        message: "Lessons",
-      });
-    }
+    const gates = await computeCourseLessonGates(req.user!.userId, course.courseId);
+    return res.status(200).json({
+      lessons: lessons.map((lesson) =>
+        gates.get(lesson.lessonId)?.locked ? { ...lesson, locked: true } : lesson,
+      ),
+      message: "Lessons",
+    });
   }
 
   return res.status(200).json({
@@ -104,9 +100,7 @@ const createLesson = async (req: Request, res: Response) => {
 
 const getLesson = async (req: Request, res: Response) => {
   const { lesson, course } = await findVisibleLesson(req.value!.params!.lessonId, req.user!);
-  await assertCanStudy(course, req.user!);
-
-  await assertLessonUnlocked(lesson, req.user!, req.headers.authorization);
+  await assertCanOpenLesson(lesson, course, req.user!);
 
   return res.status(200).json({
     lesson: await buildLessonDetail(lesson, req.user!),
@@ -243,8 +237,7 @@ const updateEnrollmentCompletion = async (userId: number, courseId: number) => {
 const setLessonProgress = async (req: Request, res: Response) => {
   const userId = req.user!.userId;
   const { lesson, course } = await findVisibleLesson(req.value!.params!.lessonId, req.user!);
-  await assertCanStudy(course, req.user!);
-  await assertLessonUnlocked(lesson, req.user!, req.headers.authorization);
+  await assertCanOpenLesson(lesson, course, req.user!);
 
   const { status }: { status: "in_progress" | "completed" } = req.value!.body;
 

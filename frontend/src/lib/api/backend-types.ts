@@ -221,7 +221,7 @@ export interface BackendAttemptResult {
   recommendations: BackendRecommendation[];
 }
 
-/** `Mastery` schema: `GET /me/mastery` (Phase 3, served by the Advanced service). */
+/** `Mastery` schema: `GET /me/mastery`. */
 export interface BackendMastery {
   skillId: number;
   skillCode: string;

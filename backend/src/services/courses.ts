@@ -97,15 +97,8 @@ export const isEnrolled = async (userId: number, courseId: number) => {
   return enrollment !== null;
 };
 
-// Learners may open a lesson only in a course they are enrolled in. Instructors and admins
-// who can see the course may always open its lessons.
-export const assertCanStudy = async (course: CourseRow, user: PublicUser) => {
-  if (user.role !== "learner") return;
-
-  if (!(await isEnrolled(user.userId, course.courseId))) {
-    throw httpError(403, "Enrol in this course to open its lessons");
-  }
-};
+// Learners' access to a lesson's content (enrolment, remedial lessons, gating) is decided in
+// services/gating.ts (assertCanOpenLesson).
 
 type StatusChanges = {
   status: CourseStatus;

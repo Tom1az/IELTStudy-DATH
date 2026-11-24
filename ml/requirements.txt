@@ -1,0 +1,5 @@
+# Offline BKT fitting (python ml/fit_bkt.py). Tested with Python 3.14.
+pyBKT==1.4.3
+numpy>=2.0,<2.5
+pandas>=2.2
+scikit-learn>=1.5

@@ -17,7 +17,8 @@
     "migration:plan": "prisma migration plan",
     "db:migrate": "prisma db migrate",
     "db:verify": "prisma db verify",
-    "seed": "node src/prisma/seed.ts"
+    "seed": "node src/prisma/seed.ts",
+    "eval": "node src/eval/simulator.ts"
   },
   "dependencies": {
     "@prisma/orm-postgres": "8.0.0-rc.17",

@@ -1,4 +1,4 @@
-# Render Blueprint for the two API services. See docs/DEPLOYMENT.md.
+# Render Blueprint for the API. See docs/DEPLOYMENT.md.
 # Deploys are started by .github/workflows/cd.yml after CI passes, not by every push.
 services:
   - type: web
@@ -16,27 +16,17 @@ services:
         sync: false
       - key: JWT_SECRET
         sync: false
-      - key: ADVANCED_SERVICE_URL
-        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
         sync: false
       - key: SUPABASE_STORAGE_BUCKET
         sync: false
-
-  - type: web
-    name: ieltstudy-advanced
-    runtime: docker
-    dockerfilePath: advanced/Dockerfile
-    dockerContext: advanced
-    plan: free
-    region: singapore
-    branch: main
-    autoDeployTrigger: "off"
-    healthCheckPath: /
-    envVars:
-      - key: DATABASE_URL
+      - key: APP_URL
         sync: false
-      - key: JWT_SECRET
+      - key: MAIL_API_KEY
+        sync: false
+      - key: MAIL_FROM
+        sync: false
+      - key: CORS_ORIGINS
         sync: false

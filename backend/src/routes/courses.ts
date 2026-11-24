@@ -3,6 +3,7 @@ import { authenticate, authorize } from "../middlewares/auth.ts";
 import { validateBody, validateParams, validateQuery, schemas } from "../utils/validator.ts";
 
 import coursesController from "../controllers/courses.ts";
+import learningController from "../controllers/learning.ts";
 import lessonsController from "../controllers/lessons.ts";
 
 const router = express.Router();
@@ -62,6 +63,7 @@ router.post(
   coursesController.archiveCourse,
 );
 router.post("/:courseId/enroll", authorize("learner"), courseId, coursesController.enrollInCourse);
+router.get("/:courseId/gates", authorize("learner"), courseId, learningController.getCourseGates);
 router.delete("/:courseId/enroll", authorize("learner"), courseId, coursesController.leaveCourse);
 
 // Lessons are listed and created under their course

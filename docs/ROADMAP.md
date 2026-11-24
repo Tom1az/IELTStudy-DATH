@@ -70,15 +70,15 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 
 ## Phase 3 — BKT and recommender
 
-Owned by another team member, so Phase 4 work goes ahead without it. Until it lands, the frontend shows "not available yet" for mastery, recommendations and locked lessons.
+Ported into the backend on 2026-11-24 (`advanced/` removed): BKT, the recommender and gating run in the API, and the mastery update happens inside the submit transaction.
 
-- [ ] `ml/`: fit pyBKT parameters → `ml/output/bkt_params.json`
-- [ ] `services/bkt.ts`: per-response update, Q-matrix weighted split, upsert mastery inside the submit transaction
-- [ ] Diagnostic sets the starting mastery (cold start)
-- [ ] `services/recommender.ts`: mastery below 0.65 → tagged lessons, ranked, with a rationale
-- [ ] `GET /api/v1/recommendations` + module gating
-- [ ] Latency test: p95 under 300 ms
-- [ ] **Gate:** ranking formula, unlock rule and remedial-lesson access approved
+- [x] `ml/`: fit pyBKT parameters → `ml/output/bkt_params.json` (`ml/fit_bkt.py`, simulated + optional real responses; copied to `backend/src/config/bkt-params.json`)
+- [x] `services/bkt.ts`: per-response update, Q-matrix weighted split, upsert mastery inside the submit transaction
+- [x] Diagnostic sets the starting mastery (cold start: unmeasured skills take their category's average)
+- [x] `services/recommender.ts`: mastery below 0.65 → tagged lessons, ranked, with a rationale
+- [x] `GET /api/v1/recommendations` + module gating (`services/gating.ts`, `GET /courses/{id}/gates`)
+- [x] Latency test: p95 under 300 ms (`recommendations.latency.integration.test.ts`: p95 ≈ 7 ms locally)
+- [x] **Gate:** ranking formula, unlock rule and remedial-lesson access approved (2026-11-24, see Decisions)
 
 ## Phase 4 — Frontend (parallel, against Prism mocks)
 
@@ -118,8 +118,8 @@ Required by the course brief (`proposal_VI.md`) but not built yet. Plan each ite
 - [ ] Report inappropriate content (brief §4.5): new table (schema change), a report button on comments and content, and the admin handling page `/admin/reports` (placeholder today).
 - [x] Admin audit log (brief §4.6). Done 2026-11-24: `admin_audit_logs` written in the same transaction as role changes, (de)activations and course approve/reject/archive; `GET /admin/audit`. new table (schema change), written when an admin changes a role, deactivates a user, or approves, rejects or archives a course. Wire `/admin/audit` (placeholder today).
 - [ ] Admin reports (brief §4.6): check that `GET /admin/stats` covers enrolments, completion rate and learning results; add what is missing.
-- [ ] Autosave answers while a quiz is open: the time limit now closes an unsubmitted attempt with score 0 and cannot tell when answers were given (`docs/plans/phase-2-core-apis.md`, "Server-side quiz time limit"). Needs a column or table (schema change).
-- [ ] BKT and recommender integration into the core app: the existing Phase 3 tasks cover it. Port or adapt `advanced/` to the Prisma schema and JWT, add `mastery_history` if needed, and call it from `submitAttempt`.
+- [x] Autosave answers while a quiz is open (done 2026-11-24: `PUT`/`GET /attempts/{id}/answers`, `quiz_attempts.draft_answers`; the time limit grades the answers saved before the deadline): the time limit now closes an unsubmitted attempt with score 0 and cannot tell when answers were given (`docs/plans/phase-2-core-apis.md`, "Server-side quiz time limit"). Needs a column or table (schema change).
+- [x] BKT and recommender integration into the core app (done 2026-11-24): the existing Phase 3 tasks cover it. Port or adapt `advanced/` to the Prisma schema and JWT, add `mastery_history` if needed, and call it from `submitAttempt`.
   - **Decision (2026-11-01):** until the interim report, BKT and the recommender stay in `advanced/`, a separate service on port 4001 that shares the database and `JWT_SECRET`, and the backend calls it through `services/advanced-client.ts` (fails soft). After the interim, port it into `backend/src/services/` (`bkt.ts`, `recommender.ts`, `gating.ts`) and run the mastery update inside the submit transaction. Why: one Prisma schema instead of a copy, no duplicated auth/JWT code, an atomic update, no extra HTTP hop, one server to deploy, and a failure is visible instead of swallowed. When ported, remove `ADVANCED_SERVICE_URL` and `advanced-client.ts`, and add the code to the backend tests and CI. Mention this as a known limitation and planned step in the interim report.
 
 Several items need schema changes. Send them to the owner as one combined proposal, so there is one migration (`backend/CLAUDE.md`: schema changes need approval).

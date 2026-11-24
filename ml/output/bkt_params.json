@@ -1,0 +1,158 @@
+{
+  "generatedAt": "2026-11-24T04:39:40+00:00",
+  "method": "pyBKT EM fit per skill (no forgetting), 5 restarts",
+  "data": {
+    "simulatedLearnersPerSkill": 300,
+    "realResponses": 0,
+    "seed": 42
+  },
+  "defaults": {
+    "pInit": 0.3,
+    "pLearn": 0.15,
+    "pSlip": 0.1,
+    "pGuess": 0.25,
+    "pForget": 0.0
+  },
+  "skills": {
+    "L_FORM_COMPLETION": {
+      "pInit": 0.3837,
+      "pLearn": 0.1774,
+      "pGuess": 0.1719,
+      "pSlip": 0.0895,
+      "pForget": 0.0
+    },
+    "L_SPECIFIC_DETAIL": {
+      "pInit": 0.3997,
+      "pLearn": 0.1493,
+      "pGuess": 0.2315,
+      "pSlip": 0.0947,
+      "pForget": 0.0
+    },
+    "L_MAP_LABELLING": {
+      "pInit": 0.2931,
+      "pLearn": 0.1668,
+      "pGuess": 0.2555,
+      "pSlip": 0.1046,
+      "pForget": 0.0
+    },
+    "L_GIST": {
+      "pInit": 0.3149,
+      "pLearn": 0.1462,
+      "pGuess": 0.27,
+      "pSlip": 0.0879,
+      "pForget": 0.0
+    },
+    "L_DISTRACTORS": {
+      "pInit": 0.2778,
+      "pLearn": 0.1412,
+      "pGuess": 0.2257,
+      "pSlip": 0.1139,
+      "pForget": 0.0
+    },
+    "R_SKIM_HEADINGS": {
+      "pInit": 0.2945,
+      "pLearn": 0.1542,
+      "pGuess": 0.1982,
+      "pSlip": 0.1062,
+      "pForget": 0.0
+    },
+    "R_SCAN_DETAIL": {
+      "pInit": 0.3954,
+      "pLearn": 0.1575,
+      "pGuess": 0.2531,
+      "pSlip": 0.0703,
+      "pForget": 0.0
+    },
+    "R_TFNG": {
+      "pInit": 0.327,
+      "pLearn": 0.1243,
+      "pGuess": 0.3245,
+      "pSlip": 0.1033,
+      "pForget": 0.0
+    },
+    "R_INFERENCE": {
+      "pInit": 0.2615,
+      "pLearn": 0.1188,
+      "pGuess": 0.2562,
+      "pSlip": 0.117,
+      "pForget": 0.0
+    },
+    "R_VOCAB_CONTEXT": {
+      "pInit": 0.2349,
+      "pLearn": 0.1481,
+      "pGuess": 0.235,
+      "pSlip": 0.0952,
+      "pForget": 0.0
+    },
+    "W_TENSES": {
+      "pInit": 0.306,
+      "pLearn": 0.1809,
+      "pGuess": 0.2473,
+      "pSlip": 0.1055,
+      "pForget": 0.0
+    },
+    "W_CONDITIONALS": {
+      "pInit": 0.2343,
+      "pLearn": 0.1629,
+      "pGuess": 0.232,
+      "pSlip": 0.0997,
+      "pForget": 0.0
+    },
+    "W_INVERSION": {
+      "pInit": 0.2216,
+      "pLearn": 0.1203,
+      "pGuess": 0.246,
+      "pSlip": 0.1236,
+      "pForget": 0.0
+    },
+    "W_COHESION": {
+      "pInit": 0.2733,
+      "pLearn": 0.1801,
+      "pGuess": 0.2484,
+      "pSlip": 0.0901,
+      "pForget": 0.0
+    },
+    "W_COLLOCATIONS": {
+      "pInit": 0.3142,
+      "pLearn": 0.1418,
+      "pGuess": 0.2264,
+      "pSlip": 0.1051,
+      "pForget": 0.0
+    },
+    "S_WORD_STRESS": {
+      "pInit": 0.3247,
+      "pLearn": 0.1532,
+      "pGuess": 0.239,
+      "pSlip": 0.0968,
+      "pForget": 0.0
+    },
+    "S_SOUNDS": {
+      "pInit": 0.3417,
+      "pLearn": 0.137,
+      "pGuess": 0.2424,
+      "pSlip": 0.1063,
+      "pForget": 0.0
+    },
+    "S_INTONATION": {
+      "pInit": 0.3081,
+      "pLearn": 0.1451,
+      "pGuess": 0.2404,
+      "pSlip": 0.1134,
+      "pForget": 0.0
+    },
+    "S_DISCOURSE_MARKERS": {
+      "pInit": 0.2604,
+      "pLearn": 0.1734,
+      "pGuess": 0.2469,
+      "pSlip": 0.0931,
+      "pForget": 0.0
+    },
+    "S_LEXICAL_RANGE": {
+      "pInit": 0.2328,
+      "pLearn": 0.1303,
+      "pGuess": 0.2532,
+      "pSlip": 0.1066,
+      "pForget": 0.0
+    }
+  }
+}

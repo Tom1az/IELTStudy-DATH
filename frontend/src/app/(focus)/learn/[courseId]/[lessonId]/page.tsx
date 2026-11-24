@@ -193,7 +193,8 @@ export default function LessonPage() {
                   ) : (
                     <button className="btn-outline" onClick={complete} disabled={completing}>{completing && <Spinner className="h-4 w-4" />}Mark lesson complete</button>
                   ))}
-                  {practice && enrollment && <Link href={`/practice/${practice.id}`} className="btn-primary">Start quiz →</Link>}
+                  {/* A remedial lesson's quiz is open without enrolling; the backend checks access */}
+                  {practice && <Link href={`/practice/${practice.id}`} className="btn-primary">Start quiz →</Link>}
                 </div>
               </div>
             )}

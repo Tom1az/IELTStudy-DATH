@@ -357,6 +357,21 @@ const schemas = {
       .required(),
   }),
 
+  // Autosave: every answered question each time; remainingSeconds is accepted and ignored
+  draftAnswersSchema: Joi.object().keys({
+    responses: Joi.array()
+      .items(
+        Joi.object().keys({
+          questionId: Joi.number().integer().positive().required(),
+          answer: learnerAnswer.required(),
+        }),
+      )
+      .max(200)
+      .unique("questionId")
+      .required(),
+    remainingSeconds: Joi.number().allow(null),
+  }),
+
   myAttemptsQuerySchema: Joi.object().keys({
     quizId: Joi.number().integer().positive(),
     status: Joi.string().valid("in_progress", "completed"),

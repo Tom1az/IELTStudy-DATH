@@ -23,6 +23,17 @@ router.post(
   attemptsController.submitMyAttempt,
 );
 
+// Autosave while the attempt is open
+router
+  .route("/:attemptId/answers")
+  .get(authorize("learner"), attemptId, attemptsController.getMyDraftAnswers)
+  .put(
+    authorize("learner"),
+    attemptId,
+    validateBody(schemas.draftAnswersSchema),
+    attemptsController.putDraftAnswers,
+  );
+
 router.get(
   "/:attemptId/feedback",
   authorize("learner", "admin"),

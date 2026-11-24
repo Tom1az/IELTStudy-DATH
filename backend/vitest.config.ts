@@ -26,8 +26,6 @@ export default defineConfig({
       SUPABASE_URL: "",
       SUPABASE_SERVICE_ROLE_KEY: "",
       SUPABASE_STORAGE_BUCKET: "",
-      // Tests never call the Advanced service
-      ADVANCED_SERVICE_URL: "",
     },
     // Applies migrations to the test database once per run
     globalSetup: ["./src/test/global-setup.ts"],

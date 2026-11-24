@@ -10,7 +10,7 @@ The REST API for IELTStudy, an adaptive IELTS learning platform. It handles:
 - **Grading:** answers are graded on the server when an attempt is submitted, and every response is logged.
 - **Admin:** manage user roles, deactivate accounts, review courses and view usage stats.
 
-The Bayesian Knowledge Tracing engine and the recommendations run as a separate service in [`../advanced/`](../advanced/), which this API calls after a quiz submit and when it serves lessons (see [`../docs/ROADMAP.md`](../docs/ROADMAP.md)). The product spec is [`../specs.md`](../specs.md).
+Bayesian Knowledge Tracing (`src/services/bkt.ts`), the recommender (`src/services/recommender.ts`) and module gating (`src/services/gating.ts`) run inside this API: submitting an attempt updates mastery and recommendations in the same transaction. The BKT parameters come from the pyBKT fit in [`../ml/`](../ml/) (`src/config/bkt-params.json`). `npm run eval` runs the simulated evaluation. The product spec is [`../specs.md`](../specs.md).
 
 ## Tech stack
 
