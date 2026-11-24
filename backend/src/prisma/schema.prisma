@@ -68,6 +68,20 @@ enum ProgressStatus {
   completed   = "completed"
 }
 
+enum ReportTargetType {
+  @@type("pg/text@1")
+  comment  = "comment"
+  lesson   = "lesson"
+  question = "question"
+}
+
+enum ReportStatus {
+  @@type("pg/text@1")
+  open      = "open"
+  resolved  = "resolved"
+  dismissed = "dismissed"
+}
+
 model Users {
   userId     Int                  @id @default(autoincrement()) @map("user_id")
   email      VarChar(255)         @unique
@@ -76,6 +90,8 @@ model Users {
   role       UserRole             @default(learner)
   targetBand Float?               @map("target_band")
   isActive   Boolean              @default(true) @map("is_active")
+  // Set when the password changes; login tokens issued before it are refused
+  passwordChangedAt DateTime?     @map("password_changed_at")
   createdAt  temporal.createdAt() @map("created_at")
   updatedAt  temporal.updatedAt() @map("updated_at")
 
@@ -246,6 +262,9 @@ model QuizAttempts {
   totalScore     Int?                 @map("total_score")
   maxScore       Int                  @map("max_score")
   masteryChanges Jsonb?               @map("mastery_changes")
+  // Autosave: { "<questionId>": { answer, savedAt } }. Graded on submit or when the time limit closes the attempt.
+  draftAnswers   Jsonb?               @map("draft_answers")
+  draftSavedAt   DateTime?            @map("draft_saved_at")
   user           Users                @relation(fields: [userId], references: [userId], onDelete: Cascade, index: false)
   quiz           Quizzes              @relation(fields: [quizId], references: [quizId])
 
@@ -352,4 +371,108 @@ model Recommendations {
   @@check(expression: "rank >= 1", name: "recommendations_rank_positive")
   @@check(expression: "mastery_prob BETWEEN 0 AND 1", name: "recommendations_mastery_range")
   @@map("recommendations")
+}
+
+// Single-use password reset links. Only the SHA-256 of the token is stored.
+model PasswordResetTokens {
+  tokenId   Int                  @id @default(autoincrement()) @map("token_id")
+  userId    Int                  @map("user_id")
+  tokenHash VarChar(64)          @unique @map("token_hash")
+  expiresAt DateTime             @map("expires_at")
+  usedAt    DateTime?            @map("used_at")
+  createdAt temporal.createdAt() @map("created_at")
+  user      Users                @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@map("password_reset_tokens")
+}
+
+// What admins did: role changes, deactivations, course reviews, moderation. Written in the same transaction as the change.
+model AdminAuditLogs {
+  auditId    Int                  @id @default(autoincrement()) @map("audit_id")
+  actorId    Int?                 @map("actor_id")
+  action     VarChar(64)
+  targetType VarChar(32)?         @map("target_type")
+  targetId   Int?                 @map("target_id")
+  summary    VarChar(500)?
+  details    Jsonb?
+  createdAt  temporal.createdAt() @map("created_at")
+  actor      Users?               @relation(fields: [actorId], references: [userId], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([action])
+  @@map("admin_audit_logs")
+}
+
+// An instructor's written feedback on a submitted attempt; score_override replaces the automatic score when set
+model AttemptFeedback {
+  attemptId     Int                  @id @map("attempt_id")
+  instructorId  Int?                 @map("instructor_id")
+  comment       String
+  scoreOverride Int?                 @map("score_override")
+  createdAt     temporal.createdAt() @map("created_at")
+  updatedAt     temporal.updatedAt() @map("updated_at")
+  attempt       QuizAttempts         @relation(fields: [attemptId], references: [attemptId], onDelete: Cascade, index: false)
+  instructor    Users?               @relation(fields: [instructorId], references: [userId], onDelete: SetNull)
+
+  @@check(expression: "score_override IS NULL OR score_override >= 0", name: "attempt_feedback_score_nonnegative")
+  @@map("attempt_feedback")
+}
+
+model Notifications {
+  notificationId Int                  @id @default(autoincrement()) @map("notification_id")
+  userId         Int                  @map("user_id")
+  type           VarChar(64)
+  title          VarChar(255)
+  body           String?
+  link           VarChar(1024)?
+  readAt         DateTime?            @map("read_at")
+  createdAt      temporal.createdAt() @map("created_at")
+  user           Users                @relation(fields: [userId], references: [userId], onDelete: Cascade, index: false)
+
+  @@index([userId, createdAt])
+  @@map("notifications")
+}
+
+// Lesson discussion. One level of replies: a reply's parent is always a top-level comment. Removal is a soft delete.
+model LessonComments {
+  commentId   Int                  @id @default(autoincrement()) @map("comment_id")
+  lessonId    Int                  @map("lesson_id")
+  userId      Int                  @map("user_id")
+  parentId    Int?                 @map("parent_id")
+  body        String
+  createdAt   temporal.createdAt() @map("created_at")
+  updatedAt   temporal.updatedAt() @map("updated_at")
+  deletedAt   DateTime?            @map("deleted_at")
+  deletedById Int?                 @map("deleted_by_id")
+  lesson      Lessons              @relation(fields: [lessonId], references: [lessonId], onDelete: Cascade, index: false)
+  user        Users                @relation("CommentAuthor", fields: [userId], references: [userId], onDelete: Cascade)
+  parent      LessonComments?      @relation("CommentReplies", fields: [parentId], references: [commentId], onDelete: Cascade)
+  deletedBy   Users?               @relation("CommentRemover", fields: [deletedById], references: [userId], onDelete: SetNull)
+
+  @@index([lessonId, createdAt])
+  @@index([deletedById])
+  @@map("lesson_comments")
+}
+
+// One report per user and target. target_id points at lesson_comments, lessons or questions depending on target_type,
+// so it has no foreign key; a report outlives its target.
+model ContentReports {
+  reportId    Int                  @id @default(autoincrement()) @map("report_id")
+  reporterId  Int?                 @map("reporter_id")
+  targetType  ReportTargetType     @map("target_type")
+  targetId    Int                  @map("target_id")
+  reason      String
+  status      ReportStatus         @default(open)
+  note        String?
+  handledById Int?                 @map("handled_by_id")
+  handledAt   DateTime?            @map("handled_at")
+  createdAt   temporal.createdAt() @map("created_at")
+  reporter    Users?               @relation("ReportAuthor", fields: [reporterId], references: [userId], onDelete: SetNull, index: false)
+  handledBy   Users?               @relation("ReportHandler", fields: [handledById], references: [userId], onDelete: SetNull)
+
+  @@unique([reporterId, targetType, targetId])
+  @@index([status, createdAt])
+  @@index([targetType, targetId])
+  @@check(expression: "(status = 'open') = (handled_at IS NULL)", name: "content_reports_handled_when_closed")
+  @@map("content_reports")
 }

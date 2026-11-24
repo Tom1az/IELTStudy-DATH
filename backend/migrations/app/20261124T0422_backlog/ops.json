@@ -1,0 +1,1415 @@
+[
+  {
+    "id": "table.admin_audit_logs",
+    "label": "Create table \"admin_audit_logs\"",
+    "summary": "Creates table \"admin_audit_logs\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "admin_audit_logs"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"admin_audit_logs\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"admin_audit_logs\"",
+        "sql": "CREATE TABLE \"public\".\"admin_audit_logs\" (\n  \"action\" character varying(64) NOT NULL,\n  \"actor_id\" int4,\n  \"audit_id\" SERIAL NOT NULL,\n  \"created_at\" timestamptz NOT NULL,\n  \"details\" jsonb,\n  \"summary\" character varying(500),\n  \"target_id\" int4,\n  \"target_type\" character varying(32),\n  PRIMARY KEY (\"audit_id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"admin_audit_logs\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.attempt_feedback",
+    "label": "Create table \"attempt_feedback\"",
+    "summary": "Creates table \"attempt_feedback\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "attempt_feedback"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"attempt_feedback\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"attempt_feedback\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"attempt_feedback\"",
+        "sql": "CREATE TABLE \"public\".\"attempt_feedback\" (\n  \"attempt_id\" int4 NOT NULL,\n  \"comment\" text NOT NULL,\n  \"created_at\" timestamptz NOT NULL,\n  \"instructor_id\" int4,\n  \"score_override\" int4,\n  \"updated_at\" timestamptz NOT NULL,\n  PRIMARY KEY (\"attempt_id\"),\n  CONSTRAINT \"attempt_feedback_score_nonnegative_adb8949a\" CHECK (score_override IS NULL OR score_override >= 0)\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"attempt_feedback\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"attempt_feedback\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.content_reports",
+    "label": "Create table \"content_reports\"",
+    "summary": "Creates table \"content_reports\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "content_reports"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"content_reports\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"content_reports\"",
+        "sql": "CREATE TABLE \"public\".\"content_reports\" (\n  \"created_at\" timestamptz NOT NULL,\n  \"handled_at\" timestamptz,\n  \"handled_by_id\" int4,\n  \"note\" text,\n  \"reason\" text NOT NULL,\n  \"report_id\" SERIAL NOT NULL,\n  \"reporter_id\" int4,\n  \"status\" text DEFAULT 'open' NOT NULL,\n  \"target_id\" int4 NOT NULL,\n  \"target_type\" text NOT NULL,\n  PRIMARY KEY (\"report_id\"),\n  CONSTRAINT \"content_reports_handled_when_closed_94128ffc\" CHECK ((status = 'open') = (handled_at IS NULL)),\n  CONSTRAINT \"content_reports_status_check_342b8d8d\" CHECK (\"status\" IN ('open', 'resolved', 'dismissed')),\n  CONSTRAINT \"content_reports_target_type_check_fe68a219\" CHECK (\"target_type\" IN ('comment', 'lesson', 'question'))\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"content_reports\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.lesson_comments",
+    "label": "Create table \"lesson_comments\"",
+    "summary": "Creates table \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"lesson_comments\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"lesson_comments\"",
+        "sql": "CREATE TABLE \"public\".\"lesson_comments\" (\n  \"body\" text NOT NULL,\n  \"comment_id\" SERIAL NOT NULL,\n  \"created_at\" timestamptz NOT NULL,\n  \"deleted_at\" timestamptz,\n  \"deleted_by_id\" int4,\n  \"lesson_id\" int4 NOT NULL,\n  \"parent_id\" int4,\n  \"updated_at\" timestamptz NOT NULL,\n  \"user_id\" int4 NOT NULL,\n  PRIMARY KEY (\"comment_id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"lesson_comments\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.notifications",
+    "label": "Create table \"notifications\"",
+    "summary": "Creates table \"notifications\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "notifications"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"notifications\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"notifications\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"notifications\"",
+        "sql": "CREATE TABLE \"public\".\"notifications\" (\n  \"body\" text,\n  \"created_at\" timestamptz NOT NULL,\n  \"link\" character varying(1024),\n  \"notification_id\" SERIAL NOT NULL,\n  \"read_at\" timestamptz,\n  \"title\" character varying(255) NOT NULL,\n  \"type\" character varying(64) NOT NULL,\n  \"user_id\" int4 NOT NULL,\n  PRIMARY KEY (\"notification_id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"notifications\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"notifications\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "table.password_reset_tokens",
+    "label": "Create table \"password_reset_tokens\"",
+    "summary": "Creates table \"password_reset_tokens\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "table",
+        "name": "password_reset_tokens"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure table \"password_reset_tokens\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"password_reset_tokens\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create table \"password_reset_tokens\"",
+        "sql": "CREATE TABLE \"public\".\"password_reset_tokens\" (\n  \"created_at\" timestamptz NOT NULL,\n  \"expires_at\" timestamptz NOT NULL,\n  \"token_hash\" character varying(64) NOT NULL,\n  \"token_id\" SERIAL NOT NULL,\n  \"used_at\" timestamptz,\n  \"user_id\" int4 NOT NULL,\n  PRIMARY KEY (\"token_id\")\n)",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify table \"password_reset_tokens\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"password_reset_tokens\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.quiz_attempts.draft_answers",
+    "label": "Add column \"draft_answers\" to \"quiz_attempts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "draft_answers",
+        "table": "quiz_attempts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"draft_answers\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "quiz_attempts",
+          "draft_answers"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"draft_answers\"",
+        "sql": "ALTER TABLE \"public\".\"quiz_attempts\" ADD COLUMN \"draft_answers\" jsonb"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"draft_answers\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "quiz_attempts",
+          "draft_answers"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.quiz_attempts.draft_saved_at",
+    "label": "Add column \"draft_saved_at\" to \"quiz_attempts\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "draft_saved_at",
+        "table": "quiz_attempts"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"draft_saved_at\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "quiz_attempts",
+          "draft_saved_at"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"draft_saved_at\"",
+        "sql": "ALTER TABLE \"public\".\"quiz_attempts\" ADD COLUMN \"draft_saved_at\" timestamptz"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"draft_saved_at\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "quiz_attempts",
+          "draft_saved_at"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "column.public.users.password_changed_at",
+    "label": "Add column \"password_changed_at\" to \"users\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "column",
+        "name": "password_changed_at",
+        "table": "users"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure column \"password_changed_at\" is missing",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "users",
+          "password_changed_at"
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add column \"password_changed_at\"",
+        "sql": "ALTER TABLE \"public\".\"users\" ADD COLUMN \"password_changed_at\" timestamptz"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify column \"password_changed_at\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"information_schema\".\"columns\" WHERE (\"table_schema\" = $1 AND \"table_name\" = $2 AND \"column_name\" = $3)) AS \"result\"",
+        "params": [
+          "public",
+          "users",
+          "password_changed_at"
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.content_reports.content_reports_reporter_id_target_type_target_id_key",
+    "label": "Add unique constraint on \"content_reports\" (reporter_id, target_type, target_id)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "content_reports_reporter_id_target_type_target_id_key",
+        "table": "content_reports"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"content_reports_reporter_id_target_type_target_id_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "content_reports_reporter_id_target_type_target_id_key",
+          "public",
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"content_reports_reporter_id_target_type_target_id_key\"",
+        "sql": "ALTER TABLE \"public\".\"content_reports\" ADD CONSTRAINT \"content_reports_reporter_id_target_type_target_id_key\" UNIQUE (\"reporter_id\", \"target_type\", \"target_id\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"content_reports_reporter_id_target_type_target_id_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "content_reports_reporter_id_target_type_target_id_key",
+          "public",
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "unique.password_reset_tokens.password_reset_tokens_token_hash_key",
+    "label": "Add unique constraint on \"password_reset_tokens\" (token_hash)",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "unique",
+        "name": "password_reset_tokens_token_hash_key",
+        "table": "password_reset_tokens"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure constraint \"password_reset_tokens_token_hash_key\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "password_reset_tokens_token_hash_key",
+          "public",
+          "\"public\".\"password_reset_tokens\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add unique constraint \"password_reset_tokens_token_hash_key\"",
+        "sql": "ALTER TABLE \"public\".\"password_reset_tokens\" ADD CONSTRAINT \"password_reset_tokens_token_hash_key\" UNIQUE (\"token_hash\")"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify constraint \"password_reset_tokens_token_hash_key\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "password_reset_tokens_token_hash_key",
+          "public",
+          "\"public\".\"password_reset_tokens\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.admin_audit_logs.admin_audit_logs_action_idx_cd0d2116",
+    "label": "Create index \"admin_audit_logs_action_idx_cd0d2116\" on \"admin_audit_logs\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "admin_audit_logs_action_idx_cd0d2116",
+        "table": "admin_audit_logs"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"admin_audit_logs_action_idx_cd0d2116\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs_action_idx_cd0d2116\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"admin_audit_logs_action_idx_cd0d2116\"",
+        "sql": "CREATE INDEX \"admin_audit_logs_action_idx_cd0d2116\" ON \"public\".\"admin_audit_logs\" (\"action\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"admin_audit_logs_action_idx_cd0d2116\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs_action_idx_cd0d2116\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.admin_audit_logs.admin_audit_logs_actor_id_idx_69a2164d",
+    "label": "Create index \"admin_audit_logs_actor_id_idx_69a2164d\" on \"admin_audit_logs\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "admin_audit_logs_actor_id_idx_69a2164d",
+        "table": "admin_audit_logs"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"admin_audit_logs_actor_id_idx_69a2164d\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs_actor_id_idx_69a2164d\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"admin_audit_logs_actor_id_idx_69a2164d\"",
+        "sql": "CREATE INDEX \"admin_audit_logs_actor_id_idx_69a2164d\" ON \"public\".\"admin_audit_logs\" (\"actor_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"admin_audit_logs_actor_id_idx_69a2164d\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs_actor_id_idx_69a2164d\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.admin_audit_logs.admin_audit_logs_created_at_idx_225d8c0f",
+    "label": "Create index \"admin_audit_logs_created_at_idx_225d8c0f\" on \"admin_audit_logs\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "admin_audit_logs_created_at_idx_225d8c0f",
+        "table": "admin_audit_logs"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"admin_audit_logs_created_at_idx_225d8c0f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs_created_at_idx_225d8c0f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"admin_audit_logs_created_at_idx_225d8c0f\"",
+        "sql": "CREATE INDEX \"admin_audit_logs_created_at_idx_225d8c0f\" ON \"public\".\"admin_audit_logs\" (\"created_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"admin_audit_logs_created_at_idx_225d8c0f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"admin_audit_logs_created_at_idx_225d8c0f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.attempt_feedback.attempt_feedback_instructor_id_idx_50db9bd8",
+    "label": "Create index \"attempt_feedback_instructor_id_idx_50db9bd8\" on \"attempt_feedback\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "attempt_feedback_instructor_id_idx_50db9bd8",
+        "table": "attempt_feedback"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"attempt_feedback_instructor_id_idx_50db9bd8\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"attempt_feedback_instructor_id_idx_50db9bd8\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"attempt_feedback_instructor_id_idx_50db9bd8\"",
+        "sql": "CREATE INDEX \"attempt_feedback_instructor_id_idx_50db9bd8\" ON \"public\".\"attempt_feedback\" (\"instructor_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"attempt_feedback_instructor_id_idx_50db9bd8\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"attempt_feedback_instructor_id_idx_50db9bd8\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.content_reports.content_reports_handled_by_id_idx_1d05907c",
+    "label": "Create index \"content_reports_handled_by_id_idx_1d05907c\" on \"content_reports\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "content_reports_handled_by_id_idx_1d05907c",
+        "table": "content_reports"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"content_reports_handled_by_id_idx_1d05907c\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports_handled_by_id_idx_1d05907c\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"content_reports_handled_by_id_idx_1d05907c\"",
+        "sql": "CREATE INDEX \"content_reports_handled_by_id_idx_1d05907c\" ON \"public\".\"content_reports\" (\"handled_by_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"content_reports_handled_by_id_idx_1d05907c\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports_handled_by_id_idx_1d05907c\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.content_reports.content_reports_status_created_at_idx_1bbe8adf",
+    "label": "Create index \"content_reports_status_created_at_idx_1bbe8adf\" on \"content_reports\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "content_reports_status_created_at_idx_1bbe8adf",
+        "table": "content_reports"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"content_reports_status_created_at_idx_1bbe8adf\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports_status_created_at_idx_1bbe8adf\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"content_reports_status_created_at_idx_1bbe8adf\"",
+        "sql": "CREATE INDEX \"content_reports_status_created_at_idx_1bbe8adf\" ON \"public\".\"content_reports\" (\"status\", \"created_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"content_reports_status_created_at_idx_1bbe8adf\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports_status_created_at_idx_1bbe8adf\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.content_reports.content_reports_target_type_target_id_idx_792315bb",
+    "label": "Create index \"content_reports_target_type_target_id_idx_792315bb\" on \"content_reports\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "content_reports_target_type_target_id_idx_792315bb",
+        "table": "content_reports"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"content_reports_target_type_target_id_idx_792315bb\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports_target_type_target_id_idx_792315bb\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"content_reports_target_type_target_id_idx_792315bb\"",
+        "sql": "CREATE INDEX \"content_reports_target_type_target_id_idx_792315bb\" ON \"public\".\"content_reports\" (\"target_type\", \"target_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"content_reports_target_type_target_id_idx_792315bb\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"content_reports_target_type_target_id_idx_792315bb\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.lesson_comments.lesson_comments_deleted_by_id_idx_783fe282",
+    "label": "Create index \"lesson_comments_deleted_by_id_idx_783fe282\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "lesson_comments_deleted_by_id_idx_783fe282",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"lesson_comments_deleted_by_id_idx_783fe282\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_deleted_by_id_idx_783fe282\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"lesson_comments_deleted_by_id_idx_783fe282\"",
+        "sql": "CREATE INDEX \"lesson_comments_deleted_by_id_idx_783fe282\" ON \"public\".\"lesson_comments\" (\"deleted_by_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"lesson_comments_deleted_by_id_idx_783fe282\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_deleted_by_id_idx_783fe282\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.lesson_comments.lesson_comments_lesson_id_created_at_idx_2a1925f7",
+    "label": "Create index \"lesson_comments_lesson_id_created_at_idx_2a1925f7\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "lesson_comments_lesson_id_created_at_idx_2a1925f7",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"lesson_comments_lesson_id_created_at_idx_2a1925f7\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_lesson_id_created_at_idx_2a1925f7\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"lesson_comments_lesson_id_created_at_idx_2a1925f7\"",
+        "sql": "CREATE INDEX \"lesson_comments_lesson_id_created_at_idx_2a1925f7\" ON \"public\".\"lesson_comments\" (\"lesson_id\", \"created_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"lesson_comments_lesson_id_created_at_idx_2a1925f7\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_lesson_id_created_at_idx_2a1925f7\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.lesson_comments.lesson_comments_parent_id_idx_ab33b399",
+    "label": "Create index \"lesson_comments_parent_id_idx_ab33b399\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "lesson_comments_parent_id_idx_ab33b399",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"lesson_comments_parent_id_idx_ab33b399\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_parent_id_idx_ab33b399\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"lesson_comments_parent_id_idx_ab33b399\"",
+        "sql": "CREATE INDEX \"lesson_comments_parent_id_idx_ab33b399\" ON \"public\".\"lesson_comments\" (\"parent_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"lesson_comments_parent_id_idx_ab33b399\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_parent_id_idx_ab33b399\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.lesson_comments.lesson_comments_user_id_idx_6c952402",
+    "label": "Create index \"lesson_comments_user_id_idx_6c952402\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "lesson_comments_user_id_idx_6c952402",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"lesson_comments_user_id_idx_6c952402\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_user_id_idx_6c952402\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"lesson_comments_user_id_idx_6c952402\"",
+        "sql": "CREATE INDEX \"lesson_comments_user_id_idx_6c952402\" ON \"public\".\"lesson_comments\" (\"user_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"lesson_comments_user_id_idx_6c952402\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"lesson_comments_user_id_idx_6c952402\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.notifications.notifications_user_id_created_at_idx_b562028f",
+    "label": "Create index \"notifications_user_id_created_at_idx_b562028f\" on \"notifications\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "notifications_user_id_created_at_idx_b562028f",
+        "table": "notifications"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"notifications_user_id_created_at_idx_b562028f\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"notifications_user_id_created_at_idx_b562028f\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"notifications_user_id_created_at_idx_b562028f\"",
+        "sql": "CREATE INDEX \"notifications_user_id_created_at_idx_b562028f\" ON \"public\".\"notifications\" (\"user_id\", \"created_at\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"notifications_user_id_created_at_idx_b562028f\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"notifications_user_id_created_at_idx_b562028f\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "index.password_reset_tokens.password_reset_tokens_user_id_idx_6c952402",
+    "label": "Create index \"password_reset_tokens_user_id_idx_6c952402\" on \"password_reset_tokens\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "index",
+        "name": "password_reset_tokens_user_id_idx_6c952402",
+        "table": "password_reset_tokens"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure index \"password_reset_tokens_user_id_idx_6c952402\" does not exist",
+        "sql": "SELECT (to_regclass($1)) IS NULL AS \"result\"",
+        "params": [
+          "\"public\".\"password_reset_tokens_user_id_idx_6c952402\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "create index \"password_reset_tokens_user_id_idx_6c952402\"",
+        "sql": "CREATE INDEX \"password_reset_tokens_user_id_idx_6c952402\" ON \"public\".\"password_reset_tokens\" (\"user_id\")",
+        "params": []
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify index \"password_reset_tokens_user_id_idx_6c952402\" exists",
+        "sql": "SELECT (to_regclass($1)) IS NOT NULL AS \"result\"",
+        "params": [
+          "\"public\".\"password_reset_tokens_user_id_idx_6c952402\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.admin_audit_logs.admin_audit_logs_actor_id_fkey",
+    "label": "Add foreign key \"admin_audit_logs_actor_id_fkey\" on \"admin_audit_logs\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "admin_audit_logs_actor_id_fkey",
+        "table": "admin_audit_logs"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"admin_audit_logs_actor_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "admin_audit_logs_actor_id_fkey",
+          "public",
+          "\"public\".\"admin_audit_logs\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"admin_audit_logs_actor_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"admin_audit_logs\"\nADD CONSTRAINT \"admin_audit_logs_actor_id_fkey\"\nFOREIGN KEY (\"actor_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"admin_audit_logs_actor_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "admin_audit_logs_actor_id_fkey",
+          "public",
+          "\"public\".\"admin_audit_logs\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.attempt_feedback.attempt_feedback_attempt_id_fkey",
+    "label": "Add foreign key \"attempt_feedback_attempt_id_fkey\" on \"attempt_feedback\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "attempt_feedback_attempt_id_fkey",
+        "table": "attempt_feedback"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"attempt_feedback_attempt_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "attempt_feedback_attempt_id_fkey",
+          "public",
+          "\"public\".\"attempt_feedback\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"attempt_feedback_attempt_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"attempt_feedback\"\nADD CONSTRAINT \"attempt_feedback_attempt_id_fkey\"\nFOREIGN KEY (\"attempt_id\")\nREFERENCES \"public\".\"quiz_attempts\" (\"attempt_id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"attempt_feedback_attempt_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "attempt_feedback_attempt_id_fkey",
+          "public",
+          "\"public\".\"attempt_feedback\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.attempt_feedback.attempt_feedback_instructor_id_fkey",
+    "label": "Add foreign key \"attempt_feedback_instructor_id_fkey\" on \"attempt_feedback\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "attempt_feedback_instructor_id_fkey",
+        "table": "attempt_feedback"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"attempt_feedback_instructor_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "attempt_feedback_instructor_id_fkey",
+          "public",
+          "\"public\".\"attempt_feedback\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"attempt_feedback_instructor_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"attempt_feedback\"\nADD CONSTRAINT \"attempt_feedback_instructor_id_fkey\"\nFOREIGN KEY (\"instructor_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"attempt_feedback_instructor_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "attempt_feedback_instructor_id_fkey",
+          "public",
+          "\"public\".\"attempt_feedback\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.content_reports.content_reports_reporter_id_fkey",
+    "label": "Add foreign key \"content_reports_reporter_id_fkey\" on \"content_reports\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "content_reports_reporter_id_fkey",
+        "table": "content_reports"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"content_reports_reporter_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "content_reports_reporter_id_fkey",
+          "public",
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"content_reports_reporter_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"content_reports\"\nADD CONSTRAINT \"content_reports_reporter_id_fkey\"\nFOREIGN KEY (\"reporter_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"content_reports_reporter_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "content_reports_reporter_id_fkey",
+          "public",
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.content_reports.content_reports_handled_by_id_fkey",
+    "label": "Add foreign key \"content_reports_handled_by_id_fkey\" on \"content_reports\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "content_reports_handled_by_id_fkey",
+        "table": "content_reports"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"content_reports_handled_by_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "content_reports_handled_by_id_fkey",
+          "public",
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"content_reports_handled_by_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"content_reports\"\nADD CONSTRAINT \"content_reports_handled_by_id_fkey\"\nFOREIGN KEY (\"handled_by_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"content_reports_handled_by_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "content_reports_handled_by_id_fkey",
+          "public",
+          "\"public\".\"content_reports\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.lesson_comments.lesson_comments_lesson_id_fkey",
+    "label": "Add foreign key \"lesson_comments_lesson_id_fkey\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "lesson_comments_lesson_id_fkey",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"lesson_comments_lesson_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_lesson_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"lesson_comments_lesson_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"lesson_comments\"\nADD CONSTRAINT \"lesson_comments_lesson_id_fkey\"\nFOREIGN KEY (\"lesson_id\")\nREFERENCES \"public\".\"lessons\" (\"lesson_id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"lesson_comments_lesson_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_lesson_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.lesson_comments.lesson_comments_user_id_fkey",
+    "label": "Add foreign key \"lesson_comments_user_id_fkey\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "lesson_comments_user_id_fkey",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"lesson_comments_user_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_user_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"lesson_comments_user_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"lesson_comments\"\nADD CONSTRAINT \"lesson_comments_user_id_fkey\"\nFOREIGN KEY (\"user_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"lesson_comments_user_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_user_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.lesson_comments.lesson_comments_parent_id_fkey",
+    "label": "Add foreign key \"lesson_comments_parent_id_fkey\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "lesson_comments_parent_id_fkey",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"lesson_comments_parent_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_parent_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"lesson_comments_parent_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"lesson_comments\"\nADD CONSTRAINT \"lesson_comments_parent_id_fkey\"\nFOREIGN KEY (\"parent_id\")\nREFERENCES \"public\".\"lesson_comments\" (\"comment_id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"lesson_comments_parent_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_parent_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.lesson_comments.lesson_comments_deleted_by_id_fkey",
+    "label": "Add foreign key \"lesson_comments_deleted_by_id_fkey\" on \"lesson_comments\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "lesson_comments_deleted_by_id_fkey",
+        "table": "lesson_comments"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"lesson_comments_deleted_by_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_deleted_by_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"lesson_comments_deleted_by_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"lesson_comments\"\nADD CONSTRAINT \"lesson_comments_deleted_by_id_fkey\"\nFOREIGN KEY (\"deleted_by_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE SET NULL"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"lesson_comments_deleted_by_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "lesson_comments_deleted_by_id_fkey",
+          "public",
+          "\"public\".\"lesson_comments\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.notifications.notifications_user_id_fkey",
+    "label": "Add foreign key \"notifications_user_id_fkey\" on \"notifications\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "notifications_user_id_fkey",
+        "table": "notifications"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"notifications_user_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "notifications_user_id_fkey",
+          "public",
+          "\"public\".\"notifications\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"notifications_user_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"notifications\"\nADD CONSTRAINT \"notifications_user_id_fkey\"\nFOREIGN KEY (\"user_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"notifications_user_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "notifications_user_id_fkey",
+          "public",
+          "\"public\".\"notifications\""
+        ]
+      }
+    ]
+  },
+  {
+    "id": "foreignKey.password_reset_tokens.password_reset_tokens_user_id_fkey",
+    "label": "Add foreign key \"password_reset_tokens_user_id_fkey\" on \"password_reset_tokens\"",
+    "operationClass": "additive",
+    "target": {
+      "id": "postgres",
+      "details": {
+        "schema": "public",
+        "objectType": "foreignKey",
+        "name": "password_reset_tokens_user_id_fkey",
+        "table": "password_reset_tokens"
+      }
+    },
+    "precheck": [
+      {
+        "description": "ensure FK \"password_reset_tokens_user_id_fkey\" does not exist",
+        "sql": "SELECT NOT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "password_reset_tokens_user_id_fkey",
+          "public",
+          "\"public\".\"password_reset_tokens\""
+        ]
+      }
+    ],
+    "execute": [
+      {
+        "description": "add FK \"password_reset_tokens_user_id_fkey\"",
+        "sql": "ALTER TABLE \"public\".\"password_reset_tokens\"\nADD CONSTRAINT \"password_reset_tokens_user_id_fkey\"\nFOREIGN KEY (\"user_id\")\nREFERENCES \"public\".\"users\" (\"user_id\")\nON DELETE CASCADE"
+      }
+    ],
+    "postcheck": [
+      {
+        "description": "verify FK \"password_reset_tokens_user_id_fkey\" exists",
+        "sql": "SELECT EXISTS (SELECT 1 AS \"one\" FROM \"pg_constraint\" AS \"c\" INNER JOIN \"pg_namespace\" AS \"n\" ON \"n\".\"oid\" = \"c\".\"connamespace\" WHERE (\"c\".\"conname\" = $1 AND \"n\".\"nspname\" = $2 AND \"c\".\"conrelid\" = to_regclass($3))) AS \"result\"",
+        "params": [
+          "password_reset_tokens_user_id_fkey",
+          "public",
+          "\"public\".\"password_reset_tokens\""
+        ]
+      }
+    ]
+  }
+]

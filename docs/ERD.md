@@ -212,8 +212,8 @@ Notes:
 
 ## Design decisions
 
-- **A module is a lesson.** A course is an ordered list of `core` lessons (`order_index`). Lesson N+1 unlocks when lesson N's quiz skills pass the gate; the exact rule is a Phase 3 decision.
-- **Remedial lessons** (`kind = remedial`) sit outside the gated sequence. They are only reached through recommendations, matched to weak skills through `lesson_skills`. `order_index` orders lessons within their kind.
+- **A module is a lesson.** A course is an ordered list of `core` lessons (`order_index`). Lesson N+1 unlocks when lesson N is completed or every skill tagged on lesson N reaches mastery ≥ 0.65 (decided 2026-11-24, `backend/src/services/gating.ts`).
+- **Remedial lessons** (`kind = remedial`) sit outside the gated sequence. They are only reached through recommendations, matched to weak skills through `lesson_skills`, and any learner may open the remedial lessons of an approved course without enrolling. `order_index` orders lessons within their kind.
 - **One diagnostic.** `quizzes.kind = diagnostic` is unique (partial unique index) and has no lesson. The diagnostic's responses seed `user_skill_mastery` (cold start).
 - **Questions are reusable** across quizzes through `quiz_questions`. A question may hang off a passage (reading text or listening transcript) or stand alone.
 - **Q-matrix.** `question_skills.weight` splits a question's evidence across skills for the BKT update.
@@ -223,6 +223,19 @@ Notes:
 - **`recommendations` is a log** of what was served, kept for Precision@3 / MRR (`rank`, `clicked_at`) and for debugging the rationale.
 - **Timestamps** are `timestamptz`, read and written as `Temporal.Instant`, so Node ≥ 26.8.2 is required. `created_at` / `updated_at` are filled by the ORM (`temporal.createdAt()` / `temporal.updatedAt()`), not by database defaults, so raw SQL inserts must supply them.
 - **Integer keys** (`SERIAL`) match `idSchema` and the existing routes.
+
+## Backlog tables (migration `20261124T0422_backlog`)
+
+| Table / column | Purpose |
+| --- | --- |
+| `users.password_changed_at` | Set on a password reset. A login token issued before it gets 401, so a reset logs out other sessions. |
+| `password_reset_tokens` | One row per reset link. Only `token_hash` (SHA-256 hex) is stored; `expires_at` is 30 minutes after creation, `used_at` makes it single-use. A new request or a successful reset marks the user's other tokens used. |
+| `admin_audit_logs` | Who (`actor_id`) did what (`action` = `subject.verb`) to what (`target_type`, `target_id`), with a one-line `summary` and `details` jsonb. Written in the same transaction as the change. `actor_id` is set to NULL if the admin is deleted. |
+| `attempt_feedback` | One instructor feedback per attempt (`attempt_id` is the key). `score_override` replaces the automatic score when not NULL; `quiz_attempts.total_score` keeps the automatic one. |
+| `quiz_attempts.draft_answers`, `draft_saved_at` | Autosave: `{ "<questionId>": { "answer": …, "savedAt": "<ISO>" } }`. `savedAt` changes only when the answer does, so the time limit can grade just the answers given before the deadline. |
+| `notifications` | In-app notifications (`type`, `title`, `body`, `link` = a frontend path). Created inside the transaction of the change that triggers them. |
+| `lesson_comments` | Lesson discussion. `parent_id` points at a top-level comment (one level of replies, app-enforced). Removal sets `deleted_at` and `deleted_by_id` (soft delete), so replies keep their thread. |
+| `content_reports` | Reports on a comment, lesson or question. `target_id` has no foreign key because it depends on `target_type`. One report per (reporter, target); `handled_at` is set exactly when `status` leaves `open`. |
 
 ## Delete rules
 

@@ -18,9 +18,9 @@ import type {
 } from '@prisma/orm-postgres/contract/types';
 
 export type StorageHash =
-  StorageHashBase<'4557b4ac18820c6c20ff4814c45b59bc5cf1d731857137911f00db5b4c4c83b1'>;
+  StorageHashBase<'6bb279f3a6e117a9aa3142cf1e1f9fcc7fa1959709b1cbca6e12713cdd418e65'>;
 export type ExecutionHash =
-  ExecutionHashBase<'493de273e0dfb1ab9f2e3e654a78634e1c3e71f2f79f4f456a31043784a7a270'>;
+  ExecutionHashBase<'f66a20028e561bf574919eabc35b047d99b89d899a97b69c64b104eacd6c9f34'>;
 export type ProfileHash =
   ProfileHashBase<'3916f444a8a17ad749191acf9e08dad97d1a327b88c2f1d45d12f240296aa8b2'>;
 
@@ -234,6 +234,36 @@ type DefaultLiteralValue<CodecId extends string, Encoded> = CodecId extends keyo
 
 export type FieldOutputTypes = {
   readonly public: {
+    readonly AdminAuditLogs: {
+      readonly action: Varchar<64>;
+      readonly actorId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly auditId: CodecTypes['pg/int4@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly details: CodecTypes['pg/jsonb@1']['output'] | null;
+      readonly summary: Varchar<500> | null;
+      readonly targetId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly targetType: Varchar<32> | null;
+    };
+    readonly AttemptFeedback: {
+      readonly attemptId: CodecTypes['pg/int4@1']['output'];
+      readonly comment: CodecTypes['pg/text@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly instructorId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly scoreOverride: CodecTypes['pg/int4@1']['output'] | null;
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    };
+    readonly ContentReports: {
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly handledAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly handledById: CodecTypes['pg/int4@1']['output'] | null;
+      readonly note: CodecTypes['pg/text@1']['output'] | null;
+      readonly reason: CodecTypes['pg/text@1']['output'];
+      readonly reportId: CodecTypes['pg/int4@1']['output'];
+      readonly reporterId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly status: 'open' | 'resolved' | 'dismissed';
+      readonly targetId: CodecTypes['pg/int4@1']['output'];
+      readonly targetType: 'comment' | 'lesson' | 'question';
+    };
     readonly Courses: {
       readonly courseId: CodecTypes['pg/int4@1']['output'];
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -252,6 +282,17 @@ export type FieldOutputTypes = {
       readonly completedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly courseId: CodecTypes['pg/int4@1']['output'];
       readonly enrolledAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly LessonComments: {
+      readonly body: CodecTypes['pg/text@1']['output'];
+      readonly commentId: CodecTypes['pg/int4@1']['output'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly deletedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly deletedById: CodecTypes['pg/int4@1']['output'] | null;
+      readonly lessonId: CodecTypes['pg/int4@1']['output'];
+      readonly parentId: CodecTypes['pg/int4@1']['output'] | null;
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly userId: CodecTypes['pg/int4@1']['output'];
     };
     readonly LessonProgress: {
@@ -277,6 +318,16 @@ export type FieldOutputTypes = {
       readonly skillId: CodecTypes['pg/int4@1']['output'];
       readonly weight: CodecTypes['pg/float8@1']['output'];
     };
+    readonly Notifications: {
+      readonly body: CodecTypes['pg/text@1']['output'] | null;
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly link: Varchar<1024> | null;
+      readonly notificationId: CodecTypes['pg/int4@1']['output'];
+      readonly readAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly title: Varchar<255>;
+      readonly type: Varchar<64>;
+      readonly userId: CodecTypes['pg/int4@1']['output'];
+    };
     readonly PassagesMedia: {
       readonly content: CodecTypes['pg/text@1']['output'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -288,6 +339,14 @@ export type FieldOutputTypes = {
       readonly title: Varchar<255> | null;
       readonly type: 'reading_text' | 'listening_audio' | 'video';
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    };
+    readonly PasswordResetTokens: {
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly expiresAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly tokenHash: Varchar<64>;
+      readonly tokenId: CodecTypes['pg/int4@1']['output'];
+      readonly usedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly userId: CodecTypes['pg/int4@1']['output'];
     };
     readonly QuestionResponses: {
       readonly answeredAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -325,6 +384,8 @@ export type FieldOutputTypes = {
     readonly QuizAttempts: {
       readonly attemptId: CodecTypes['pg/int4@1']['output'];
       readonly completedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly draftAnswers: CodecTypes['pg/jsonb@1']['output'] | null;
+      readonly draftSavedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly masteryChanges: CodecTypes['pg/jsonb@1']['output'] | null;
       readonly maxScore: CodecTypes['pg/int4@1']['output'];
       readonly quizId: CodecTypes['pg/int4@1']['output'];
@@ -376,6 +437,7 @@ export type FieldOutputTypes = {
       readonly fullName: Varchar<255>;
       readonly hashedPass: Varchar<255>;
       readonly isActive: CodecTypes['pg/bool@1']['output'];
+      readonly passwordChangedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly role: 'learner' | 'instructor' | 'admin';
       readonly targetBand: CodecTypes['pg/float8@1']['output'] | null;
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -392,6 +454,36 @@ export type FieldOutputTypes = {
 };
 export type FieldInputTypes = {
   readonly public: {
+    readonly AdminAuditLogs: {
+      readonly action: CodecTypes['sql/varchar@1']['input'];
+      readonly actorId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly auditId: CodecTypes['pg/int4@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly details: CodecTypes['pg/jsonb@1']['input'] | null;
+      readonly summary: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly targetId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly targetType: CodecTypes['sql/varchar@1']['input'] | null;
+    };
+    readonly AttemptFeedback: {
+      readonly attemptId: CodecTypes['pg/int4@1']['input'];
+      readonly comment: CodecTypes['pg/text@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly instructorId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly scoreOverride: CodecTypes['pg/int4@1']['input'] | null;
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+    };
+    readonly ContentReports: {
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly handledAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly handledById: CodecTypes['pg/int4@1']['input'] | null;
+      readonly note: CodecTypes['pg/text@1']['input'] | null;
+      readonly reason: CodecTypes['pg/text@1']['input'];
+      readonly reportId: CodecTypes['pg/int4@1']['input'];
+      readonly reporterId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly status: 'open' | 'resolved' | 'dismissed';
+      readonly targetId: CodecTypes['pg/int4@1']['input'];
+      readonly targetType: 'comment' | 'lesson' | 'question';
+    };
     readonly Courses: {
       readonly courseId: CodecTypes['pg/int4@1']['input'];
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -410,6 +502,17 @@ export type FieldInputTypes = {
       readonly completedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly courseId: CodecTypes['pg/int4@1']['input'];
       readonly enrolledAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly LessonComments: {
+      readonly body: CodecTypes['pg/text@1']['input'];
+      readonly commentId: CodecTypes['pg/int4@1']['input'];
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly deletedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly deletedById: CodecTypes['pg/int4@1']['input'] | null;
+      readonly lessonId: CodecTypes['pg/int4@1']['input'];
+      readonly parentId: CodecTypes['pg/int4@1']['input'] | null;
+      readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly userId: CodecTypes['pg/int4@1']['input'];
     };
     readonly LessonProgress: {
@@ -435,6 +538,16 @@ export type FieldInputTypes = {
       readonly skillId: CodecTypes['pg/int4@1']['input'];
       readonly weight: CodecTypes['pg/float8@1']['input'];
     };
+    readonly Notifications: {
+      readonly body: CodecTypes['pg/text@1']['input'] | null;
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly link: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly notificationId: CodecTypes['pg/int4@1']['input'];
+      readonly readAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly title: CodecTypes['sql/varchar@1']['input'];
+      readonly type: CodecTypes['sql/varchar@1']['input'];
+      readonly userId: CodecTypes['pg/int4@1']['input'];
+    };
     readonly PassagesMedia: {
       readonly content: CodecTypes['pg/text@1']['input'] | null;
       readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -446,6 +559,14 @@ export type FieldInputTypes = {
       readonly title: CodecTypes['sql/varchar@1']['input'] | null;
       readonly type: 'reading_text' | 'listening_audio' | 'video';
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+    };
+    readonly PasswordResetTokens: {
+      readonly createdAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly expiresAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly tokenHash: CodecTypes['sql/varchar@1']['input'];
+      readonly tokenId: CodecTypes['pg/int4@1']['input'];
+      readonly usedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly userId: CodecTypes['pg/int4@1']['input'];
     };
     readonly QuestionResponses: {
       readonly answeredAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -483,6 +604,8 @@ export type FieldInputTypes = {
     readonly QuizAttempts: {
       readonly attemptId: CodecTypes['pg/int4@1']['input'];
       readonly completedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly draftAnswers: CodecTypes['pg/jsonb@1']['input'] | null;
+      readonly draftSavedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly masteryChanges: CodecTypes['pg/jsonb@1']['input'] | null;
       readonly maxScore: CodecTypes['pg/int4@1']['input'];
       readonly quizId: CodecTypes['pg/int4@1']['input'];
@@ -534,6 +657,7 @@ export type FieldInputTypes = {
       readonly fullName: CodecTypes['sql/varchar@1']['input'];
       readonly hashedPass: CodecTypes['sql/varchar@1']['input'];
       readonly isActive: CodecTypes['pg/bool@1']['input'];
+      readonly passwordChangedAt: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly role: 'learner' | 'instructor' | 'admin';
       readonly targetBand: CodecTypes['pg/float8@1']['input'] | null;
       readonly updatedAt: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -550,6 +674,36 @@ export type FieldInputTypes = {
 };
 export type StorageColumnTypes = {
   readonly public: {
+    readonly admin_audit_logs: {
+      readonly action: Varchar<64>;
+      readonly actor_id: CodecTypes['pg/int4@1']['output'] | null;
+      readonly audit_id: CodecTypes['pg/int4@1']['output'];
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly details: CodecTypes['pg/jsonb@1']['output'] | null;
+      readonly summary: Varchar<500> | null;
+      readonly target_id: CodecTypes['pg/int4@1']['output'] | null;
+      readonly target_type: Varchar<32> | null;
+    };
+    readonly attempt_feedback: {
+      readonly attempt_id: CodecTypes['pg/int4@1']['output'];
+      readonly comment: CodecTypes['pg/text@1']['output'];
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly instructor_id: CodecTypes['pg/int4@1']['output'] | null;
+      readonly score_override: CodecTypes['pg/int4@1']['output'] | null;
+      readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    };
+    readonly content_reports: {
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly handled_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly handled_by_id: CodecTypes['pg/int4@1']['output'] | null;
+      readonly note: CodecTypes['pg/text@1']['output'] | null;
+      readonly reason: CodecTypes['pg/text@1']['output'];
+      readonly report_id: CodecTypes['pg/int4@1']['output'];
+      readonly reporter_id: CodecTypes['pg/int4@1']['output'] | null;
+      readonly status: 'open' | 'resolved' | 'dismissed';
+      readonly target_id: CodecTypes['pg/int4@1']['output'];
+      readonly target_type: 'comment' | 'lesson' | 'question';
+    };
     readonly courses: {
       readonly course_id: CodecTypes['pg/int4@1']['output'];
       readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -568,6 +722,17 @@ export type StorageColumnTypes = {
       readonly completed_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly course_id: CodecTypes['pg/int4@1']['output'];
       readonly enrolled_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly user_id: CodecTypes['pg/int4@1']['output'];
+    };
+    readonly lesson_comments: {
+      readonly body: CodecTypes['pg/text@1']['output'];
+      readonly comment_id: CodecTypes['pg/int4@1']['output'];
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly deleted_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly deleted_by_id: CodecTypes['pg/int4@1']['output'] | null;
+      readonly lesson_id: CodecTypes['pg/int4@1']['output'];
+      readonly parent_id: CodecTypes['pg/int4@1']['output'] | null;
+      readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
       readonly user_id: CodecTypes['pg/int4@1']['output'];
     };
     readonly lesson_progress: {
@@ -593,6 +758,16 @@ export type StorageColumnTypes = {
       readonly title: Varchar<255>;
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
     };
+    readonly notifications: {
+      readonly body: CodecTypes['pg/text@1']['output'] | null;
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly link: Varchar<1024> | null;
+      readonly notification_id: CodecTypes['pg/int4@1']['output'];
+      readonly read_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly title: Varchar<255>;
+      readonly type: Varchar<64>;
+      readonly user_id: CodecTypes['pg/int4@1']['output'];
+    };
     readonly passages_media: {
       readonly content: CodecTypes['pg/text@1']['output'] | null;
       readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -604,6 +779,14 @@ export type StorageColumnTypes = {
       readonly title: Varchar<255> | null;
       readonly type: 'reading_text' | 'listening_audio' | 'video';
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    };
+    readonly password_reset_tokens: {
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly expires_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
+      readonly token_hash: Varchar<64>;
+      readonly token_id: CodecTypes['pg/int4@1']['output'];
+      readonly used_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly user_id: CodecTypes['pg/int4@1']['output'];
     };
     readonly question_responses: {
       readonly answered_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -641,6 +824,8 @@ export type StorageColumnTypes = {
     readonly quiz_attempts: {
       readonly attempt_id: CodecTypes['pg/int4@1']['output'];
       readonly completed_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+      readonly draft_answers: CodecTypes['pg/jsonb@1']['output'] | null;
+      readonly draft_saved_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly mastery_changes: CodecTypes['pg/jsonb@1']['output'] | null;
       readonly max_score: CodecTypes['pg/int4@1']['output'];
       readonly quiz_id: CodecTypes['pg/int4@1']['output'];
@@ -699,6 +884,7 @@ export type StorageColumnTypes = {
       readonly full_name: Varchar<255>;
       readonly hashed_pass: Varchar<255>;
       readonly is_active: CodecTypes['pg/bool@1']['output'];
+      readonly password_changed_at: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
       readonly role: 'learner' | 'instructor' | 'admin';
       readonly target_band: CodecTypes['pg/float8@1']['output'] | null;
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -708,6 +894,36 @@ export type StorageColumnTypes = {
 };
 export type StorageColumnInputTypes = {
   readonly public: {
+    readonly admin_audit_logs: {
+      readonly action: CodecTypes['sql/varchar@1']['input'];
+      readonly actor_id: CodecTypes['pg/int4@1']['input'] | null;
+      readonly audit_id: CodecTypes['pg/int4@1']['input'];
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly details: CodecTypes['pg/jsonb@1']['input'] | null;
+      readonly summary: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly target_id: CodecTypes['pg/int4@1']['input'] | null;
+      readonly target_type: CodecTypes['sql/varchar@1']['input'] | null;
+    };
+    readonly attempt_feedback: {
+      readonly attempt_id: CodecTypes['pg/int4@1']['input'];
+      readonly comment: CodecTypes['pg/text@1']['input'];
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly instructor_id: CodecTypes['pg/int4@1']['input'] | null;
+      readonly score_override: CodecTypes['pg/int4@1']['input'] | null;
+      readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+    };
+    readonly content_reports: {
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly handled_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly handled_by_id: CodecTypes['pg/int4@1']['input'] | null;
+      readonly note: CodecTypes['pg/text@1']['input'] | null;
+      readonly reason: CodecTypes['pg/text@1']['input'];
+      readonly report_id: CodecTypes['pg/int4@1']['input'];
+      readonly reporter_id: CodecTypes['pg/int4@1']['input'] | null;
+      readonly status: 'open' | 'resolved' | 'dismissed';
+      readonly target_id: CodecTypes['pg/int4@1']['input'];
+      readonly target_type: 'comment' | 'lesson' | 'question';
+    };
     readonly courses: {
       readonly course_id: CodecTypes['pg/int4@1']['input'];
       readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -726,6 +942,17 @@ export type StorageColumnInputTypes = {
       readonly completed_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly course_id: CodecTypes['pg/int4@1']['input'];
       readonly enrolled_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly user_id: CodecTypes['pg/int4@1']['input'];
+    };
+    readonly lesson_comments: {
+      readonly body: CodecTypes['pg/text@1']['input'];
+      readonly comment_id: CodecTypes['pg/int4@1']['input'];
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly deleted_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly deleted_by_id: CodecTypes['pg/int4@1']['input'] | null;
+      readonly lesson_id: CodecTypes['pg/int4@1']['input'];
+      readonly parent_id: CodecTypes['pg/int4@1']['input'] | null;
+      readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
       readonly user_id: CodecTypes['pg/int4@1']['input'];
     };
     readonly lesson_progress: {
@@ -751,6 +978,16 @@ export type StorageColumnInputTypes = {
       readonly title: CodecTypes['sql/varchar@1']['input'];
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
     };
+    readonly notifications: {
+      readonly body: CodecTypes['pg/text@1']['input'] | null;
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly link: CodecTypes['sql/varchar@1']['input'] | null;
+      readonly notification_id: CodecTypes['pg/int4@1']['input'];
+      readonly read_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly title: CodecTypes['sql/varchar@1']['input'];
+      readonly type: CodecTypes['sql/varchar@1']['input'];
+      readonly user_id: CodecTypes['pg/int4@1']['input'];
+    };
     readonly passages_media: {
       readonly content: CodecTypes['pg/text@1']['input'] | null;
       readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -762,6 +999,14 @@ export type StorageColumnInputTypes = {
       readonly title: CodecTypes['sql/varchar@1']['input'] | null;
       readonly type: 'reading_text' | 'listening_audio' | 'video';
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+    };
+    readonly password_reset_tokens: {
+      readonly created_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly expires_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
+      readonly token_hash: CodecTypes['sql/varchar@1']['input'];
+      readonly token_id: CodecTypes['pg/int4@1']['input'];
+      readonly used_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly user_id: CodecTypes['pg/int4@1']['input'];
     };
     readonly question_responses: {
       readonly answered_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -799,6 +1044,8 @@ export type StorageColumnInputTypes = {
     readonly quiz_attempts: {
       readonly attempt_id: CodecTypes['pg/int4@1']['input'];
       readonly completed_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
+      readonly draft_answers: CodecTypes['pg/jsonb@1']['input'] | null;
+      readonly draft_saved_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly mastery_changes: CodecTypes['pg/jsonb@1']['input'] | null;
       readonly max_score: CodecTypes['pg/int4@1']['input'];
       readonly quiz_id: CodecTypes['pg/int4@1']['input'];
@@ -857,6 +1104,7 @@ export type StorageColumnInputTypes = {
       readonly full_name: CodecTypes['sql/varchar@1']['input'];
       readonly hashed_pass: CodecTypes['sql/varchar@1']['input'];
       readonly is_active: CodecTypes['pg/bool@1']['input'];
+      readonly password_changed_at: CodecTypes['pg/timestamptz-temporal@1']['input'] | null;
       readonly role: 'learner' | 'instructor' | 'admin';
       readonly target_band: CodecTypes['pg/float8@1']['input'] | null;
       readonly updated_at: CodecTypes['pg/timestamptz-temporal@1']['input'];
@@ -866,6 +1114,44 @@ export type StorageColumnInputTypes = {
 };
 
 export namespace Models {
+  export type public_AdminAuditLogs = {
+    action: Varchar<64>;
+    actorId: CodecTypes['pg/int4@1']['output'] | null;
+    auditId: CodecTypes['pg/int4@1']['output'];
+    createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    details: CodecTypes['pg/jsonb@1']['output'] | null;
+    summary: Varchar<500> | null;
+    targetId: CodecTypes['pg/int4@1']['output'] | null;
+    targetType: Varchar<32> | null;
+    actor: public_Users | null;
+    readonly [RelationKeys]?: 'actor';
+  };
+  export type public_AttemptFeedback = {
+    attemptId: CodecTypes['pg/int4@1']['output'];
+    comment: CodecTypes['pg/text@1']['output'];
+    createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    instructorId: CodecTypes['pg/int4@1']['output'] | null;
+    scoreOverride: CodecTypes['pg/int4@1']['output'] | null;
+    updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    attempt: public_QuizAttempts;
+    instructor: public_Users | null;
+    readonly [RelationKeys]?: 'attempt' | 'instructor';
+  };
+  export type public_ContentReports = {
+    createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    handledAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    handledById: CodecTypes['pg/int4@1']['output'] | null;
+    note: CodecTypes['pg/text@1']['output'] | null;
+    reason: CodecTypes['pg/text@1']['output'];
+    reportId: CodecTypes['pg/int4@1']['output'];
+    reporterId: CodecTypes['pg/int4@1']['output'] | null;
+    status: 'open' | 'resolved' | 'dismissed';
+    targetId: CodecTypes['pg/int4@1']['output'];
+    targetType: 'comment' | 'lesson' | 'question';
+    handledBy: public_Users | null;
+    reporter: public_Users | null;
+    readonly [RelationKeys]?: 'handledBy' | 'reporter';
+  };
   export type public_Courses = {
     courseId: CodecTypes['pg/int4@1']['output'];
     createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -891,6 +1177,22 @@ export namespace Models {
     course: public_Courses;
     user: public_Users;
     readonly [RelationKeys]?: 'course' | 'user';
+  };
+  export type public_LessonComments = {
+    body: CodecTypes['pg/text@1']['output'];
+    commentId: CodecTypes['pg/int4@1']['output'];
+    createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    deletedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    deletedById: CodecTypes['pg/int4@1']['output'] | null;
+    lessonId: CodecTypes['pg/int4@1']['output'];
+    parentId: CodecTypes['pg/int4@1']['output'] | null;
+    updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    userId: CodecTypes['pg/int4@1']['output'];
+    deletedBy: public_Users | null;
+    lesson: public_Lessons;
+    parent: public_LessonComments | null;
+    user: public_Users;
+    readonly [RelationKeys]?: 'deletedBy' | 'lesson' | 'parent' | 'user';
   };
   export type public_LessonProgress = {
     completedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -923,6 +1225,18 @@ export namespace Models {
     course: public_Courses;
     readonly [RelationKeys]?: 'course';
   };
+  export type public_Notifications = {
+    body: CodecTypes['pg/text@1']['output'] | null;
+    createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    link: Varchar<1024> | null;
+    notificationId: CodecTypes['pg/int4@1']['output'];
+    readAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    title: Varchar<255>;
+    type: Varchar<64>;
+    userId: CodecTypes['pg/int4@1']['output'];
+    user: public_Users;
+    readonly [RelationKeys]?: 'user';
+  };
   export type public_PassagesMedia = {
     content: CodecTypes['pg/text@1']['output'] | null;
     createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -937,6 +1251,16 @@ export namespace Models {
     createdBy: public_Users;
     lesson: public_Lessons | null;
     readonly [RelationKeys]?: 'createdBy' | 'lesson';
+  };
+  export type public_PasswordResetTokens = {
+    createdAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    expiresAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
+    tokenHash: Varchar<64>;
+    tokenId: CodecTypes['pg/int4@1']['output'];
+    usedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    userId: CodecTypes['pg/int4@1']['output'];
+    user: public_Users;
+    readonly [RelationKeys]?: 'user';
   };
   export type public_QuestionResponses = {
     answeredAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -979,6 +1303,8 @@ export namespace Models {
   export type public_QuizAttempts = {
     attemptId: CodecTypes['pg/int4@1']['output'];
     completedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
+    draftAnswers: CodecTypes['pg/jsonb@1']['output'] | null;
+    draftSavedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     masteryChanges: CodecTypes['pg/jsonb@1']['output'] | null;
     maxScore: CodecTypes['pg/int4@1']['output'];
     quizId: CodecTypes['pg/int4@1']['output'];
@@ -1056,6 +1382,7 @@ export namespace Models {
     fullName: Varchar<255>;
     hashedPass: Varchar<255>;
     isActive: CodecTypes['pg/bool@1']['output'];
+    passwordChangedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
     role: 'learner' | 'instructor' | 'admin';
     targetBand: CodecTypes['pg/float8@1']['output'] | null;
     updatedAt: CodecTypes['pg/timestamptz-temporal@1']['output'];
@@ -1066,12 +1393,18 @@ export namespace Models {
 
 export declare const models: {
   public: {
+    AdminAuditLogs: Models.public_AdminAuditLogs;
+    AttemptFeedback: Models.public_AttemptFeedback;
+    ContentReports: Models.public_ContentReports;
     Courses: Models.public_Courses;
     Enrollments: Models.public_Enrollments;
+    LessonComments: Models.public_LessonComments;
     LessonProgress: Models.public_LessonProgress;
     LessonSkills: Models.public_LessonSkills;
     Lessons: Models.public_Lessons;
+    Notifications: Models.public_Notifications;
     PassagesMedia: Models.public_PassagesMedia;
+    PasswordResetTokens: Models.public_PasswordResetTokens;
     QuestionResponses: Models.public_QuestionResponses;
     QuestionSkills: Models.public_QuestionSkills;
     Questions: Models.public_Questions;
@@ -1103,6 +1436,299 @@ type ContractBase = Omit<
         readonly kind: 'postgres-schema';
         readonly entries: {
           readonly table: {
+            readonly admin_audit_logs: {
+              columns: {
+                readonly action: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 64 };
+                  readonly many: false;
+                };
+                readonly actor_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly audit_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly created_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly details: {
+                  readonly dataType: 'pg/jsonb';
+                  readonly codecId: 'pg/jsonb@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly summary: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                  readonly typeParams: { readonly length: 500 };
+                  readonly many: false;
+                };
+                readonly target_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly target_type: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                  readonly typeParams: { readonly length: 32 };
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['audit_id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'admin_audit_logs_action_idx_cd0d2116';
+                  readonly prefix: 'admin_audit_logs_action_idx';
+                  readonly columns: readonly ['action'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'admin_audit_logs_actor_id_idx_69a2164d';
+                  readonly prefix: 'admin_audit_logs_actor_id_idx';
+                  readonly columns: readonly ['actor_id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'admin_audit_logs_created_at_idx_225d8c0f';
+                  readonly prefix: 'admin_audit_logs_created_at_idx';
+                  readonly columns: readonly ['created_at'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'admin_audit_logs';
+                    readonly columns: readonly ['actor_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
+                  };
+                },
+              ];
+            };
+            readonly attempt_feedback: {
+              columns: {
+                readonly attempt_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly comment: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly created_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly instructor_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly score_override: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updated_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['attempt_id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'attempt_feedback_instructor_id_idx_50db9bd8';
+                  readonly prefix: 'attempt_feedback_instructor_id_idx';
+                  readonly columns: readonly ['instructor_id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'attempt_feedback';
+                    readonly columns: readonly ['attempt_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'quiz_attempts';
+                    readonly columns: readonly ['attempt_id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'attempt_feedback';
+                    readonly columns: readonly ['instructor_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
+                  };
+                },
+              ];
+            };
+            readonly content_reports: {
+              columns: {
+                readonly created_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly handled_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly handled_by_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly note: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly reason: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly report_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly reporter_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly status: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'literal';
+                    readonly value: DefaultLiteralValue<'pg/text@1', 'open'>;
+                  };
+                  readonly many: false;
+                };
+                readonly target_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly target_type: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['report_id'] };
+              uniques: readonly [
+                { readonly columns: readonly ['reporter_id', 'target_type', 'target_id'] },
+              ];
+              indexes: readonly [
+                {
+                  readonly name: 'content_reports_handled_by_id_idx_1d05907c';
+                  readonly prefix: 'content_reports_handled_by_id_idx';
+                  readonly columns: readonly ['handled_by_id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'content_reports_status_created_at_idx_1bbe8adf';
+                  readonly prefix: 'content_reports_status_created_at_idx';
+                  readonly columns: readonly ['status', 'created_at'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'content_reports_target_type_target_id_idx_792315bb';
+                  readonly prefix: 'content_reports_target_type_target_id_idx';
+                  readonly columns: readonly ['target_type', 'target_id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'content_reports';
+                    readonly columns: readonly ['reporter_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'content_reports';
+                    readonly columns: readonly ['handled_by_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
+                  };
+                },
+              ];
+            };
             readonly courses: {
               columns: {
                 readonly course_id: {
@@ -1296,6 +1922,146 @@ type ContractBase = Omit<
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'courses';
                     readonly columns: readonly ['course_id'];
+                  };
+                },
+              ];
+            };
+            readonly lesson_comments: {
+              columns: {
+                readonly body: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly comment_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly created_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly deleted_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly deleted_by_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly lesson_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly parent_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly updated_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly user_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['comment_id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'lesson_comments_deleted_by_id_idx_783fe282';
+                  readonly prefix: 'lesson_comments_deleted_by_id_idx';
+                  readonly columns: readonly ['deleted_by_id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'lesson_comments_lesson_id_created_at_idx_2a1925f7';
+                  readonly prefix: 'lesson_comments_lesson_id_created_at_idx';
+                  readonly columns: readonly ['lesson_id', 'created_at'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'lesson_comments_parent_id_idx_ab33b399';
+                  readonly prefix: 'lesson_comments_parent_id_idx';
+                  readonly columns: readonly ['parent_id'];
+                  readonly unique: false;
+                },
+                {
+                  readonly name: 'lesson_comments_user_id_idx_6c952402';
+                  readonly prefix: 'lesson_comments_user_id_idx';
+                  readonly columns: readonly ['user_id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'lesson_comments';
+                    readonly columns: readonly ['lesson_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'lessons';
+                    readonly columns: readonly ['lesson_id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'lesson_comments';
+                    readonly columns: readonly ['user_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'lesson_comments';
+                    readonly columns: readonly ['parent_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'lesson_comments';
+                    readonly columns: readonly ['comment_id'];
+                  };
+                },
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'lesson_comments';
+                    readonly columns: readonly ['deleted_by_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
                   };
                 },
               ];
@@ -1527,6 +2293,89 @@ type ContractBase = Omit<
                 },
               ];
             };
+            readonly notifications: {
+              columns: {
+                readonly body: {
+                  readonly dataType: 'pg/text';
+                  readonly codecId: 'pg/text@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly created_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly link: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: true;
+                  readonly typeParams: { readonly length: 1024 };
+                  readonly many: false;
+                };
+                readonly notification_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly read_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly title: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 255 };
+                  readonly many: false;
+                };
+                readonly type: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 64 };
+                  readonly many: false;
+                };
+                readonly user_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['notification_id'] };
+              uniques: readonly [];
+              indexes: readonly [
+                {
+                  readonly name: 'notifications_user_id_created_at_idx_b562028f';
+                  readonly prefix: 'notifications_user_id_created_at_idx';
+                  readonly columns: readonly ['user_id', 'created_at'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'notifications';
+                    readonly columns: readonly ['user_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
+                  };
+                },
+              ];
+            };
             readonly passages_media: {
               columns: {
                 readonly content: {
@@ -1634,6 +2483,75 @@ type ContractBase = Omit<
                     readonly namespaceId: 'public' & NamespaceId;
                     readonly tableName: 'passages_media';
                     readonly columns: readonly ['created_by_id'];
+                  };
+                  readonly target: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'users';
+                    readonly columns: readonly ['user_id'];
+                  };
+                },
+              ];
+            };
+            readonly password_reset_tokens: {
+              columns: {
+                readonly created_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly expires_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+                readonly token_hash: {
+                  readonly dataType: 'pg/varchar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly nullable: false;
+                  readonly typeParams: { readonly length: 64 };
+                  readonly many: false;
+                };
+                readonly token_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly default: {
+                    readonly kind: 'function';
+                    readonly expression: 'autoincrement()';
+                  };
+                  readonly many: false;
+                };
+                readonly used_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly user_id: {
+                  readonly dataType: 'pg/int4';
+                  readonly codecId: 'pg/int4@1';
+                  readonly nullable: false;
+                  readonly many: false;
+                };
+              };
+              primaryKey: { readonly columns: readonly ['token_id'] };
+              uniques: readonly [{ readonly columns: readonly ['token_hash'] }];
+              indexes: readonly [
+                {
+                  readonly name: 'password_reset_tokens_user_id_idx_6c952402';
+                  readonly prefix: 'password_reset_tokens_user_id_idx';
+                  readonly columns: readonly ['user_id'];
+                  readonly unique: false;
+                },
+              ];
+              foreignKeys: readonly [
+                {
+                  readonly source: {
+                    readonly namespaceId: 'public' & NamespaceId;
+                    readonly tableName: 'password_reset_tokens';
+                    readonly columns: readonly ['user_id'];
                   };
                   readonly target: {
                     readonly namespaceId: 'public' & NamespaceId;
@@ -1936,6 +2854,18 @@ type ContractBase = Omit<
                   readonly many: false;
                 };
                 readonly completed_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly draft_answers: {
+                  readonly dataType: 'pg/jsonb';
+                  readonly codecId: 'pg/jsonb@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
+                readonly draft_saved_at: {
                   readonly dataType: 'pg/timestamptz';
                   readonly codecId: 'pg/timestamptz-temporal@1';
                   readonly nullable: true;
@@ -2537,6 +3467,12 @@ type ContractBase = Omit<
                   };
                   readonly many: false;
                 };
+                readonly password_changed_at: {
+                  readonly dataType: 'pg/timestamptz';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                  readonly nullable: true;
+                  readonly many: false;
+                };
                 readonly role: {
                   readonly dataType: 'pg/text';
                   readonly codecId: 'pg/text@1';
@@ -2617,6 +3553,14 @@ type ContractBase = Omit<
               readonly kind: 'valueSet';
               readonly values: readonly ['diagnostic', 'lesson', 'practice'];
             };
+            readonly ReportStatus: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['open', 'resolved', 'dismissed'];
+            };
+            readonly ReportTargetType: {
+              readonly kind: 'valueSet';
+              readonly values: readonly ['comment', 'lesson', 'question'];
+            };
             readonly SkillCategory: {
               readonly kind: 'valueSet';
               readonly values: readonly ['listening', 'reading', 'writing', 'speaking'];
@@ -2636,10 +3580,26 @@ type ContractBase = Omit<
   readonly target: 'postgres';
   readonly targetFamily: 'sql';
   readonly roots: {
+    readonly admin_audit_logs: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'AdminAuditLogs';
+    };
+    readonly attempt_feedback: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'AttemptFeedback';
+    };
+    readonly content_reports: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'ContentReports';
+    };
     readonly courses: { readonly namespace: 'public' & NamespaceId; readonly model: 'Courses' };
     readonly enrollments: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'Enrollments';
+    };
+    readonly lesson_comments: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'LessonComments';
     };
     readonly lesson_progress: {
       readonly namespace: 'public' & NamespaceId;
@@ -2650,9 +3610,17 @@ type ContractBase = Omit<
       readonly model: 'LessonSkills';
     };
     readonly lessons: { readonly namespace: 'public' & NamespaceId; readonly model: 'Lessons' };
+    readonly notifications: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'Notifications';
+    };
     readonly passages_media: {
       readonly namespace: 'public' & NamespaceId;
       readonly model: 'PassagesMedia';
+    };
+    readonly password_reset_tokens: {
+      readonly namespace: 'public' & NamespaceId;
+      readonly model: 'PasswordResetTokens';
     };
     readonly question_responses: {
       readonly namespace: 'public' & NamespaceId;
@@ -2687,6 +3655,249 @@ type ContractBase = Omit<
     readonly namespaces: {
       readonly public: {
         readonly models: {
+          readonly AdminAuditLogs: {
+            readonly fields: {
+              readonly action: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 64 };
+                };
+              };
+              readonly actorId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly auditId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly details: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
+              };
+              readonly summary: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 500 };
+                };
+              };
+              readonly targetId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly targetType: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 32 };
+                };
+              };
+            };
+            readonly relations: {
+              readonly actor: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['actorId'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'admin_audit_logs';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly action: { readonly column: 'action' };
+                readonly actorId: { readonly column: 'actor_id' };
+                readonly auditId: { readonly column: 'audit_id' };
+                readonly createdAt: { readonly column: 'created_at' };
+                readonly details: { readonly column: 'details' };
+                readonly summary: { readonly column: 'summary' };
+                readonly targetId: { readonly column: 'target_id' };
+                readonly targetType: { readonly column: 'target_type' };
+              };
+            };
+          };
+          readonly AttemptFeedback: {
+            readonly fields: {
+              readonly attemptId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly comment: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly instructorId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly scoreOverride: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+            };
+            readonly relations: {
+              readonly attempt: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'QuizAttempts';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['attemptId'];
+                  readonly targetFields: readonly ['attemptId'];
+                };
+              };
+              readonly instructor: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['instructorId'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'attempt_feedback';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly attemptId: { readonly column: 'attempt_id' };
+                readonly comment: { readonly column: 'comment' };
+                readonly createdAt: { readonly column: 'created_at' };
+                readonly instructorId: { readonly column: 'instructor_id' };
+                readonly scoreOverride: { readonly column: 'score_override' };
+                readonly updatedAt: { readonly column: 'updated_at' };
+              };
+            };
+          };
+          readonly ContentReports: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly handledAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly handledById: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly note: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly reason: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly reportId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly reporterId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly status: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly targetId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly targetType: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+            };
+            readonly relations: {
+              readonly handledBy: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['handledById'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly reporter: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['reporterId'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'content_reports';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'created_at' };
+                readonly handledAt: { readonly column: 'handled_at' };
+                readonly handledById: { readonly column: 'handled_by_id' };
+                readonly note: { readonly column: 'note' };
+                readonly reason: { readonly column: 'reason' };
+                readonly reportId: { readonly column: 'report_id' };
+                readonly reporterId: { readonly column: 'reporter_id' };
+                readonly status: { readonly column: 'status' };
+                readonly targetId: { readonly column: 'target_id' };
+                readonly targetType: { readonly column: 'target_type' };
+              };
+            };
+          };
           readonly Courses: {
             readonly fields: {
               readonly courseId: {
@@ -2857,6 +4068,120 @@ type ContractBase = Omit<
                 readonly completedAt: { readonly column: 'completed_at' };
                 readonly courseId: { readonly column: 'course_id' };
                 readonly enrolledAt: { readonly column: 'enrolled_at' };
+                readonly userId: { readonly column: 'user_id' };
+              };
+            };
+          };
+          readonly LessonComments: {
+            readonly fields: {
+              readonly body: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly commentId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly deletedAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly deletedById: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly lessonId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly parentId: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly updatedAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+            };
+            readonly relations: {
+              readonly deletedBy: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['deletedById'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+              readonly lesson: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Lessons';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['lessonId'];
+                  readonly targetFields: readonly ['lessonId'];
+                };
+              };
+              readonly parent: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'LessonComments';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: true;
+                readonly on: {
+                  readonly localFields: readonly ['parentId'];
+                  readonly targetFields: readonly ['commentId'];
+                };
+              };
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'lesson_comments';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly body: { readonly column: 'body' };
+                readonly commentId: { readonly column: 'comment_id' };
+                readonly createdAt: { readonly column: 'created_at' };
+                readonly deletedAt: { readonly column: 'deleted_at' };
+                readonly deletedById: { readonly column: 'deleted_by_id' };
+                readonly lessonId: { readonly column: 'lesson_id' };
+                readonly parentId: { readonly column: 'parent_id' };
+                readonly updatedAt: { readonly column: 'updated_at' };
                 readonly userId: { readonly column: 'user_id' };
               };
             };
@@ -3061,6 +4386,88 @@ type ContractBase = Omit<
               };
             };
           };
+          readonly Notifications: {
+            readonly fields: {
+              readonly body: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
+              };
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly link: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 1024 };
+                };
+              };
+              readonly notificationId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly readAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly title: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 255 };
+                };
+              };
+              readonly type: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 64 };
+                };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'notifications';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly body: { readonly column: 'body' };
+                readonly createdAt: { readonly column: 'created_at' };
+                readonly link: { readonly column: 'link' };
+                readonly notificationId: { readonly column: 'notification_id' };
+                readonly readAt: { readonly column: 'read_at' };
+                readonly title: { readonly column: 'title' };
+                readonly type: { readonly column: 'type' };
+                readonly userId: { readonly column: 'user_id' };
+              };
+            };
+          };
           readonly PassagesMedia: {
             readonly fields: {
               readonly content: {
@@ -3158,6 +4565,73 @@ type ContractBase = Omit<
                 readonly title: { readonly column: 'title' };
                 readonly type: { readonly column: 'type' };
                 readonly updatedAt: { readonly column: 'updated_at' };
+              };
+            };
+          };
+          readonly PasswordResetTokens: {
+            readonly fields: {
+              readonly createdAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly expiresAt: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly tokenHash: {
+                readonly nullable: false;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'sql/varchar@1';
+                  readonly typeParams: { readonly length: 64 };
+                };
+              };
+              readonly tokenId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+              readonly usedAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
+              readonly userId: {
+                readonly nullable: false;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/int4@1' };
+              };
+            };
+            readonly relations: {
+              readonly user: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'Users';
+                };
+                readonly cardinality: 'N:1';
+                readonly nullable: false;
+                readonly on: {
+                  readonly localFields: readonly ['userId'];
+                  readonly targetFields: readonly ['userId'];
+                };
+              };
+            };
+            readonly storage: {
+              readonly table: 'password_reset_tokens';
+              readonly namespaceId: 'public';
+              readonly fields: {
+                readonly createdAt: { readonly column: 'created_at' };
+                readonly expiresAt: { readonly column: 'expires_at' };
+                readonly tokenHash: { readonly column: 'token_hash' };
+                readonly tokenId: { readonly column: 'token_id' };
+                readonly usedAt: { readonly column: 'used_at' };
+                readonly userId: { readonly column: 'user_id' };
               };
             };
           };
@@ -3401,6 +4875,17 @@ type ContractBase = Omit<
                   readonly codecId: 'pg/timestamptz-temporal@1';
                 };
               };
+              readonly draftAnswers: {
+                readonly nullable: true;
+                readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
+              };
+              readonly draftSavedAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
               readonly masteryChanges: {
                 readonly nullable: true;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/jsonb@1' };
@@ -3461,6 +4946,8 @@ type ContractBase = Omit<
               readonly fields: {
                 readonly attemptId: { readonly column: 'attempt_id' };
                 readonly completedAt: { readonly column: 'completed_at' };
+                readonly draftAnswers: { readonly column: 'draft_answers' };
+                readonly draftSavedAt: { readonly column: 'draft_saved_at' };
                 readonly masteryChanges: { readonly column: 'mastery_changes' };
                 readonly maxScore: { readonly column: 'max_score' };
                 readonly quizId: { readonly column: 'quiz_id' };
@@ -3839,6 +5326,13 @@ type ContractBase = Omit<
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/bool@1' };
               };
+              readonly passwordChangedAt: {
+                readonly nullable: true;
+                readonly type: {
+                  readonly kind: 'scalar';
+                  readonly codecId: 'pg/timestamptz-temporal@1';
+                };
+              };
               readonly role: {
                 readonly nullable: false;
                 readonly type: { readonly kind: 'scalar'; readonly codecId: 'pg/text@1' };
@@ -3869,6 +5363,7 @@ type ContractBase = Omit<
                 readonly fullName: { readonly column: 'full_name' };
                 readonly hashedPass: { readonly column: 'hashed_pass' };
                 readonly isActive: { readonly column: 'is_active' };
+                readonly passwordChangedAt: { readonly column: 'password_changed_at' };
                 readonly role: { readonly column: 'role' };
                 readonly targetBand: { readonly column: 'target_band' };
                 readonly updatedAt: { readonly column: 'updated_at' };
@@ -4000,6 +5495,22 @@ type ContractBase = Omit<
               { readonly name: 'practice'; readonly value: 'practice' },
             ];
           };
+          readonly ReportStatus: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'open'; readonly value: 'open' },
+              { readonly name: 'resolved'; readonly value: 'resolved' },
+              { readonly name: 'dismissed'; readonly value: 'dismissed' },
+            ];
+          };
+          readonly ReportTargetType: {
+            readonly codecId: 'pg/text@1';
+            readonly members: readonly [
+              { readonly name: 'comment'; readonly value: 'comment' },
+              { readonly name: 'lesson'; readonly value: 'lesson' },
+              { readonly name: 'question'; readonly value: 'question' },
+            ];
+          };
           readonly SkillCategory: {
             readonly codecId: 'pg/text@1';
             readonly members: readonly [
@@ -4056,6 +5567,16 @@ type ContractBase = Omit<
             { readonly name: 'lesson'; readonly value: 'lesson' },
             { readonly name: 'practice'; readonly value: 'practice' },
           ];
+          readonly ReportStatus: readonly [
+            { readonly name: 'open'; readonly value: 'open' },
+            { readonly name: 'resolved'; readonly value: 'resolved' },
+            { readonly name: 'dismissed'; readonly value: 'dismissed' },
+          ];
+          readonly ReportTargetType: readonly [
+            { readonly name: 'comment'; readonly value: 'comment' },
+            { readonly name: 'lesson'; readonly value: 'lesson' },
+            { readonly name: 'question'; readonly value: 'question' },
+          ];
           readonly SkillCategory: readonly [
             { readonly name: 'listening'; readonly value: 'listening' },
             { readonly name: 'reading'; readonly value: 'reading' },
@@ -4106,6 +5627,39 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly ref: {
+            readonly entry: 'admin_audit_logs';
+            readonly field: 'created_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'attempt_feedback';
+            readonly field: 'created_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'attempt_feedback';
+            readonly field: 'updated_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'content_reports';
+            readonly field: 'created_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
             readonly entry: 'courses';
             readonly field: 'created_at';
             readonly namespace: 'public';
@@ -4125,6 +5679,23 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'enrollments';
             readonly field: 'enrolled_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'lesson_comments';
+            readonly field: 'created_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly onUpdate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'lesson_comments';
+            readonly field: 'updated_at';
             readonly namespace: 'public';
           };
         },
@@ -4165,6 +5736,14 @@ type ContractBase = Omit<
         {
           readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
           readonly ref: {
+            readonly entry: 'notifications';
+            readonly field: 'created_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
             readonly entry: 'passages_media';
             readonly field: 'created_at';
             readonly namespace: 'public';
@@ -4176,6 +5755,14 @@ type ContractBase = Omit<
           readonly ref: {
             readonly entry: 'passages_media';
             readonly field: 'updated_at';
+            readonly namespace: 'public';
+          };
+        },
+        {
+          readonly onCreate: { readonly id: 'instantNow'; readonly kind: 'generator' };
+          readonly ref: {
+            readonly entry: 'password_reset_tokens';
+            readonly field: 'created_at';
             readonly namespace: 'public';
           };
         },

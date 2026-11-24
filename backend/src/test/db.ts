@@ -16,7 +16,9 @@ export const resetDb = async () => {
     TRUNCATE TABLE
       users, courses, lessons, lesson_skills, passages_media, skills,
       questions, question_skills, quizzes, quiz_questions, quiz_attempts, question_responses,
-      user_skill_mastery, enrollments, lesson_progress, recommendations
+      user_skill_mastery, enrollments, lesson_progress, recommendations,
+      password_reset_tokens, admin_audit_logs, attempt_feedback, notifications,
+      lesson_comments, content_reports
     RESTART IDENTITY CASCADE
   `
     .affectedCount()
