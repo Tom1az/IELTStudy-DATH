@@ -4,303 +4,193 @@ on:
   push:
     branches: [main, develop]
   pull_request:
-    branches: [main, develop]
 
-# Huỷ run cũ khi có commit mới trên cùng branch/PR
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
+  group: ci-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
   contents: read
 
-env:
-  # backend yêu cầu Node >= 26.8.2 (chạy file .ts trực tiếp), advanced >= 24.
-  # Dùng chung một major cho cả 3 service để khớp môi trường dev.
-  NODE_VERSION: "26"
-
 jobs:
-  # ---------------------------------------------------------------------------
-  # Xác định service nào có thay đổi để bỏ qua job không cần thiết (monorepo)
-  # ---------------------------------------------------------------------------
-  changes:
-    name: Detect changes
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      pull-requests: read
-    outputs:
-      backend: ${{ steps.filter.outputs.backend }}
-      advanced: ${{ steps.filter.outputs.advanced }}
-      frontend: ${{ steps.filter.outputs.frontend }}
-      e2e: ${{ steps.filter.outputs.e2e }}
-    steps:
-      - uses: actions/checkout@v5
-      - uses: dorny/paths-filter@v3
-        id: filter
-        with:
-          filters: |
-            backend:
-              - 'backend/**'
-              - '.github/workflows/ci.yml'
-            advanced:
-              - 'advanced/**'
-              # advanced dùng chung schema/migration với backend
-              - 'backend/src/prisma/**'
-              - 'backend/migrations/**'
-              - '.github/workflows/ci.yml'
-            frontend:
-              - 'frontend/**'
-              - '.github/workflows/ci.yml'
-            e2e:
-              - 'backend/**'
-              - 'frontend/**'
-              - '.github/workflows/ci.yml'
-
-  # ---------------------------------------------------------------------------
-  # Backend: typecheck + lint + test (vitest chạy trên PostgreSQL thật)
-  # ---------------------------------------------------------------------------
   backend:
-    name: Backend
-    needs: changes
-    if: needs.changes.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieltstudy_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
     defaults:
       run:
         working-directory: backend
-    services:
-      postgres:
-        image: postgres:17
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ieltstudy
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U postgres"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy
-      # vitest.config.ts từ chối chạy nếu trùng DATABASE_URL (test sẽ xoá sạch DB này)
-      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
-      JWT_SECRET: ci-jwt-secret
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: backend/package-lock.json
-
       - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
 
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Create test database
-        run: psql "postgresql://postgres:postgres@localhost:5432/postgres" -c 'CREATE DATABASE ieltstudy_test'
-
-      # globalSetup của vitest tự chạy migration lên TEST_DATABASE_URL
-      - name: Test
-        run: npm test
-
-  # ---------------------------------------------------------------------------
-  # Advanced (BKT + recommender): typecheck + unit test (không cần DB thật)
-  # ---------------------------------------------------------------------------
   advanced:
-    name: Advanced
-    needs: changes
-    if: needs.changes.outputs.advanced == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: advanced
-    env:
-      # src/prisma/db.ts đọc biến này khi import; test BKT không kết nối DB thật
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy
-      JWT_SECRET: ci-jwt-secret
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: advanced/package-lock.json
-
-      - run: npm ci
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Test
-        run: npm test
-
-  # ---------------------------------------------------------------------------
-  # Frontend: lint + typecheck + unit test + build
-  # ---------------------------------------------------------------------------
-  frontend:
-    name: Frontend
-    needs: changes
-    if: needs.changes.outputs.frontend == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: frontend
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
-
-      - uses: actions/cache@v4
-        with:
-          path: frontend/.next/cache
-          key: nextjs-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}-${{ hashFiles('frontend/src/**') }}
-          restore-keys: |
-            nextjs-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}-
-
-      - run: npm ci
-
-      - name: Lint
-        run: npm run lint
-
-      - name: Typecheck
-        run: npm run typecheck
-
-      - name: Unit test
-        run: npm test
-
-      - name: Build
-        run: npm run build
-        env:
-          NEXT_TELEMETRY_DISABLED: "1"
-          NEXT_PUBLIC_API_URL: /api/v1
-          BACKEND_URL: http://localhost:3000
-
-  # ---------------------------------------------------------------------------
-  # E2E (Playwright): PostgreSQL + backend thật + seed + frontend
-  # Frontend được Playwright tự build và start (xem playwright.config.ts)
-  # ---------------------------------------------------------------------------
-  e2e:
-    name: E2E (Playwright)
-    needs: changes
-    if: needs.changes.outputs.e2e == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 25
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
-          POSTGRES_USER: postgres
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: ieltstudy
-        ports:
-          - 5432:5432
+          POSTGRES_DB: ieltstudy_test
+        ports: ["5432:5432"]
         options: >-
           --health-cmd "pg_isready -U postgres"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy
-      JWT_SECRET: ci-jwt-secret
-      SEED_PASSWORD: ci-seed-password-1
-      NEXT_TELEMETRY_DISABLED: "1"
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy_test
     steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version-file: .node-version
           cache: npm
           cache-dependency-path: |
             backend/package-lock.json
+            advanced/package-lock.json
+      # The two services share one database, so their copies of the contract must match
+      - name: Check the Prisma contract copies match
+        run: |
+          node -e '
+            const { readFileSync } = require("node:fs");
+            const { isDeepStrictEqual } = require("node:util");
+            const read = (dir) => JSON.parse(readFileSync(`${dir}/src/prisma/schema.json`, "utf8"));
+            if (!isDeepStrictEqual(read("backend"), read("advanced"))) {
+              console.error("advanced/src/prisma/schema.json differs from the backend copy");
+              process.exit(1);
+            }
+          '
+          cmp backend/src/prisma/schema.d.ts advanced/src/prisma/schema.d.ts
+      # Advanced has no migrations of its own: the backend owns the schema
+      - name: Migrate the test database
+        working-directory: backend
+        run: |
+          npm ci
+          npx prisma db migrate --db "$TEST_DATABASE_URL" --yes --quiet > /dev/null
+        env:
+          DATABASE_URL: ${{ env.TEST_DATABASE_URL }}
+      - run: npm ci
+        working-directory: advanced
+      - run: npm run typecheck
+        working-directory: advanced
+      - run: npm test
+        working-directory: advanced
+      - run: npm run eval
+        working-directory: advanced
+
+  frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    needs: [backend, advanced, frontend]
+    # The browsers ship inside this image, so the job never downloads them: the Playwright
+    # CDN stalled at 100% on every attempt from these runners. Bump the tag together with
+    # the frontend's playwright version.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.0-noble
+      options: --user 1001
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: ieltstudy
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # From inside a job container a service answers to its own name, not to localhost
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ieltstudy
+      JWT_SECRET: ci-e2e-secret
+      SEED_PASSWORD: ci-seed-password
+      BACKEND_URL: http://localhost:3000
+      ADVANCED_URL: http://localhost:4001
+      ADVANCED_SERVICE_URL: http://localhost:4001
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            advanced/package-lock.json
             frontend/package-lock.json
-
-      - name: Install backend
+      - run: npm ci
         working-directory: backend
-        run: npm ci
-
-      - name: Migrate and seed database
+      - run: npm ci
+        working-directory: advanced
+      - run: npm ci
+        working-directory: frontend
+      - name: Migrate and seed
         working-directory: backend
         run: |
-          npm run db:migrate -- --yes
+          npx prisma db migrate --db "$DATABASE_URL" --yes --quiet > /dev/null
           npm run seed
-
-      # Không đặt ADVANCED_SERVICE_URL / SUPABASE_*: backend "fail soft" khi thiếu
-      # (giống môi trường test), e2e hiện tại không cần các service đó.
-      - name: Start backend
-        working-directory: backend
-        env:
-          PORT: "3000"
+      - name: Run the end-to-end tests
         run: |
-          nohup npm start > ../backend.log 2>&1 &
-          for i in $(seq 1 30); do
-            if curl -fsS http://localhost:3000/ > /dev/null; then
-              echo "Backend is up"; exit 0
-            fi
-            sleep 2
-          done
-          echo "Backend did not start"; cat ../backend.log; exit 1
-
-      - name: Install frontend
-        working-directory: frontend
-        run: npm ci
-
-      - name: Install Playwright browsers
-        working-directory: frontend
-        run: npx playwright install --with-deps chromium
-
-      - name: Run e2e tests
-        working-directory: frontend
-        env:
-          BACKEND_URL: http://localhost:3000
-        run: npm run test:e2e
-
-      - name: Upload Playwright report
+          (cd backend && PORT=3000 node src/server.ts > /tmp/backend.log 2>&1 &)
+          (cd advanced && PORT=4001 node src/server.ts > /tmp/advanced.log 2>&1 &)
+          npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/ http-get://localhost:4001/
+          cd frontend && npm run test:e2e
+      - name: Show the server logs
         if: failure()
-        uses: actions/upload-artifact@v4
+        run: |
+          echo "=== backend ==="
+          cat /tmp/backend.log || true
+          echo "=== advanced ==="
+          cat /tmp/advanced.log || true
+      - uses: actions/upload-artifact@v4
+        if: failure()
         with:
           name: playwright-report
-          path: |
-            frontend/playwright-report
-            frontend/test-results
+          path: frontend/playwright-report
           retention-days: 7
 
-      - name: Show backend log
-        if: failure()
-        run: cat backend.log || true
-
-  # ---------------------------------------------------------------------------
-  # Cổng duy nhất để đặt làm "required status check" trong branch protection.
-  # Job bị skip (do không đổi code service đó) vẫn được tính là đạt.
-  # ---------------------------------------------------------------------------
-  ci-ok:
-    name: CI passed
-    if: always()
-    needs: [changes, backend, advanced, frontend, e2e]
+  docker:
     runs-on: ubuntu-latest
     steps:
-      - name: Check results
-        run: |
-          echo '${{ toJSON(needs) }}'
-          if [ "${{ contains(needs.*.result, 'failure') }}" = "true" ] || [ "${{ contains(needs.*.result, 'cancelled') }}" = "true" ]; then
-            echo "One or more jobs failed or were cancelled"
-            exit 1
-          fi
-          echo "All required jobs passed or were skipped"
+      - uses: actions/checkout@v4
+      - run: docker build -t ieltstudy-backend backend
+      - run: docker build -t ieltstudy-advanced advanced

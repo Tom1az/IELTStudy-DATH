@@ -335,14 +335,26 @@ export const lessonApi = {
    * started (`in_progress`). It is never sent again, because that would undo `completed`.
    */
   async get(courseId: string, lessonId: string): Promise<LessonView> {
+    // A locked lesson answers 403, and the page then shows its lock card. It is told apart from
+    // "not enrolled" (also 403) by the lesson list, which marks it as locked.
+    let forbidden: ApiError | null = null;
     const [detail, course, lessons, categories] = await Promise.all([
-      backendRequest<{ lesson: BackendLessonDetail }>("GET", `/lessons/${lessonId}`).then((r) => r.lesson),
+      backendRequest<{ lesson: BackendLessonDetail }>("GET", `/lessons/${lessonId}`).then((r) => r.lesson).catch((e: unknown) => {
+        if (e instanceof ApiError && e.status === 403) {
+          forbidden = e;
+          return null;
+        }
+        throw e;
+      }),
       loadCourse(courseId),
       loadLessons(courseId),
       loadCategories(),
     ]);
 
-    if (course.isEnrolled && detail.progress === null) {
+    const locked = lessons.find((l) => String(l.lessonId) === lessonId && l.locked);
+    if (!detail && !(course.isEnrolled && locked)) throw forbidden;
+
+    if (detail && course.isEnrolled && detail.progress === null) {
       await backendRequest("PUT", `/lessons/${lessonId}/progress`, { status: "in_progress" }).catch(() => {});
     }
 
@@ -351,18 +363,19 @@ export const lessonApi = {
     const index = flat.findIndex((l) => l.id === lessonId);
     // Remedial lessons are not in the syllabus, so they have no position
     const order = index >= 0 ? flat[index].order : 1;
-    const passages: LessonPassage[] = detail.passages.map((p) => ({ id: String(p.passageId), type: p.type, title: p.title, content: p.content, mediaUrl: p.mediaUrl }));
-    const quiz = detail.quizzes[0];
+    const passages: LessonPassage[] = (detail?.passages ?? []).map((p) => ({ id: String(p.passageId), type: p.type, title: p.title, content: p.content, mediaUrl: p.mediaUrl }));
+    const quiz = detail?.quizzes[0];
+    const lesson = detail ?? { ...locked!, content: null };
 
     return {
       course: toCourse(course),
-      lesson: toLesson(detail, lessonCategory(detail, categories), order),
+      lesson: toLesson(lesson, lessonCategory(lesson, categories), order),
       passages,
       sections,
       enrollment: course.isEnrolled ? toEnrollment({ courseId: course.courseId, lessons }) : null,
       progress: coreProgress(lessons),
       practice: quiz ? { id: String(quiz.quizId), title: quiz.title, questions: quiz.questionCount, minutes: quiz.timeLimitSeconds ? Math.round(quiz.timeLimitSeconds / 60) : 0 } : null,
-      unlocked: !detail.locked,
+      unlocked: !!detail && !detail.locked,
       prevId: index > 0 ? flat[index - 1].id : undefined,
       nextId: index >= 0 && index < flat.length - 1 ? flat[index + 1].id : undefined,
     };

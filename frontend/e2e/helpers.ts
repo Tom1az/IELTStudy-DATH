@@ -1,8 +1,8 @@
 import { expect, type Page } from "@playwright/test";
 
 /**
- * These tests run against the real backend (start it first: `cd ../backend && npm run dev`)
- * with the seed data loaded. Learners are created fresh through the sign-up page.
+ * These tests run against the real backend and Advanced service (start both first: `npm run dev`
+ * in `../backend` and `../advanced`) with the seed data loaded. Learners are created fresh through the sign-up page.
  * Instructor and admin tests log in with the seed accounts, so they need the backend's
  * SEED_PASSWORD in the environment; without it they are skipped.
  */

@@ -1,4 +1,5 @@
 node_modules/
+.DS_Store
 yarn.lock
 .env
 dist/
@@ -17,3 +18,5 @@ CLAUDE.md
 docs/CLAUDE_CODE_GUIDE.md
 .mcp.json
 graphify-out/
+advanced/.DS_Store
+.DS_Store

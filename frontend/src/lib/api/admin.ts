@@ -1,11 +1,11 @@
 import type { AccountStatus, Course, Paginated, Role, SkillCategory, User } from "@/lib/types";
 import type { BackendAdminStats, BackendCourse, BackendLesson, BackendSkill, BackendUser } from "./backend-types";
-import { backendRequest } from "./client";
+import { backendRequest, optional } from "./client";
 import { lessonCategory, toCourse, toSkillCategories, toUser } from "./mappers";
 
 /**
- * Admin: users (role and deactivation), the course review queue, and usage statistics.
- * Decisions: `docs/plans/phase-4-frontend.md`.
+ * Admin: users (role and deactivation), the course review queue, usage statistics and
+ * the audit log. Decisions: `docs/plans/phase-4-frontend.md`.
  */
 
 /** A course in the admin list, with its core lessons counted per skill. */
@@ -16,6 +16,59 @@ export interface AdminCourse extends Course {
 }
 
 export type AdminStats = BackendAdminStats;
+
+/**
+ * `GET /admin/audit` is not in `backend/src/docs/openapi.yaml` yet, so its shape lives here
+ * rather than in `backend-types.ts` (which only mirrors the documented contract). Move it
+ * there once the endpoint is written up.
+ */
+interface BackendAuditEntry {
+  auditId: number;
+  action: string;
+  actor: { userId: number; fullName: string; role: Role } | null;
+  targetType: string | null;
+  targetId: number | null;
+  summary: string | null;
+  createdAt: string;
+}
+
+/** One recorded action. `actor` is null for something the system did on its own. */
+export interface AuditEntry {
+  id: string;
+  action: string;
+  actor: { id: string; name: string; role: Role } | null;
+  /** What the action was about, e.g. "Course #12". Empty when the action has no target. */
+  target: string;
+  summary: string;
+  at: string;
+}
+
+/** The log plus the values to offer in the two filters, taken from the rows themselves. */
+export interface AuditPage extends Paginated<AuditEntry> {
+  actions: string[];
+  actors: { id: string; name: string }[];
+}
+
+/** `course.approve` reads as "Course approved" in the table. */
+export function auditActionLabel(action: string): string {
+  const [subject, verb] = action.split(".");
+  if (!verb) return action;
+  const noun = subject.replace(/_/g, " ");
+  const stem = verb.replace(/_/g, " ");
+  const past = stem.endsWith("e") ? `${stem}d` : `${stem}ed`;
+  return `${noun[0].toUpperCase()}${noun.slice(1)} ${past}`;
+}
+
+function toAuditEntry(row: BackendAuditEntry): AuditEntry {
+  return {
+    id: String(row.auditId),
+    action: row.action,
+    actor: row.actor ? { id: String(row.actor.userId), name: row.actor.fullName, role: row.actor.role } : null,
+    target: row.targetType ? `${row.targetType[0].toUpperCase()}${row.targetType.slice(1)} #${row.targetId ?? "—"}` : "",
+    summary: row.summary ?? "",
+    at: row.createdAt,
+  };
+}
 
 export const adminApi = {
   /** The users table. The backend filters by role and status; search and paging run here. */
@@ -90,5 +143,44 @@ export const adminApi = {
   async stats(): Promise<AdminStats> {
     const res = await backendRequest<{ stats: BackendAdminStats }>("GET", "/admin/stats");
     return res.stats;
+  },
+
+  /**
+   * `GET /admin/audit` — who did what, newest first. Like the users table, the backend
+   * returns the matching rows and the paging is done here, so the two filters can be
+   * combined without another round trip.
+   *
+   * Null while the backend doesn't record an audit log yet; the page then says so.
+   */
+  async audit(params: { action?: string; actorId?: string; page?: number; pageSize?: number } = {}): Promise<AuditPage | null> {
+    const query = new URLSearchParams();
+    if (params.action && params.action !== "all") query.set("action", params.action);
+    if (params.actorId && params.actorId !== "all") query.set("actorId", params.actorId);
+    const qs = query.toString();
+    const res = await optional(() => backendRequest<{ entries: BackendAuditEntry[] }>("GET", `/admin/audit${qs ? `?${qs}` : ""}`));
+    if (!res) return null;
+
+    const rows = res.entries.map(toAuditEntry);
+    rows.sort((a, b) => b.at.localeCompare(a.at));
+
+    // The dropdowns list exactly what the log holds, so they can never offer an empty filter
+    const actions = Array.from(new Set(rows.map((r) => r.action))).sort();
+    const actorMap = new Map<string, string>();
+    for (const row of rows) {
+      if (row.actor) actorMap.set(row.actor.id, row.actor.name);
+    }
+    const actors = Array.from(actorMap, ([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name));
+
+    const page = Math.max(1, params.page ?? 1);
+    const pageSize = params.pageSize ?? 20;
+    return {
+      items: rows.slice((page - 1) * pageSize, page * pageSize),
+      page,
+      pageSize,
+      total: rows.length,
+      totalPages: Math.max(1, Math.ceil(rows.length / pageSize)),
+      actions,
+      actors,
+    };
   },
 };

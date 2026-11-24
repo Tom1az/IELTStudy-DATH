@@ -11,6 +11,7 @@ import {
 } from "../services/attempts.ts";
 import type { SubmittedResponse } from "../services/attempts.ts";
 import { buildQuiz } from "../services/quiz-views.ts";
+import { httpError } from "../utils/http-error.ts";
 
 const orm = db.orm.public;
 
@@ -19,6 +20,7 @@ const startAttempt = async (req: Request, res: Response) => {
   const { attempt, quiz, created } = await startOrResumeAttempt(
     req.value!.params!.quizId,
     req.user!,
+    req.headers.authorization,
   );
 
   return res.status(created ? 201 : 200).json({
@@ -32,6 +34,10 @@ const startAttempt = async (req: Request, res: Response) => {
 const submitMyAttempt = async (req: Request, res: Response) => {
   const attempt = await findOwnAttempt(req.value!.params!.attemptId, req.user!);
   const { responses }: { responses: SubmittedResponse[] } = req.value!.body;
+
+  if (await closeAttemptIfTimeIsUp(attempt)) {
+    throw httpError(409, "Time is up: this attempt was closed");
+  }
 
   const closed = await submitAttempt(attempt, responses);
   const result = await buildAttemptResult(closed);
@@ -61,12 +67,17 @@ const getAttempt = async (req: Request, res: Response) => {
   }
   const result = await buildAttemptResult(attempt);
 
-  // A submitted attempt was already processed by the Advanced service at submit time: read back
+  // A submitted attempt was normally processed by the Advanced service at submit time: read back
   // what it stored, so the post-quiz review still shows the skill changes and recommendations.
-  const advanced =
-    attempt.completedAt !== null
-      ? await fetchAttemptOutcome(attempt.attemptId, req.headers.authorization)
-      : null;
+  // Nothing stored means Advanced was down then, so process it now. Advanced applies an attempt
+  // once and ignores one with no answers, so this is safe to repeat on every read.
+  let advanced = null;
+  if (attempt.completedAt !== null) {
+    advanced =
+      attempt.masteryChanges === null
+        ? await processAttemptWithAdvanced(attempt.attemptId, req.headers.authorization)
+        : await fetchAttemptOutcome(attempt.attemptId, req.headers.authorization);
+  }
 
   return res.status(200).json({
     result: advanced

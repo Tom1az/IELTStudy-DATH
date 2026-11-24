@@ -6,6 +6,9 @@
 // learner's request still succeeds and the Phase 3 parts stay empty (no mastery, nothing locked),
 // exactly as they were before Phase 3.
 
+import { httpError } from "../utils/http-error.ts";
+import type { PublicUser } from "../utils/public-user.ts";
+
 const TIMEOUT_MS = 5000;
 
 export interface AdvancedAttemptOutcome {
@@ -60,7 +63,7 @@ const toOutcome = (body: Record<string, unknown> | null): AdvancedAttemptOutcome
 };
 
 // `POST /mastery/attempts/{attemptId}/process` on Advanced: updates the learner's BKT mastery for
-// a submitted attempt and generates recommendations. Call it once, right after the submit.
+// a submitted attempt and generates recommendations. Safe to repeat: an attempt is applied once.
 export const processAttemptWithAdvanced = async (
   attemptId: number,
   authorization: string | undefined,
@@ -89,4 +92,21 @@ export const fetchCourseGates = async (
     gates.set(gate.lessonId, gate);
   }
   return gates;
+};
+
+// A learner can't use a lesson they haven't unlocked yet (403, as the contract says). Every way
+// into a lesson calls this: opening it, saving progress and opening or starting its quiz. Staff
+// are never gated, and if Advanced can't be used nothing is locked.
+export const assertLessonUnlocked = async (
+  lesson: { lessonId: number; courseId: number },
+  user: PublicUser,
+  authorization: string | undefined,
+) => {
+  if (user.role !== "learner") return;
+
+  const gates = await fetchCourseGates(lesson.courseId, authorization);
+  const gate = gates?.get(lesson.lessonId);
+  if (gate?.locked) {
+    throw httpError(403, gate.reason ?? "This lesson is locked");
+  }
 };

@@ -1,3 +1,4 @@
+import { pathToFileURL } from "node:url";
 import { SEED_SKILL_CODES, getBktParams, MASTERY_THRESHOLD } from "../config/bkt-params.ts";
 import { computeBktStep } from "../services/bkt.ts";
 
@@ -174,6 +175,7 @@ const rankCatalog = (
   });
 };
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// pathToFileURL, because import.meta.url escapes spaces and accented letters in the path
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
   console.table(runSimulation(42, 200, 40));
 }

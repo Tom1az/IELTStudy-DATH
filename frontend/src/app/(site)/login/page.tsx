@@ -40,7 +40,10 @@ function LoginInner() {
       <form className="space-y-4" onSubmit={submit} noValidate>
         {err && !Object.keys(fields).length && <Alert tone="error">{err.message}</Alert>}
         <TextInput label="Email" type="email" autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} error={fields.email} required />
-        <TextInput label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} error={fields.password} required />
+        <div>
+          <TextInput label="Password" type="password" autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} error={fields.password} required />
+          <p className="mt-1.5 text-right"><Link href="/forgot-password" className="text-xs font-semibold text-ink-muted transition-colors hover:text-brand">Forgot your password?</Link></p>
+        </div>
         <button className="btn-primary w-full py-3" disabled={pending}>{pending && <Spinner className="h-4 w-4" />}Log in</button>
       </form>
     </AuthShell>

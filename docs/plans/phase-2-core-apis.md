@@ -752,7 +752,7 @@ Approved 2026-11-01 (owner's rule: "graded as far as the learner got; the attemp
 
 The assignment requires a time limit that the server enforces (`proposal_VI.md` §4.4). Before this task only the client timer ran. No schema change: `quizzes.time_limit_seconds` and `quiz_attempts.started_at` already exist.
 
-- **A late submit is graded, never rejected.** `submitAttempt` is unchanged: it grades the answers in the request.
+- **A late submit is rejected with 409** and the attempt is closed with score 0 (changed from "graded, never rejected" after review: an API client could submit full marks days late).
 - **An attempt nobody submits is closed by the server** (`closeAttemptIfTimeIsUp` in `services/attempts.ts`) when it is next opened, by `POST /quizzes/{id}/attempts` or `GET /attempts/{id}`. Score 0 and no response rows, because the server only receives answers at submit time. `completed_at` is the deadline, not the moment it was noticed. A learner who starts the quiz again gets a fresh attempt.
 - **Grace period:** 30 seconds after the limit (`GRACE_SECONDS`), for network delay.
 - **Not applied to the diagnostic:** an empty completed diagnostic would block a retake (409) and seed mastery with zeros.
@@ -763,5 +763,5 @@ The assignment requires a time limit that the server enforces (`proposal_VI.md` 
 Done 2026-11-01.
 - **Checks:** typecheck and lint are clean, 193 tests pass across 17 files (6 new, in `routes/attempts.integration.test.ts`, describe "quiz time limit"). Redocly lint is valid. `openapi.yaml` text updated for `startAttempt`, `getAttempt` and `submitAttempt`; no new endpoint, so the contract version is unchanged.
 - **Files:** `src/services/attempts.ts`, `src/controllers/attempts.ts`, `src/routes/attempts.integration.test.ts`, `src/docs/openapi.yaml`.
-- **Known limit:** the server cannot see answers before the learner submits. If the learner's browser dies, the answers given so far are lost and the attempt scores 0. A late submit can also contain answers given after the deadline, because the server cannot tell when each answer was given (`responseTimeSeconds` is sent by the client). Closing both gaps needs answers saved while the learner works (autosave), which needs a new column or table and is left for later.
+- **Known limit:** the server cannot see answers before the learner submits. If the learner's browser dies, the answers given so far are lost and the attempt scores 0. (Before the 409 rule) a late submit could also contain answers given after the deadline, because the server cannot tell when each answer was given (`responseTimeSeconds` is sent by the client). Closing both gaps needs answers saved while the learner works (autosave), which needs a new column or table and is left for later.
 - **Frontend:** nothing changes for it to keep working. It should send the answers when its own timer reaches zero (the "auto-submit" the learner sees).

@@ -30,28 +30,28 @@ function Syllabus({ detail }: { detail: CourseDetail }) {
   if (sections.length === 0) return <p className="card p-5 text-sm text-ink-muted">This course has no lessons yet.</p>;
 
   return (
-    <div className="space-y-3">
+    <div className="stagger space-y-3">
       {sections.map((sec) => {
         const isOpen = open[sec.skill];
         const shown = all[sec.skill] ? sec.lessons : sec.lessons.slice(0, 4);
         return (
-          <section key={sec.skill} id={sec.skill} className="scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-white">
-            <button className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left" onClick={() => setOpen((o) => ({ ...o, [sec.skill]: !o[sec.skill] }))} aria-expanded={isOpen} aria-controls={`sec-${sec.skill}`}>
+          <section key={sec.skill} id={sec.skill} className="scroll-mt-24 overflow-hidden rounded-2xl border border-line bg-white transition-colors duration-200 hover:border-brand/25">
+            <button className="flex w-full items-center gap-3.5 px-4 py-3.5 text-left transition-colors duration-150 hover:bg-ivory" onClick={() => setOpen((o) => ({ ...o, [sec.skill]: !o[sec.skill] }))} aria-expanded={isOpen} aria-controls={`sec-${sec.skill}`}>
               <SkillTile skill={sec.skill} size={36} />
               <div className="flex-1">
                 <h3 className="text-lg font-extrabold leading-tight">{SKILL_META[sec.skill].label}</h3>
                 <p className="text-xs text-ink-muted">{plural(sec.lessons.length, "lesson")}{enrollment && <> · {sec.done} done</>}</p>
               </div>
-              <ChevronDown className={cx("h-5 w-5 text-ink transition-transform", isOpen && "rotate-180")} aria-hidden />
+              <ChevronDown className={cx("h-5 w-5 text-ink transition-transform duration-200 ease-swift", isOpen && "rotate-180")} aria-hidden />
             </button>
             {isOpen && (
-              <div id={`sec-${sec.skill}`}>
+              <div id={`sec-${sec.skill}`} className="animate-rise">
                 <ul>
                   {shown.map((l) => {
                     const canOpen = !!enrollment && l.unlocked;
                     const inner = (
                       <>
-                        <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold", l.completed ? "bg-brand text-white" : "bg-line/50 text-ink")}>
+                        <span className={cx("flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold transition-colors", l.completed ? "bg-brand text-white" : "bg-line/50 text-ink")}>
                           {l.completed ? <Check className="h-3.5 w-3.5" /> : l.order}
                         </span>
                         <p className="min-w-0 flex-1 text-sm font-semibold text-ink">{l.title}</p>
@@ -64,7 +64,7 @@ function Syllabus({ detail }: { detail: CourseDetail }) {
                     return (
                       <li key={l.id} className="border-t border-line">
                         {canOpen ? (
-                          <Link href={`/learn/${course.id}/${l.id}`} className="flex items-center gap-3.5 px-4 py-3 hover:bg-ivory">{inner}</Link>
+                          <Link href={`/learn/${course.id}/${l.id}`} className="flex items-center gap-3.5 px-4 py-3 transition-colors duration-150 hover:bg-ivory">{inner}</Link>
                         ) : (
                           <div className="flex items-center gap-3.5 px-4 py-3">{inner}</div>
                         )}
@@ -73,7 +73,7 @@ function Syllabus({ detail }: { detail: CourseDetail }) {
                   })}
                 </ul>
                 {sec.lessons.length > 4 && (
-                  <button className="w-full border-t border-line px-4 py-3.5 text-left text-sm font-semibold text-brand hover:bg-ivory" onClick={() => setAll((a) => ({ ...a, [sec.skill]: !a[sec.skill] }))}>
+                  <button className="w-full border-t border-line px-4 py-3.5 text-left text-sm font-semibold text-brand transition-colors duration-150 hover:bg-ivory" onClick={() => setAll((a) => ({ ...a, [sec.skill]: !a[sec.skill] }))}>
                     {all[sec.skill] ? "Show fewer lessons" : `Show all ${sec.lessons.length} lessons`}
                   </button>
                 )}
@@ -172,7 +172,7 @@ function CourseInner() {
             ) : (
               <>
                 <h2 className="text-[22px] font-extrabold">Start Level {course.level}</h2>
-                <EnrollButton course={course} label="Enroll in this course" className="mt-4" firstLessonId={lessons[0]?.id} onEnrolled={reload} />
+                <EnrollButton course={course} label="Enroll in this course" className="mt-4" firstLessonId={sp.get("lesson") ?? lessons[0]?.id} onEnrolled={reload} />
                 {!data.canEnroll.ok && data.canEnroll.reason && <p className="mt-2 text-xs text-ink-muted">{data.canEnroll.reason}</p>}
               </>
             )}

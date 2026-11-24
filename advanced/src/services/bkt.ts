@@ -1,8 +1,8 @@
 import "temporal-polyfill/global";
 import { db } from "../prisma/db.ts";
 import { DEFAULT_BKT_PARAMS, getBktParams, PROB_MAX, PROB_MIN } from "../config/bkt-params.ts";
+import { lockLearner } from "./learner-lock.ts";
 
-const orm = db.orm.public;
 type Orm = typeof db.orm.public;
 
 export type MasteryChangeItem = {
@@ -52,11 +52,24 @@ export const computeBktStep = (
   return clampProb(nextMastery);
 };
 
+// Applies a submitted attempt to the learner's mastery, once. The work runs in one transaction under
+// the learner's lock, so parallel calls wait for each other and the later ones find the saved result.
 export const processAttemptMastery = async (attemptId: number): Promise<MasteryChangeItem[]> => {
-  const attempt = await orm.QuizAttempts.first({ attemptId });
+  const attempt = await db.orm.public.QuizAttempts.first({ attemptId });
   if (!attempt || attempt.completedAt === null) {
     return [];
   }
+
+  return db.transaction(async (tx) => {
+    await lockLearner(tx, attempt.userId);
+    return applyAttempt(tx.orm.public, attemptId);
+  });
+};
+
+const applyAttempt = async (orm: Orm, attemptId: number): Promise<MasteryChangeItem[]> => {
+  // Read again now that we hold the lock: another call may have just finished this attempt
+  const attempt = await orm.QuizAttempts.first({ attemptId });
+  if (!attempt) return [];
 
   const allSkills = await orm.Skills.orderBy((s) => s.skillId.asc()).all();
   const skillById = new Map(allSkills.map((s) => [s.skillId, s]));
@@ -67,19 +80,19 @@ export const processAttemptMastery = async (attemptId: number): Promise<MasteryC
       before: number | null;
       after: number;
     }>;
-    return saved
-      .map((item) => {
-        const sk = skillById.get(item.skillId);
-        if (!sk) return null;
-        return {
-          skillId: item.skillId,
-          skillCode: sk.skillCode,
-          name: sk.name,
-          before: item.before,
-          after: item.after,
-        };
-      })
-      .filter((x): x is MasteryChangeItem => x !== null);
+    const changes: MasteryChangeItem[] = [];
+    for (const item of saved) {
+      const sk = skillById.get(item.skillId);
+      if (!sk) continue;
+      changes.push({
+        skillId: item.skillId,
+        skillCode: sk.skillCode,
+        name: sk.name,
+        before: item.before,
+        after: item.after,
+      });
+    }
+    return changes;
   }
 
   const quiz = await orm.Quizzes.first({ quizId: attempt.quizId });
@@ -116,6 +129,9 @@ export const processAttemptMastery = async (attemptId: number): Promise<MasteryC
   const responses = await orm.QuestionResponses.where({ attemptId })
     .orderBy((r) => r.attemptOrder.asc())
     .all();
+
+  // No answers at all (an attempt the time limit closed) is no evidence about the learner
+  if (responses.length === 0) return [];
 
   const orderedObservations: Array<{ questionId: number; isCorrect: boolean }> = [];
   const answeredSet = new Set<number>();
@@ -193,19 +209,17 @@ export const processAttemptMastery = async (attemptId: number): Promise<MasteryC
     after: currentProb.get(skillId)!,
   }));
 
-  await db.transaction(async (tx) => {
-    await upsertMasteryRows(
-      tx.orm.public,
-      attempt.userId,
-      sortedTouchedIds,
-      existingBySkill,
-      currentProb,
-      obsCount,
-    );
+  await upsertMasteryRows(
+    orm,
+    attempt.userId,
+    sortedTouchedIds,
+    existingBySkill,
+    currentProb,
+    obsCount,
+  );
 
-    await tx.orm.public.QuizAttempts.where({ attemptId }).update({
-      masteryChanges: dbChangesPayload,
-    });
+  await orm.QuizAttempts.where({ attemptId }).update({
+    masteryChanges: dbChangesPayload,
   });
 
   return sortedTouchedIds.map((skillId) => {
@@ -248,7 +262,7 @@ const upsertMasteryRows = async (
 };
 
 export const getLearnerMastery = async (userId: number) => {
-  const rows = await orm.UserSkillMastery.where({ userId })
+  const rows = await db.orm.public.UserSkillMastery.where({ userId })
     .include("skill", (s) => s.select("skillCode", "name", "category"))
     .orderBy((m) => m.skillId.asc())
     .all();

@@ -39,10 +39,10 @@ function Placement() {
     }
   };
 
-  const submit = async (answers: Record<string, string>, timings: Record<string, number>) => {
+  const submit = async (answers: Record<string, string>, timings: Record<string, number>, touchOrder: string[]) => {
     if (!attemptId) return;
     try {
-      await practiceApi.submit(attemptId, answers, timings);
+      await practiceApi.submit(attemptId, answers, timings, touchOrder);
       await refresh();
       router.push(`/practice/result/${attemptId}`);
     } catch (e) {

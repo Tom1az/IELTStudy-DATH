@@ -2,14 +2,7 @@ import express from "express";
 import type { Express, NextFunction, Request, Response } from "express";
 import { authenticate, authorize } from "../middlewares/auth.ts";
 import { validateParams, schemas } from "../utils/validator.ts";
-import { httpError } from "../utils/http-error.ts";
 import advancedController from "../controllers/advanced.ts";
-import { processAttemptMastery } from "../services/bkt.ts";
-import {
-  computeCourseLessonGates,
-  isLessonLockedForLearner,
-} from "../services/gating.ts";
-import { generateRecommendationsForLearner } from "../services/recommender.ts";
 
 export const createAdvancedRouter = () => {
   const router = express.Router();
@@ -76,125 +69,6 @@ export const createAdvancedRouter = () => {
     authorize("learner"),
     validateParams(schemas.idSchema, "courseId"),
     advancedController.getCourseGates,
-  );
-
-  // 3. Interceptors (khi gắn cùng Core App)
-  router.get(
-    "/lessons/:lessonId",
-    authenticate,
-    validateParams(schemas.idSchema, "lessonId"),
-    async (req: Request, _res: Response, next: NextFunction) => {
-      if (req.user?.role === "learner") {
-        const lessonId = req.value!.params!.lessonId;
-        const gate = await isLessonLockedForLearner(req.user.userId, lessonId);
-        if (gate.locked) {
-          throw httpError(403, gate.reason ?? "This lesson is locked");
-        }
-      }
-      next();
-    },
-  );
-
-  router.use(
-    "/attempts/:attemptId",
-    (req: Request, res: Response, next: NextFunction) => {
-      const originalJson = res.json.bind(res);
-
-      res.json = ((body: unknown) => {
-        const isSuccess = res.statusCode >= 200 && res.statusCode < 300;
-        const hasResult =
-          typeof body === "object" &&
-          body !== null &&
-          "result" in body &&
-          typeof (body as { result?: unknown }).result === "object";
-
-        if (!isSuccess || !hasResult) {
-          return originalJson(body);
-        }
-
-        const payload = body as {
-          result: {
-            attempt: { attemptId: number; status: string };
-            masteryChanges: unknown[];
-            recommendations: unknown[];
-          };
-          message: string;
-        };
-
-        if (payload.result.attempt.status !== "completed") {
-          return originalJson(body);
-        }
-
-        const attemptId = payload.result.attempt.attemptId;
-        const userId = req.user?.userId;
-
-        (async () => {
-          try {
-            const masteryChanges = await processAttemptMastery(attemptId);
-            const recommendations = userId
-              ? await generateRecommendationsForLearner(userId, {
-                  sourceAttemptId: attemptId,
-                })
-              : [];
-            payload.result.masteryChanges = masteryChanges;
-            payload.result.recommendations = recommendations;
-          } catch (err) {
-            console.error("Advanced BKT post-submit hook error:", err);
-          }
-          originalJson(payload);
-        })();
-
-        return res;
-      }) as typeof res.json;
-
-      next();
-    },
-  );
-
-  router.get(
-    "/courses/:courseId/lessons",
-    (req: Request, res: Response, next: NextFunction) => {
-      const originalJson = res.json.bind(res);
-
-      res.json = ((body: unknown) => {
-        const isSuccess = res.statusCode >= 200 && res.statusCode < 300;
-        const hasLessons =
-          typeof body === "object" &&
-          body !== null &&
-          "lessons" in body &&
-          Array.isArray((body as { lessons?: unknown }).lessons);
-
-        if (!isSuccess || !hasLessons || req.user?.role !== "learner") {
-          return originalJson(body);
-        }
-
-        const courseId = Number(req.params.courseId);
-        const userId = req.user.userId;
-        const payload = body as {
-          lessons: Array<{ lessonId: number; locked?: boolean }>;
-          message: string;
-        };
-
-        (async () => {
-          try {
-            const gates = await computeCourseLessonGates(userId, courseId);
-            for (const lesson of payload.lessons) {
-              const gate = gates.get(lesson.lessonId);
-              if (gate) {
-                lesson.locked = gate.locked;
-              }
-            }
-          } catch (err) {
-            console.error("Advanced gating hook error:", err);
-          }
-          originalJson(payload);
-        })();
-
-        return res;
-      }) as typeof res.json;
-
-      next();
-    },
   );
 
   return router;

@@ -89,3 +89,25 @@ export async function backendRequest<T>(method: Method, path: string, body?: unk
 export function notAvailable(feature: string): Promise<never> {
   return Promise.reject(new ApiError(501, "NOT_AVAILABLE", `${feature} is not available yet.`));
 }
+
+/**
+ * True when a call failed because the endpoint isn't there yet (or the service behind it
+ * is down), rather than because of something the user did. A page can then show its
+ * "not available yet" card instead of an error, and start working on its own the day the
+ * route ships. A 400/401/403/409 is a real answer and is never swallowed here.
+ */
+export function isMissingEndpoint(e: unknown): boolean {
+  if (e instanceof ApiError) return e.status === 404 || e.status === 501 || e.status >= 502;
+  // `fetch` rejects with a TypeError when it can't reach the server at all
+  return e instanceof TypeError;
+}
+
+/** Runs a call that may hit an endpoint the backend hasn't built yet; `null` means "not there". */
+export async function optional<T>(call: () => Promise<T>): Promise<T | null> {
+  try {
+    return await call();
+  } catch (e) {
+    if (isMissingEndpoint(e)) return null;
+    throw e;
+  }
+}

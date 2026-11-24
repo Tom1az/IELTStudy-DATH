@@ -1,11 +1,11 @@
 import type { PracticeSet, QuizAttempt, Recommendation, SkillCategory } from "@/lib/types";
 import type {
-  BackendAttempt, BackendAttemptResult, BackendAttemptSummary, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendQuizForLearner, BackendSkill,
+  BackendAnswer, BackendAttempt, BackendAttemptResult, BackendAttemptSummary, BackendEnrollment, BackendLesson, BackendLessonDetail, BackendQuizForLearner, BackendSkill,
 } from "./backend-types";
-import { ApiError, backendRequest } from "./client";
+import { ApiError, backendRequest, optional } from "./client";
 import { meApi } from "./learning";
 import { buildSyllabus, lessonCategory, toCourse, toRecommendation, toSkillCategories, type SkillCategories } from "./mappers";
-import { toBackendAnswer, toSections, toUiAnswer } from "./quiz-mappers";
+import { answerOrder, toBackendAnswer, toSections, toUiAnswer } from "./quiz-mappers";
 
 /**
  * Quizzes: the practice list, taking a quiz, the post-quiz review, history and the
@@ -31,6 +31,8 @@ export interface AttemptSession {
   courseId: string | null;
   lessonId: string | null;
   lessonTitle?: string;
+  /** Where the answers restored into this session came from. */
+  restoredFrom: "server" | "device" | null;
 }
 
 export interface SkillChange {
@@ -85,6 +87,12 @@ export interface Placement {
   completedAttemptId?: string;
 }
 
+/** The result of one autosave: where the answers ended up, and when. */
+export interface SaveOutcome {
+  where: "server" | "device";
+  at: string;
+}
+
 /* ───────── Shared loaders ───────── */
 
 async function loadCategories(): Promise<SkillCategories> {
@@ -106,13 +114,26 @@ const minutesOf = (seconds: number | null) => (seconds ? Math.round(seconds / 60
 
 /* ───────── Answers in progress ───────── */
 
-// The backend has no autosave, so answers stay in this browser until the attempt is submitted
+/**
+ * Answers are autosaved to the backend while the quiz is open, so a learner can finish on
+ * another device or after a crash:
+ *
+ *   PUT /attempts/{attemptId}/answers  { responses, remainingSeconds } -> { savedAt }
+ *   GET /attempts/{attemptId}/answers  -> { responses, remainingSeconds, savedAt }
+ *
+ * This browser keeps its own copy as well. It is what the player falls back to when the
+ * network (or the endpoint) isn't there, and it is only read when the server has nothing
+ * newer, so the two copies can't disagree.
+ */
 const draftKey = (attemptId: string) => `ieltstudy.attempt.${attemptId}`;
 
 interface Draft {
   answers: Record<string, string>;
   remainingSeconds?: number;
 }
+
+/** Converting answers needs the quiz, so the one the player opened is kept for the autosave. */
+const openQuizzes = new Map<string, BackendQuizForLearner>();
 
 function loadDraft(attemptId: string): Draft | null {
   try {
@@ -123,12 +144,35 @@ function loadDraft(attemptId: string): Draft | null {
   }
 }
 
+function saveDraft(attemptId: string, draft: Draft) {
+  try {
+    window.localStorage.setItem(draftKey(attemptId), JSON.stringify(draft));
+  } catch {
+    /* storage full or unavailable: the answers are still in the page */
+  }
+}
+
 function clearDraft(attemptId: string) {
   try {
     window.localStorage.removeItem(draftKey(attemptId));
   } catch {
     /* storage unavailable */
   }
+}
+
+/** Reads back what the backend has for this attempt. Null while the endpoint isn't there. */
+async function loadServerDraft(attemptId: string, quiz: BackendQuizForLearner): Promise<Draft | null> {
+  const res = await optional(() =>
+    backendRequest<{ responses: { questionId: number; answer: BackendAnswer | null }[]; remainingSeconds: number | null }>("GET", `/attempts/${attemptId}/answers`),
+  );
+  if (!res || res.responses.length === 0) return null;
+
+  const answers: Record<string, string> = {};
+  for (const saved of res.responses) {
+    const question = quiz.questions.find((q) => q.questionId === saved.questionId);
+    if (question) answers[String(saved.questionId)] = toUiAnswer(question, saved.answer);
+  }
+  return { answers, remainingSeconds: res.remainingSeconds ?? undefined };
 }
 
 function toAttempt(a: BackendAttempt, kind: QuizAttempt["kind"], draft: Draft | null): QuizAttempt {
@@ -282,9 +326,9 @@ export const practiceApi = {
   },
 
   /**
-   * Starts the quiz, or resumes my unfinished attempt (the backend returns it again, and
-   * the answers saved in this browser are restored). The lesson is loaded too, for the
-   * skill label and the "exit" link.
+   * Starts the quiz, or resumes my unfinished attempt. The answers come back from the
+   * backend's autosave; if it has none (or doesn't answer), the copy this browser kept is
+   * used instead. The lesson is loaded too, for the skill label and the "exit" link.
    */
   async start(quizId: string): Promise<AttemptSession> {
     const [res, categories] = await Promise.all([
@@ -292,6 +336,8 @@ export const practiceApi = {
       loadCategories(),
     ]);
     const quiz = res.quiz;
+    const attemptId = String(res.attempt.attemptId);
+    openQuizzes.set(attemptId, quiz);
 
     let lesson: BackendLessonDetail | null = null;
     let skill: SkillCategory | undefined;
@@ -300,44 +346,60 @@ export const practiceApi = {
       skill = lessonCategory(lesson, categories);
     }
 
+    const fromServer = await loadServerDraft(attemptId, quiz);
+    const draft = fromServer ?? loadDraft(attemptId);
+
     const sections = toSections(quiz, skill);
     return {
       quiz: { id: String(quiz.quizId), title: quiz.title, skill: sections[0].skill, minutes: minutesOf(quiz.timeLimitSeconds) },
       sections,
-      attempt: toAttempt(res.attempt, quiz.kind === "diagnostic" ? "placement" : "practice", loadDraft(String(res.attempt.attemptId))),
+      attempt: toAttempt(res.attempt, quiz.kind === "diagnostic" ? "placement" : "practice", draft),
       courseId: lesson ? String(lesson.courseId) : null,
       lessonId: lesson ? String(lesson.lessonId) : null,
       lessonTitle: lesson?.title,
+      restoredFrom: fromServer ? "server" : draft ? "device" : null,
     };
   },
 
-  /** Keeps my answers in this browser (the backend has no autosave). */
-  save(attemptId: string, answers: Record<string, string>, remainingSeconds: number) {
-    try {
-      window.localStorage.setItem(draftKey(attemptId), JSON.stringify({ answers, remainingSeconds: Math.round(remainingSeconds) }));
-    } catch {
-      /* storage full or unavailable: the answers are still in the page */
+  /**
+   * Autosave. The answers go to the backend and, whatever happens there, to this browser,
+   * so nothing is lost if the tab closes between two saves. The player shows which of the
+   * two the learner got.
+   */
+  async save(attemptId: string, answers: Record<string, string>, remainingSeconds: number): Promise<SaveOutcome> {
+    const seconds = Math.round(remainingSeconds);
+    saveDraft(attemptId, { answers, remainingSeconds: seconds });
+
+    const quiz = openQuizzes.get(attemptId);
+    if (!quiz) return { where: "device", at: new Date().toISOString() };
+
+    const responses: { questionId: number; answer: BackendAnswer }[] = [];
+    for (const [questionId, value] of Object.entries(answers)) {
+      const question = quiz.questions.find((q) => String(q.questionId) === questionId);
+      if (!question) continue;
+      const answer = toBackendAnswer(question, value);
+      // An empty answer is not sent: the backend reads a missing one as "not answered yet"
+      if (answer === null) continue;
+      responses.push({ questionId: question.questionId, answer });
     }
-    return Promise.resolve();
+
+    const res = await optional(() =>
+      backendRequest<{ savedAt: string }>("PUT", `/attempts/${attemptId}/answers`, { responses, remainingSeconds: seconds }),
+    );
+    return res ? { where: "server", at: res.savedAt } : { where: "device", at: new Date().toISOString() };
   },
 
   /**
    * Sends my answers. The backend wants them in the order I answered, which the player
-   * records as the order of `timings` (the first time each question was touched).
+   * records as `touchOrder` (the first time each question was touched).
    * Questions left empty are not sent: the backend counts them as wrong.
    */
-  async submit(attemptId: string, answers: Record<string, string>, timings: Record<string, number> = {}): Promise<AttemptResult> {
+  async submit(attemptId: string, answers: Record<string, string>, timings: Record<string, number> = {}, touchOrder: string[] = []): Promise<AttemptResult> {
     const before = await backendRequest<{ result: BackendAttemptResult }>("GET", `/attempts/${attemptId}`);
     const quiz = await loadQuiz(before.result.attempt.quizId);
 
-    const order: string[] = [];
-    for (const id of Object.keys(timings)) order.push(id);
-    for (const id of Object.keys(answers)) {
-      if (!order.includes(id)) order.push(id);
-    }
-
     const responses: { questionId: number; answer: unknown; responseTimeSeconds?: number }[] = [];
-    for (const id of order) {
+    for (const id of answerOrder(touchOrder, answers)) {
       const question = quiz.questions.find((q) => String(q.questionId) === id);
       if (!question) continue;
       const answer = toBackendAnswer(question, answers[id] ?? "");
@@ -348,6 +410,7 @@ export const practiceApi = {
 
     const res = await backendRequest<{ result: BackendAttemptResult }>("POST", `/attempts/${attemptId}/submit`, { responses });
     clearDraft(attemptId);
+    openQuizzes.delete(attemptId);
     return withBands(buildResult(res.result, quiz, await loadCategories()));
   },
 

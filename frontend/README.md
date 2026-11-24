@@ -19,18 +19,28 @@ The single source of truth is [`backend/src/docs/openapi.yaml`](../backend/src/d
 
 | File in `src/lib/api/` | What it does |
 |---|---|
-| `client.ts` | `backendRequest()`: sends `Authorization: Bearer <JWT>`, turns `{ error: { message, details } }` into an `ApiError` with per-field messages, and sends the user to `/login` when the token expires (there is no refresh token). `notAvailable()` for features the backend doesn't have yet. |
-| `backend-types.ts` | Response shapes copied from `openapi.yaml`. Keep them in sync. |
+| `client.ts` | `backendRequest()`: sends `Authorization: Bearer <JWT>`, turns `{ error: { message, details } }` into an `ApiError` with per-field messages, and sends the user to `/login` when the token expires (there is no refresh token). `optional()` / `isMissingEndpoint()` for calls whose route the backend hasn't written yet, and `notAvailable()` for features with no call at all. |
+| `backend-types.ts` | Response shapes copied from `openapi.yaml`. Keep them in sync. A route that isn't in `openapi.yaml` yet keeps its shape in the module that calls it, with the proposed contract written above it. |
 | `mappers.ts`, `quiz-mappers.ts` | Convert backend shapes into the types the pages use (`src/lib/types.ts`), and quiz answers in both directions. Unit-tested. |
-| `auth.ts` | Register, login, `GET /me`, `PATCH /me`. |
-| `learning.ts` | Catalog, course page, enrolment, lesson viewer and progress, learner dashboard. |
-| `practice.ts` | Practice list, quiz player, post-quiz review, history, the diagnostic (placement quiz). Answers in progress stay in localStorage until submit, because the backend has no autosave. |
+| `auth.ts` | Register, login, `GET /me`, `PATCH /me`, and the two password-reset calls. |
+| `learning.ts` | Catalog, course page, enrolment and leaving a course, lesson viewer and progress, learner dashboard. |
+| `practice.ts` | Practice list, quiz player, post-quiz review, history, the diagnostic (placement quiz). Answers autosave to the backend while the quiz is open, with this browser as the fallback copy. |
 | `instructor.ts` | Instructor Studio: courses and the review flow, lessons, passages and media uploads, questions (with Q-matrix weights) and quizzes. |
-| `admin.ts` | Users (role, suspend), the course review queue, usage statistics. |
+| `grading.ts` | The grading queue, one submission with its answers, the instructor's written feedback, and the learner list. |
+| `admin.ts` | Users (role, suspend), the course review queue, usage statistics, the audit log. |
 
-**Waiting for Phase 3 (BKT):** skill mastery, band estimates and recommendations show "not available yet" until `GET /me/mastery` and `GET /recommendations` exist and attempts return `masteryChanges`.
+**Endpoints we are waiting for.** These pages are built and in the menus. Each one calls its endpoint, and while the backend answers 404 it shows a short "not available yet" card instead of an error, so nothing has to change in the frontend on the day the route ships:
 
-**No backend yet**, so the page is a "not available yet" stub and is left out of the menus: notifications, writing tasks and grading, password reset, instructor learners and analytics, admin skills, reports, audit log and evaluation.
+| Page | Endpoint |
+|---|---|
+| `/forgot-password`, `/reset-password` | `POST /auth/forgot-password`, `POST /auth/reset-password` |
+| `/admin/audit` | `GET /admin/audit` |
+| `/instructor/grading` | `GET /instructor/submissions`, `GET /instructor/submissions/{attemptId}`, `PUT /instructor/submissions/{attemptId}/feedback` |
+| `/instructor/learners` | `GET /instructor/learners` |
+| Quiz player autosave | `PUT /attempts/{attemptId}/answers`, `GET /attempts/{attemptId}/answers` |
+| Feedback on a result | `GET /attempts/{attemptId}/feedback` |
+
+**Still a stub with no page behind it**, and left out of the menus: notifications, writing tasks, instructor analytics, admin skills, reports and evaluation.
 
 ## Scripts
 
@@ -71,6 +81,21 @@ The look follows the team's Figma file "DATH". Colours, font and radii are Tailw
 | `line`, `danger` | #E0E5D4, #B42318 | borders, errors |
 
 Learners get the sidebar layout (`components/layout/LearnerShell.tsx`, a bottom bar on phones). Guests use `SiteHeader`, and instructors and admins use `AppShell`. The font is Plus Jakarta Sans (`@fontsource/plus-jakarta-sans`).
+
+### Motion
+
+Movement is there to show what changed, never to decorate. Everything uses the same easing token (`ease-swift`) and one of the animations in `tailwind.config.ts`:
+
+| Class | Where it is used |
+|---|---|
+| `animate-rise` / `.reveal` | A card or panel that has just arrived (a result, an alert, a new section of a quiz) |
+| `.stagger` | A list whose rows should arrive one after the other, not all at once |
+| `animate-sheet`, `animate-fade` | Dialogs: the panel and the backdrop behind it |
+| `animate-toast` | The toast strip at the bottom of the screen |
+| `.shimmer` | Loading placeholders (`<Skeleton />`) |
+| `.card-hover` | A card that is a link or a button: it lifts under the pointer |
+
+Two rules go with them. Nothing moves more than about 10px or lasts longer than 700ms, and `prefers-reduced-motion` turns all of it off in `globals.css` — so test a change with that setting on as well.
 
 ## Notes
 
