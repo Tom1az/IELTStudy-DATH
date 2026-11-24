@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
             <MailCheck className="h-6 w-6" aria-hidden />
           </span>
           <p className="text-sm leading-relaxed text-ink-muted">
-            If <span className="font-semibold text-ink">{email}</span> has an account, a reset link is on its way. The link works once and expires after an hour.
+            If <span className="font-semibold text-ink">{email}</span> has an account, a reset link is on its way. The link works once and expires after 30 minutes.
           </p>
           <p className="text-sm text-ink-muted">
             Nothing arrived? Check the spam folder, or{" "}

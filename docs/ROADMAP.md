@@ -95,15 +95,16 @@ Ported into the backend on 2026-11-24 (`advanced/` removed): BKT, the recommende
 
 ## Phase 6 — Evaluation (spec weeks 45–48)
 
-- [ ] `ml/simulate.py`: BKT recommender vs. sequential curriculum vs. popularity baseline
-- [ ] Report learning gain (target ≥ 15%), Precision@3, MRR, time-to-mastery (target 20–30% less)
+- [x] Simulation: BKT recommender vs. sequential curriculum vs. popularity baseline (`backend/src/eval/simulator.ts`, `npm run eval`, run in CI)
+- [x] Report learning gain (target ≥ 15%), Precision@3, MRR, time-to-mastery (target 20–30% less): `docs/EVALUATION.md` (+16.6 % gain, P@3 0.89, −43.8 % time)
 
 ## Phase 7 — Hardening and deployment (spec weeks 49–50)
 
-- [ ] Dockerfile, GitHub Actions CI, Vercel deploy
+- [x] Dockerfile, GitHub Actions CI, Vercel deploy; staging from `develop` (`cd-staging.yml`, `ieltstudy-backend-staging`); CI migrates a blank database and seeds it
 - [x] helmet, CORS, rate limiting (`middlewares/security.ts`: login 10/15 min, forgot 5/h, reset 10/h per IP)
 - [ ] `/security-review`
-- [ ] Demo seed data, final report
+- [x] Demo seed data (`npm run seed:demo`: three roles, see `docs/DEPLOYMENT.md`)
+- [ ] Final report
 
 ## Backlog (after the interim report, not yet scheduled into a phase)
 

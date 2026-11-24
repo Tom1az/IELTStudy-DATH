@@ -102,6 +102,8 @@ jobs:
       JWT_SECRET: ci-e2e-secret
       SEED_PASSWORD: ci-seed-password
       BACKEND_URL: http://localhost:3000
+      # The E2E tests log in many times from one address; the login rate limit would stop them
+      RATE_LIMIT_DISABLED: "1"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

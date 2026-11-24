@@ -1,6 +1,6 @@
 # Deployment
 
-CI runs on every pull request and on pushes to `main` and `develop`. CD deploys `main` after CI passes.
+CI runs on every pull request and on pushes to `main` and `develop`. CD deploys `main` to production and `develop` to staging after CI passes.
 
 | Part | Where | How it deploys |
 | --- | --- | --- |
@@ -69,6 +69,27 @@ In the repository settings, create an environment named `production`, then add:
 | Variable | `DEPLOY_ENABLED` | `true`, at repository level |
 
 `DEPLOY_ENABLED` is what turns CD on. GitHub only runs the CD workflow once `cd.yml` is on the default branch.
+
+## Staging
+
+`develop` deploys to staging after CI passes on it (`.github/workflows/cd-staging.yml`), so the team tests on a real deploy before merging to `main`. It mirrors production with its own database:
+
+1. **Supabase:** a second project (free plan allows two) for the staging database. No Storage bucket is needed unless you test uploads.
+2. **Render:** the Blueprint already has `ieltstudy-backend-staging` (branch `develop`). Fill in its variables like production, with the staging `DATABASE_URL`, its own `JWT_SECRET`, and `APP_URL` = the staging frontend URL. Copy its Deploy Hook.
+3. **Vercel:** in the same project, add `BACKEND_URL` = the staging Render URL to the **Preview** environment. Each staging run creates a preview deployment; the URL is printed in the run summary.
+4. **GitHub:** create an environment `staging` with the secrets `STAGING_DATABASE_URL`, `STAGING_SEED_PASSWORD`, `RENDER_STAGING_DEPLOY_HOOK`, `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, and set the repository variable `STAGING_ENABLED` to `true`.
+
+The first staging deploy migrates the empty database and runs `npm run seed` then `npm run seed:demo`, so all three roles have data to try (see "Demo data"). Later deploys only migrate.
+
+## Demo data
+
+`npm run seed` creates the base data (three accounts, skills, the diagnostic, three courses). `npm run seed:demo` adds, through the app's own services: six learners (`linh`, `minh`, `an`, `bao`, `chi`, `duc` `@demo.ieltstudy.dev`) with placement results, enrolments, lesson progress and quiz history (so mastery, recommendations and the admin statistics are filled), instructor feedback, a lesson discussion with a reported spam comment, a second instructor (`trang@demo.ieltstudy.dev`) whose course waits for review, and audit entries. Every demo account uses `SEED_PASSWORD`.
+
+| Role | Log in as | Try |
+| --- | --- | --- |
+| Learner | `linh@demo.ieltstudy.dev` | dashboard, skill map, recommendations, quiz history, notifications (feedback, replies) |
+| Instructor | `instructor@ieltstudy.dev` | grading queue with feedback, learner progress, the discussion |
+| Admin | `admin@ieltstudy.dev` | completion and learning stats, the review queue, the open report, the audit log |
 
 ## After a deploy
 

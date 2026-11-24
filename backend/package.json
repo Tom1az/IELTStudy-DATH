@@ -18,6 +18,7 @@
     "db:migrate": "prisma db migrate",
     "db:verify": "prisma db verify",
     "seed": "node src/prisma/seed.ts",
+    "seed:demo": "node src/prisma/seed-demo.ts",
     "eval": "node src/eval/simulator.ts"
   },
   "dependencies": {

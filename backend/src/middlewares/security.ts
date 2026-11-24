@@ -25,14 +25,19 @@ export const corsMiddleware = (): RequestHandler => {
 export const helmetMiddleware = (): RequestHandler =>
   helmet({ contentSecurityPolicy: false, crossOriginEmbedderPolicy: false });
 
-// Limits per client IP. Off in tests, which log in hundreds of times from one address.
+// Limits per client IP. Off in unit/integration tests and when RATE_LIMIT_DISABLED=1 (the E2E
+// run), which log in many times from one address. Never set that flag in production.
+const limitsOff = () =>
+  process.env.RATE_LIMIT_DISABLED === "1" ||
+  (process.env.NODE_ENV === "test" && process.env.RATE_LIMIT_IN_TESTS !== "1");
+
 const limiter = (windowMinutes: number, limit: number): RequestHandler =>
   rateLimit({
     windowMs: windowMinutes * 60 * 1000,
     limit,
     standardHeaders: "draft-8",
     legacyHeaders: false,
-    skip: () => process.env.NODE_ENV === "test" && process.env.RATE_LIMIT_IN_TESTS !== "1",
+    skip: limitsOff,
     handler: (_req, res) => {
       res.status(429).json({ error: { message: "Too many requests, please try again later" } });
     },

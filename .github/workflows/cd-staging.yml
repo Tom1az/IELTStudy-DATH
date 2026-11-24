@@ -1,0 +1,70 @@
+name: CD staging
+
+# Deploys `develop` to the staging environment when CI passes on it, so the team tests on a real
+# deploy before merging to main. Stays off until the repository variable STAGING_ENABLED is
+# "true". Setup: docs/DEPLOYMENT.md, "Staging".
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+    branches: [develop]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-staging
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    if: >-
+      vars.STAGING_ENABLED == 'true' &&
+      (github.event_name == 'workflow_dispatch' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push'))
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .node-version
+
+      # Migrations first, so the new code never runs against an older schema. On an empty
+      # staging database the seed and the demo data run once (both refuse a second time).
+      - name: Migrate (and on first deploy, seed) the staging database
+        working-directory: backend
+        env:
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_URL }}
+          SEED_PASSWORD: ${{ secrets.STAGING_SEED_PASSWORD }}
+        run: |
+          npm ci
+          npx prisma db migrate --db "$DATABASE_URL" --yes --quiet > /dev/null
+          if npm run seed > /tmp/seed.log 2>&1; then
+            npm run seed:demo
+          else
+            grep -q "already has data" /tmp/seed.log || { cat /tmp/seed.log; exit 1; }
+            echo "Staging already seeded"
+          fi
+
+      - name: Deploy the staging backend to Render
+        env:
+          HOOK: ${{ secrets.RENDER_STAGING_DEPLOY_HOOK }}
+        run: curl --fail --silent --show-error -X POST "$HOOK" > /dev/null
+
+      # A Vercel preview deployment built against the staging backend (BACKEND_URL in Vercel's
+      # Preview environment)
+      - name: Deploy the staging frontend to Vercel (preview)
+        working-directory: frontend
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          npx --yes vercel@latest pull --yes --environment=preview --token="$VERCEL_TOKEN"
+          npx --yes vercel@latest build --token="$VERCEL_TOKEN"
+          url=$(npx --yes vercel@latest deploy --prebuilt --token="$VERCEL_TOKEN")
+          echo "Staging frontend: $url" >> "$GITHUB_STEP_SUMMARY"
