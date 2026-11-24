@@ -118,8 +118,15 @@ jobs:
       - run: npm run build
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
     needs: [backend, advanced, frontend]
+    # The browsers ship inside this image, so the job never downloads them: the Playwright
+    # CDN stalled at 100% on every attempt from these runners. Bump the tag together with
+    # the frontend's playwright version.
+    container:
+      image: mcr.microsoft.com/playwright:v1.56.0-noble
+      options: --user 1001
     services:
       postgres:
         image: postgres:18
@@ -133,7 +140,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/ieltstudy
+      # From inside a job container a service answers to its own name, not to localhost
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ieltstudy
       JWT_SECRET: ci-e2e-secret
       SEED_PASSWORD: ci-seed-password
       BACKEND_URL: http://localhost:3000
@@ -160,16 +168,19 @@ jobs:
         run: |
           npx prisma db migrate --db "$DATABASE_URL" --yes --quiet > /dev/null
           npm run seed
-      - name: Start the backend and Advanced
+      - name: Run the end-to-end tests
         run: |
-          (cd backend && PORT=3000 node src/server.ts) &
-          (cd advanced && PORT=4001 node src/server.ts) &
+          (cd backend && PORT=3000 node src/server.ts > /tmp/backend.log 2>&1 &)
+          (cd advanced && PORT=4001 node src/server.ts > /tmp/advanced.log 2>&1 &)
           npx --yes wait-on@8 --timeout 60000 http-get://localhost:3000/ http-get://localhost:4001/
-      - run: npx playwright install --with-deps chromium
-        working-directory: frontend
-      # Playwright builds and starts the frontend itself (playwright.config.ts)
-      - run: npm run test:e2e
-        working-directory: frontend
+          cd frontend && npm run test:e2e
+      - name: Show the server logs
+        if: failure()
+        run: |
+          echo "=== backend ==="
+          cat /tmp/backend.log || true
+          echo "=== advanced ==="
+          cat /tmp/advanced.log || true
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

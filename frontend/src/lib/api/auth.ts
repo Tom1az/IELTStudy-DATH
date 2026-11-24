@@ -85,4 +85,28 @@ export const authApi = {
       throw e;
     }
   },
+
+  /* ───────── Password reset ───────── */
+
+  /**
+   * Asks for a reset link. The backend answers 200 whether or not the address has an
+   * account, so this call can't be used to find out who is registered — the page shows
+   * the same "if that address has an account" message either way.
+   *
+   * `POST /auth/forgot-password` → `{ message }`
+   */
+  async requestPasswordReset(email: string): Promise<void> {
+    await backendRequest("POST", "/auth/forgot-password", { email: email.trim() });
+  },
+
+  /**
+   * Sets the new password with the token from the emailed link. The token is single-use
+   * and short-lived: a used or expired one answers 400/410, which the page turns into
+   * "ask for a new link".
+   *
+   * `POST /auth/reset-password` → `{ message }`
+   */
+  async resetPassword(token: string, password: string): Promise<void> {
+    await backendRequest("POST", "/auth/reset-password", { token, password });
+  },
 };

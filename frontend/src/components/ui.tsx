@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from "react";
-import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, Info, X } from "lucide-react";
+import { AlertCircle, CheckCircle2, ChevronLeft, ChevronRight, CloudOff, Info, X } from "lucide-react";
 import type { SkillCategory } from "@/lib/types";
 import { SKILL_META, cx, initials } from "@/lib/format";
 import { ApiError } from "@/lib/api/client";
@@ -46,7 +46,8 @@ export function ProgressBar({ value, max = 100, color = "bg-brand", track = "bg-
   const p = max ? Math.min(100, Math.max(0, (value / max) * 100)) : 0;
   return (
     <div className={cx("w-full overflow-hidden rounded-full", track, height)} role="progressbar" aria-valuenow={Math.round(p)} aria-valuemin={0} aria-valuemax={100} aria-label={label}>
-      <div className={cx("h-full rounded-full transition-[width] duration-500", color)} style={{ width: `${p}%` }} />
+      {/* The bar grows into its new value, so progress reads as movement, not a redraw */}
+      <div className={cx("h-full rounded-full transition-[width] duration-700 ease-swift", color)} style={{ width: `${p}%` }} />
     </div>
   );
 }
@@ -66,14 +67,15 @@ export function PageLoader({ label = "Loading…" }: { label?: string }) {
   );
 }
 
+/** A grey block standing in for content that is still loading, with one light sweep across it. */
 export function Skeleton({ className }: { className?: string }) {
-  return <div className={cx("animate-pulse rounded-xl bg-line/60", className)} />;
+  return <div className={cx("shimmer rounded-xl", className)} />;
 }
 
 export function ErrorState({ error, onRetry }: { error: Error | null; onRetry?: () => void }) {
   const api = error instanceof ApiError ? error : null;
   return (
-    <div className="card mx-auto my-10 max-w-lg p-8 text-center" role="alert">
+    <div className="card reveal mx-auto my-10 max-w-lg p-8 text-center" role="alert">
       <AlertCircle className="mx-auto mb-3 h-8 w-8 text-brand" aria-hidden />
       <h2 className="text-xl font-extrabold">{api?.status === 404 ? "Not found" : api?.status === 403 ? "No access" : "Something went wrong"}</h2>
       <p className="mt-2 text-sm text-ink-muted">{error?.message ?? "Please try again."}</p>
@@ -87,7 +89,7 @@ export function ErrorState({ error, onRetry }: { error: Error | null; onRetry?: 
 
 export function EmptyState({ icon, title, children, action }: { icon?: ReactNode; title: string; children?: ReactNode; action?: ReactNode }) {
   return (
-    <div className="flex flex-col items-center px-6 py-12 text-center">
+    <div className="reveal flex flex-col items-center px-6 py-12 text-center">
       {icon && <div className="mb-3 text-ink-soft">{icon}</div>}
       <p className="text-lg font-semibold">{title}</p>
       {children && <div className="mt-1 max-w-md text-sm text-ink-muted">{children}</div>}
@@ -105,7 +107,7 @@ export function Alert({ tone = "info", children, className }: { tone?: "info" | 
   };
   const Icon = tone === "error" ? AlertCircle : tone === "success" ? CheckCircle2 : Info;
   return (
-    <div className={cx("flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm", map[tone], className)} role={tone === "error" ? "alert" : "status"}>
+    <div className={cx("reveal flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm", map[tone], className)} role={tone === "error" ? "alert" : "status"}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
       <div className="min-w-0 flex-1">{children}</div>
     </div>
@@ -119,7 +121,7 @@ export function Field({ label, error, hint, children, htmlFor }: { label: string
     <div>
       <label className="label" htmlFor={htmlFor}>{label}</label>
       {children}
-      {error ? <p className="mt-1.5 text-xs font-medium text-danger" role="alert">{error}</p> : hint ? <p className="mt-1.5 text-xs text-ink-soft">{hint}</p> : null}
+      {error ? <p className="mt-1.5 animate-rise text-xs font-medium text-danger" role="alert">{error}</p> : hint ? <p className="mt-1.5 text-xs text-ink-soft">{hint}</p> : null}
     </div>
   );
 }
@@ -177,11 +179,11 @@ export function Modal({ open, onClose, title, children, footer, wide }: { open: 
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-ink/40 p-0 sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cx("max-h-[92vh] w-full overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:rounded-2xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}>
+    <div className="fixed inset-0 z-50 flex animate-fade items-end justify-center bg-ink/40 p-0 backdrop-blur-[2px] sm:items-center sm:p-4" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={title} className={cx("max-h-[92vh] w-full animate-sheet overflow-y-auto rounded-t-2xl bg-white shadow-pop sm:rounded-2xl", wide ? "sm:max-w-3xl" : "sm:max-w-lg")}>
         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-line bg-white px-5 py-4">
           <h2 className="text-lg font-extrabold">{title}</h2>
-          <button data-close className="rounded-lg p-1.5 text-ink-muted hover:bg-line/50" onClick={onClose} aria-label="Close">
+          <button data-close className="rounded-lg p-1.5 text-ink-muted transition-colors hover:bg-line/50 hover:text-ink" onClick={onClose} aria-label="Close">
             <X className="h-5 w-5" />
           </button>
         </div>
@@ -220,7 +222,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       {children}
       <div className="pointer-events-none fixed inset-x-0 bottom-4 z-[60] flex flex-col items-center gap-2 px-4" aria-live="polite">
         {items.map((t) => (
-          <div key={t.id} className={cx("pointer-events-auto flex max-w-md items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-lg", t.tone === "error" ? "bg-danger" : t.tone === "info" ? "bg-ink" : "bg-brand")}>
+          <div key={t.id} className={cx("pointer-events-auto flex max-w-md animate-toast items-center gap-2 rounded-xl px-4 py-3 text-sm font-medium text-white shadow-pop", t.tone === "error" ? "bg-danger" : t.tone === "info" ? "bg-ink" : "bg-brand")}>
             {t.tone === "error" ? <AlertCircle className="h-4 w-4" /> : <CheckCircle2 className="h-4 w-4" />}
             {t.text}
           </div>
@@ -230,6 +232,33 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   );
 }
 export const useToast = () => useContext(ToastCtx);
+
+/* ───────── Autosave indicator ───────── */
+
+/** Where the work in progress currently lives. `device` is the fallback when the server can't take it. */
+export type SaveState = "idle" | "saving" | "saved" | "device" | "error";
+
+/**
+ * The one line that tells someone mid-quiz whether their answers are safe. It never shouts:
+ * the text changes, the icon changes, nothing jumps around.
+ */
+export function SaveIndicator({ state, at, className }: { state: SaveState; at?: string; className?: string }) {
+  const time = at ? new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" }) : null;
+  const copy: Record<SaveState, { text: string; icon: ReactNode; tone: string }> = {
+    idle: { text: "Not saved yet", icon: <Info className="h-4 w-4" />, tone: "text-ink-soft" },
+    saving: { text: "Saving…", icon: <Spinner className="h-3.5 w-3.5" />, tone: "text-ink-muted" },
+    saved: { text: time ? `Saved at ${time}` : "Saved", icon: <CheckCircle2 className="h-4 w-4" />, tone: "text-brand" },
+    device: { text: "Saved on this device", icon: <CloudOff className="h-4 w-4" />, tone: "text-ink-muted" },
+    error: { text: "Couldn't save — retrying", icon: <AlertCircle className="h-4 w-4" />, tone: "text-danger" },
+  };
+  const { text, icon, tone } = copy[state];
+  return (
+    <p className={cx("flex items-center gap-1.5 whitespace-nowrap text-[11px] transition-colors duration-300", tone, className)} aria-live="polite">
+      {icon}
+      <span key={text} className="animate-fade">{text}</span>
+    </p>
+  );
+}
 
 /* ───────── Pagination / Tabs ───────── */
 
@@ -242,7 +271,7 @@ export function Pagination({ page, totalPages, onChange }: { page: number; total
       {pages.map((p, i) => (
         <span key={p} className="flex items-center">
           {i > 0 && pages[i - 1] !== p - 1 && <span className="px-1 text-ink-soft">…</span>}
-          <button onClick={() => onChange(p)} aria-current={p === page ? "page" : undefined} className={cx("h-8 min-w-8 rounded-lg px-2 text-sm font-semibold", p === page ? "bg-brand text-white" : "text-ink hover:bg-line/50")}>{p}</button>
+          <button onClick={() => onChange(p)} aria-current={p === page ? "page" : undefined} className={cx("h-8 min-w-8 rounded-lg px-2 text-sm font-semibold transition duration-150 ease-swift", p === page ? "bg-brand text-white" : "text-ink hover:bg-line/50")}>{p}</button>
         </span>
       ))}
       <button className="btn-ghost btn-sm" disabled={page >= totalPages} onClick={() => onChange(page + 1)} aria-label="Next page"><ChevronRight className="h-4 w-4" /></button>
@@ -262,7 +291,7 @@ export function Tabs<T extends string>({ tabs, value, onChange, className }: { t
 
 export function StatCard({ label, value, sub, accent }: { label: string; value: ReactNode; sub?: ReactNode; accent?: string }) {
   return (
-    <div className="card p-5">
+    <div className="card p-5 transition duration-200 ease-swift hover:-translate-y-0.5 hover:shadow-lift">
       <p className="eyebrow-muted">{label}</p>
       <p className={cx("mt-2 text-3xl font-extrabold", accent)}>{value}</p>
       {sub && <p className="mt-1 text-xs text-ink-muted">{sub}</p>}

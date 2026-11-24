@@ -2,13 +2,13 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useState } from "react";
-import { ArrowRight, BadgeCheck, ChevronDown, RotateCcw, Sparkles } from "lucide-react";
-import { meApi, practiceApi } from "@/lib/api";
+import { useEffect, useState } from "react";
+import { ArrowRight, BadgeCheck, ChevronDown, MessageSquareQuote, RotateCcw, Sparkles } from "lucide-react";
+import { gradingApi, meApi, practiceApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { RequireRole } from "@/lib/auth-context";
 import { SKILL_META, band, cx, fmtDate } from "@/lib/format";
-import { ErrorState, PageLoader } from "@/components/ui";
+import { Avatar, ErrorState, PageLoader } from "@/components/ui";
 import { QuestionView } from "@/components/quiz/QuestionView";
 import { PassagePane } from "@/components/quiz/PassagePane";
 import { RecommendationList, recHref } from "@/components/RecommendationList";
@@ -18,23 +18,73 @@ const THRESHOLD = 0.65;
 
 const pct = (x: number) => `${Math.round(x * 100)}%`;
 
-/** Accuracy ring (Figma "Practice result"): a blue arc on a light track, the percentage in the middle. */
+/**
+ * Accuracy ring (Figma "Practice result"): a blue arc on a light track, the percentage in
+ * the middle. The arc sweeps up to the score once on open, which is how the number reads
+ * as something that was earned rather than printed.
+ */
 function AccuracyRing({ value }: { value: number }) {
   const size = 96;
   const stroke = 9;
   const r = (size - stroke) / 2;
   const circumference = 2 * Math.PI * r;
-  // The arc is a dashed circle: the dash covers `value` of the circumference, the gap the rest
-  const dash = Math.max(0, Math.min(1, value)) * circumference;
+  const [shown, setShown] = useState(0);
+
+  useEffect(() => {
+    // One frame at zero, so the transition below has something to move from
+    const id = requestAnimationFrame(() => setShown(Math.max(0, Math.min(1, value))));
+    return () => cancelAnimationFrame(id);
+  }, [value]);
+
   return (
     <div className="relative h-24 w-24 shrink-0">
       <svg viewBox={`0 0 ${size} ${size}`} className="h-24 w-24 -rotate-90" aria-hidden>
         <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#F2F6FC" strokeWidth={stroke} />
         {/* At 0% a round line cap would still draw a dot, so the arc is left out */}
-        {dash > 0 && <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="#3971B8" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={`${dash} ${circumference}`} />}
+        {value > 0 && (
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={r}
+            fill="none"
+            stroke="#3971B8"
+            strokeWidth={stroke}
+            strokeLinecap="round"
+            strokeDasharray={`${shown * circumference} ${circumference}`}
+            className="transition-[stroke-dasharray] duration-700 ease-swift"
+          />
+        )}
       </svg>
       <span className="absolute inset-0 flex items-center justify-center text-[20px] font-extrabold text-brand">{pct(value)}</span>
     </div>
+  );
+}
+
+/**
+ * What the instructor wrote about this attempt. Most quizzes are marked automatically and
+ * have no note, so the card only appears once there is one.
+ */
+function InstructorNote({ attemptId, maxScore }: { attemptId: string; maxScore: number }) {
+  const { data } = useAsync(() => gradingApi.myFeedback(attemptId), [attemptId]);
+  if (!data) return null;
+
+  return (
+    <section className="card reveal flex flex-col gap-3 border-brand/30 bg-brand-tint p-6" aria-labelledby="note-h">
+      <div className="flex items-center gap-2">
+        <MessageSquareQuote className="h-[18px] w-[18px] text-brand" aria-hidden />
+        <h2 id="note-h" className="text-base">Your instructor&apos;s feedback</h2>
+      </div>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-ink">{data.comment}</p>
+      {data.score !== null && (
+        <p className="text-xs text-ink-muted">
+          Score adjusted by hand to <span className="font-extrabold tabular-nums text-brand">{data.score} / {maxScore}</span>.
+        </p>
+      )}
+      <div className="flex items-center gap-2.5 border-t border-brand/15 pt-3">
+        <Avatar name={data.by} size={28} />
+        <p className="text-xs text-ink-muted">{data.by} · {fmtDate(data.at, true)}</p>
+      </div>
+    </section>
   );
 }
 
@@ -58,12 +108,12 @@ function ResultInner() {
 
   return (
     <div className="mx-auto max-w-[1100px] px-4 py-6 md:px-6 md:py-8">
-      <Link href="/my-learning" className="text-sm font-semibold text-ink-muted hover:text-ink">← Back to My learning</Link>
+      <Link href="/my-learning" className="text-sm font-semibold text-ink-muted transition-colors hover:text-ink">← Back to My learning</Link>
 
       <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_380px] lg:gap-6">
         <div className="flex flex-col gap-4 lg:gap-6">
           {/* Score summary */}
-          <section className="card flex flex-col gap-4 p-6" aria-labelledby="score-h">
+          <section className="card reveal flex flex-col gap-4 p-6" aria-labelledby="score-h">
             <div className="flex items-center justify-between">
               <p className="text-[10px] font-bold uppercase tracking-eyebrow text-ink-muted">{attempt.kind === "placement" ? "Placement quiz" : "Quiz"} · {SKILL_META[quiz.skill].label}</p>
               <BadgeCheck className="h-5 w-5 text-brand" aria-hidden />
@@ -82,6 +132,8 @@ function ResultInner() {
             </div>
           </section>
 
+          <InstructorNote attemptId={attemptId} maxScore={attempt.maxScore} />
+
           {/* BKT mastery updates */}
           <section className="card flex flex-col gap-4 p-6" aria-labelledby="skills-h">
             <div className="flex items-baseline justify-between">
@@ -90,7 +142,7 @@ function ResultInner() {
             </div>
             {tracking ? (
               <>
-                <ul className="flex flex-col gap-4">
+                <ul className="stagger flex flex-col gap-4">
                   {changes.map((c) => {
                     const below = c.after < THRESHOLD;
                     return (
@@ -119,7 +171,7 @@ function ResultInner() {
 
         <aside className="flex flex-col gap-4 lg:sticky lg:top-6 lg:self-start">
           {/* Targeted remedial recommendation */}
-          <section className="flex flex-col gap-3 rounded-2xl bg-brand p-6 text-white" aria-labelledby="rec-h">
+          <section className="reveal flex flex-col gap-3 rounded-2xl bg-brand p-6 text-white" aria-labelledby="rec-h">
             <div className="flex items-center justify-between">
               <p id="rec-h" className="text-[10px] font-extrabold uppercase tracking-eyebrow">Your next best step</p>
               <Sparkles className="h-[18px] w-[18px]" aria-hidden />
@@ -159,11 +211,11 @@ function ResultInner() {
           <h2 id="review-h" className="text-[22px]">Answer review</h2>
           {hasPassages && (
             <button className="flex items-center gap-1 text-sm font-bold text-brand" onClick={() => setShowPassage((s) => !s)} aria-expanded={showPassage}>
-              {showPassage ? "Hide" : "Show"} passages and transcripts <ChevronDown className={cx("h-4 w-4 transition-transform", showPassage && "rotate-180")} />
+              {showPassage ? "Hide" : "Show"} passages and transcripts <ChevronDown className={cx("h-4 w-4 transition-transform duration-200", showPassage && "rotate-180")} />
             </button>
           )}
         </div>
-        {showPassage && sections.map((s) => <div key={s.id} className="card mt-4 p-6"><PassagePane passage={s.passage} revealScript /></div>)}
+        {showPassage && sections.map((s) => <div key={s.id} className="card mt-4 animate-rise p-6"><PassagePane passage={s.passage} revealScript /></div>)}
         <div className="card mt-4 space-y-8 p-6">
           {questions.map((q, i) => (
             <QuestionView key={q.id} q={q} number={i + 1} value={resp[q.id]?.userAnswer ?? ""} review={{ isCorrect: !!resp[q.id]?.isCorrect, answerKey: q.answerKey, explanation: q.explanation }} />
