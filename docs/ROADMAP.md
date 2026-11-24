@@ -22,7 +22,14 @@ IELTStudy is an adaptive IELTS platform (see `specs.md`). A 30-question diagnost
 | Course editing after approval | Approved courses are locked; the instructor withdraws to draft, edits and resubmits | Decided | Phase 2 |
 | Auth tokens | JWT in the response body, 1 day, no refresh token; the user is reloaded from the database on every request | Decided | Phase 2 |
 | Practice quizzes | Need a lesson (API rule), so they follow the lesson's access and lock rules | Decided | Phase 2 |
-| Recommender ranking | Ranking formula, the rule that unlocks the next module, and whether learners can open remedial lessons outside their enrolled courses | Open | Phase 3 |
+| Recommender ranking | Keep the hybrid score from `advanced/`: `0.50·cos(need, tags) + 0.25·urgency + kind bonus (remedial 0.20, core 0.05) + level 0.10 + enrolled 0.08 + post-quiz 0.12 − 0.35 if completed`, top 3 with a −0.15 same-skill penalty (full text in `openapi.yaml`, `GET /recommendations`) | Decided (2026-11-24) | Phase 3 |
+| Unlock rule | The next core lesson opens when the previous core lesson is completed **or** all its skills reach mastery ≥ 0.65. The first core lesson and remedial lessons are always open | Decided (2026-11-24) | Phase 3 |
+| Remedial access | A remedial lesson (and its quizzes) of an approved course is open to every learner without enrolling. Core lessons still need an enrolment, so the recommender only suggests core lessons from enrolled courses | Decided (2026-11-24) | Phase 3 |
+| BKT parameters | Fitted with pyBKT on simulated response sequences (plus any real responses in the database), per skill, into `ml/output/bkt_params.json`; the backend falls back to its defaults for a missing skill | Decided (2026-11-24) | Phase 3 |
+| Mastery history | No `mastery_history` table: `quiz_attempts.mastery_changes` (before/after per skill) plus `completed_at` already give the progression over time | Decided (2026-11-24) | Phase 3 |
+| Autosave storage | `quiz_attempts.draft_answers` (jsonb: questionId → answer + savedAt) and `draft_saved_at`. Submit and time-up grade from it; `question_responses` still only holds submitted answers | Decided (2026-11-24) | Backlog |
+| Backlog API shapes | Follow the shapes the frontend already calls (`/instructor/submissions…`, `{ token, password }` for reset, `{ entries }` for the audit log) | Decided (2026-11-24) | Backlog |
+| List paging | `q`, `page`, `pageSize` (default 20, max 100, 400 above) with `{ page, pageSize, total, totalPages }` next to the list | Decided (2026-11-24) | Backlog |
 | UI design | Figma file "DATH": sidebar learner layout, Plus Jakarta Sans, palette Celtic Blue / Ivory / Drab Dark Brown / Vanilla, Tea Green used sparingly (`docs/plans/phase-4-frontend.md`) | Decided | Phase 4 |
 
 ## Phase 0 — Harness and repo foundation (~1 day)
