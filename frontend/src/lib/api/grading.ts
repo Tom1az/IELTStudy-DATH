@@ -6,18 +6,16 @@ import { backendRequest, optional } from "./client";
  * Instructor grading: the queue of submitted attempts, one attempt with its answers, and
  * the written feedback an instructor leaves on it. Also the instructor's learner list.
  *
- * These endpoints are not in `backend/src/docs/openapi.yaml` yet, so their request and
- * response shapes are written down here instead of in `backend-types.ts`:
+ * Contract (`backend/src/docs/openapi.yaml`, tag Grading):
  *
  *   GET  /instructor/learners                        -> { learners }
  *   GET  /instructor/submissions?courseId=&quizId=   -> { submissions }
- *   GET  /instructor/submissions/{attemptId}         -> { result, learner, course, feedback }
+ *   GET  /instructor/submissions/{attemptId}         -> { result, submission }
  *   PUT  /instructor/submissions/{attemptId}/feedback  { comment, totalScore } -> { feedback }
  *   GET  /attempts/{attemptId}/feedback              -> { feedback }   (the learner's own view)
  *
- * Every call goes through `optional()`, so until the backend answers them the pages show
- * their "not available yet" card rather than an error, and start working unchanged on the
- * day the routes ship.
+ * The reads go through `optional()`, so a backend without these routes (an old deploy) shows
+ * the "not available" card instead of an error.
  */
 
 /* ───────── Backend shapes (proposed contract) ───────── */

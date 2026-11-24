@@ -1,11 +1,14 @@
+import { createHash, randomBytes } from "node:crypto";
 import type { Request, Response } from "express";
 import bcrypt from "bcrypt";
+import { and } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
 import { isUniqueViolation } from "../utils/db-errors.ts";
 import { varchar } from "../utils/db-types.ts";
 import { httpError } from "../utils/http-error.ts";
 import { signToken } from "../utils/jwt.ts";
 import { toPublicUser } from "../utils/public-user.ts";
+import { appUrl, sendMail } from "../services/mail.ts";
 
 const saltRounds = 10;
 
@@ -72,7 +75,97 @@ const login = async (req: Request, res: Response) => {
   });
 };
 
+// ----- Password reset -----
+
+const RESET_TOKEN_MINUTES = 30;
+const RESET_SENT = "If an account exists for that email, a reset link has been sent";
+const RESET_INVALID = "This reset link is invalid or has expired. Ask for a new one";
+
+// Only this hash is stored, so a leaked database can't be used to reset passwords
+const hashToken = (token: string) => createHash("sha256").update(token).digest("hex");
+
+// Always the same 200, so the endpoint can't tell anyone which emails have accounts
+const forgotPassword = async (req: Request, res: Response) => {
+  const { email } = req.value!.body;
+  const user = await Users.first({ email });
+
+  if (user && user.isActive) {
+    const token = randomBytes(32).toString("base64url");
+    const now = Temporal.Now.instant();
+
+    await db.transaction(async (tx) => {
+      const orm = tx.orm.public;
+      // Asking again cancels the links sent before
+      await orm.PasswordResetTokens.where((t) =>
+        and(t.userId.eq(user.userId), t.usedAt.isNull()),
+      ).updateAndCount({ usedAt: now });
+      await orm.PasswordResetTokens.create({
+        userId: user.userId,
+        tokenHash: varchar<64>(hashToken(token)),
+        expiresAt: now.add({ minutes: RESET_TOKEN_MINUTES }),
+        usedAt: null,
+      });
+    });
+
+    const link = `${appUrl()}/reset-password?token=${token}`;
+    // Not awaited: a slow mail provider must not make known emails answer slower than unknown ones
+    void sendMail({
+      to: user.email,
+      subject: "Reset your IELTStudy password",
+      text:
+        `Hi ${user.fullName},\n\nSomeone (hopefully you) asked to reset your IELTStudy password. ` +
+        `Open this link within ${RESET_TOKEN_MINUTES} minutes to choose a new one:\n\n${link}\n\n` +
+        "If you didn't ask for this, you can ignore this email: your password stays the same.",
+    }).catch((err: unknown) => {
+      console.error("Could not send the password reset email:", err);
+    });
+  }
+
+  return res.status(200).json({ message: RESET_SENT });
+};
+
+const resetPassword = async (req: Request, res: Response) => {
+  const { token, password }: { token: string; password: string } = req.value!.body;
+
+  const row = await db.orm.public.PasswordResetTokens.first({
+    tokenHash: varchar<64>(hashToken(token)),
+  });
+  const now = Temporal.Now.instant();
+  if (!row || row.usedAt !== null || Temporal.Instant.compare(row.expiresAt, now) <= 0) {
+    throw httpError(400, RESET_INVALID);
+  }
+  const user = await Users.first({ userId: row.userId });
+  if (!user || !user.isActive) {
+    throw httpError(400, RESET_INVALID);
+  }
+
+  const hashedPass = await bcrypt.hash(password, saltRounds);
+
+  await db.transaction(async (tx) => {
+    const orm = tx.orm.public;
+    // One UPDATE ... WHERE used_at IS NULL, so two requests with the same token can't both win
+    const claimed = await orm.PasswordResetTokens.where((t) =>
+      and(t.tokenId.eq(row.tokenId), t.usedAt.isNull()),
+    ).updateAndCount({ usedAt: now });
+    if (claimed === 0) {
+      throw httpError(400, RESET_INVALID);
+    }
+    // Any other link still out there stops working too
+    await orm.PasswordResetTokens.where((t) =>
+      and(t.userId.eq(user.userId), t.usedAt.isNull()),
+    ).updateAndCount({ usedAt: now });
+    await orm.Users.where({ userId: user.userId }).update({
+      hashedPass: varchar<255>(hashedPass),
+      passwordChangedAt: now,
+    });
+  });
+
+  return res.status(200).json({ message: "Your password has been changed. Log in with the new one" });
+};
+
 export default {
   register,
   login,
+  forgotPassword,
+  resetPassword,
 };

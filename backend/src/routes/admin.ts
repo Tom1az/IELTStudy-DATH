@@ -27,4 +27,6 @@ router.get(
 
 router.get("/stats", adminController.getStats);
 
+router.get("/audit", validateQuery(schemas.auditQuerySchema), adminController.listAudit);
+
 export default router;

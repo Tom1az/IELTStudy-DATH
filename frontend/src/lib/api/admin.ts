@@ -18,11 +18,7 @@ export interface AdminCourse extends Course {
 
 export type AdminStats = BackendAdminStats;
 
-/**
- * `GET /admin/audit` is not in `backend/src/docs/openapi.yaml` yet, so its shape lives here
- * rather than in `backend-types.ts` (which only mirrors the documented contract). Move it
- * there once the endpoint is written up.
- */
+/** `AuditEntry` in `backend/src/docs/openapi.yaml` (`GET /admin/audit`). */
 interface BackendAuditEntry {
   auditId: number;
   action: string;
@@ -150,7 +146,7 @@ export const adminApi = {
    * returns the matching rows and the paging is done here, so the two filters can be
    * combined without another round trip.
    *
-   * Null while the backend doesn't record an audit log yet; the page then says so.
+   * Null if the backend has no audit route (an old deploy); the page then says so.
    */
   async audit(params: { action?: string; actorId?: string; page?: number; pageSize?: number } = {}): Promise<AuditPage | null> {
     const query = new URLSearchParams();

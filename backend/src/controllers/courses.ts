@@ -15,6 +15,8 @@ import { isUniqueViolation } from "../utils/db-errors.ts";
 import { varchar } from "../utils/db-types.ts";
 import { httpError } from "../utils/http-error.ts";
 import { likePattern, pageMeta, pageWindow } from "../utils/pagination.ts";
+import { audit } from "../services/audit.ts";
+import { notify, notifyMany } from "../services/notifications.ts";
 import type { PageQuery } from "../utils/pagination.ts";
 
 const Courses = db.orm.public.Courses;
@@ -223,16 +225,60 @@ const approveCourse = async (req: Request, res: Response) => {
   const course = await findVisibleCourse(req.value!.params!.courseId, req.user!);
   const { feedback }: { feedback?: string } = req.value!.body;
 
+  const admin = req.user!;
+
   const updated = await changeCourseStatus(
     course,
     ["pending_review"],
     {
       status: "approved",
       reviewFeedback: feedback ? feedback : null,
-      reviewedById: req.user!.userId,
+      reviewedById: admin.userId,
       reviewedAt: Temporal.Now.instant(),
     },
     "Only courses waiting for review can be approved",
+    async (orm, approved) => {
+      // When was it last approved? Read before this approval's own audit entry is written.
+      const previous = await orm.AdminAuditLogs.where((a) =>
+        and(a.action.eq(varchar<64>("course.approve")), a.targetId.eq(approved.courseId)),
+      )
+        .orderBy((a) => a.createdAt.desc())
+        .first();
+
+      await audit(orm, admin.userId, {
+        action: "course.approve",
+        targetType: "course",
+        targetId: approved.courseId,
+        summary: `Approved the course "${approved.title}"`,
+        details: feedback ? { feedback } : null,
+      });
+      await notify(orm, approved.instructorId, {
+        type: "course.approved",
+        title: `Your course "${approved.title}" was approved`,
+        body: feedback || null,
+        link: `/instructor/courses/${approved.courseId}`,
+      });
+
+      // An approved course the owner withdrew, extended and resubmitted: tell its learners
+      if (previous) {
+        const newLessons = await orm.Lessons.where((l) =>
+          and(l.courseId.eq(approved.courseId), l.createdAt.gt(previous.createdAt)),
+        ).aggregate((agg) => ({ count: agg.count() }));
+        if (newLessons.count > 0) {
+          const enrolled = await orm.Enrollments.where({ courseId: approved.courseId }).all();
+          await notifyMany(
+            orm,
+            enrolled.map((e) => e.userId),
+            {
+              type: "course.new_lessons",
+              title: `New lessons in "${approved.title}"`,
+              body: `${newLessons.count} new lesson${newLessons.count === 1 ? "" : "s"} added.`,
+              link: `/courses/${approved.courseId}`,
+            },
+          );
+        }
+      }
+    },
   );
 
   return res.status(200).json({
@@ -246,16 +292,33 @@ const rejectCourse = async (req: Request, res: Response) => {
   const course = await findVisibleCourse(req.value!.params!.courseId, req.user!);
   const { feedback }: { feedback: string } = req.value!.body;
 
+  const admin = req.user!;
+
   const updated = await changeCourseStatus(
     course,
     ["pending_review"],
     {
       status: "rejected",
       reviewFeedback: feedback,
-      reviewedById: req.user!.userId,
+      reviewedById: admin.userId,
       reviewedAt: Temporal.Now.instant(),
     },
     "Only courses waiting for review can be rejected",
+    async (orm, rejected) => {
+      await audit(orm, admin.userId, {
+        action: "course.reject",
+        targetType: "course",
+        targetId: rejected.courseId,
+        summary: `Rejected the course "${rejected.title}"`,
+        details: { feedback },
+      });
+      await notify(orm, rejected.instructorId, {
+        type: "course.rejected",
+        title: `Your course "${rejected.title}" needs changes`,
+        body: feedback,
+        link: `/instructor/courses/${rejected.courseId}`,
+      });
+    },
   );
 
   return res.status(200).json({
@@ -271,8 +334,22 @@ const archiveCourse = async (req: Request, res: Response) => {
     throw httpError(403, "Only the course's instructor or an admin can archive it");
   }
 
-  const updated = await Courses.where({ courseId: course.courseId }).update({
-    status: "archived",
+  const user = req.user!;
+  const updated = await db.transaction(async (tx) => {
+    const row = await tx.orm.public.Courses.where({ courseId: course.courseId }).update({
+      status: "archived",
+    });
+    // Only an admin's archive is an admin action; an owner retiring their own course isn't
+    if (row && user.role === "admin" && course.status !== "archived") {
+      await audit(tx.orm.public, user.userId, {
+        action: "course.archive",
+        targetType: "course",
+        targetId: row.courseId,
+        summary: `Archived the course "${row.title}"`,
+        details: { from: course.status },
+      });
+    }
+    return row;
   });
   if (!updated) {
     throw httpError(404, "Course not found");

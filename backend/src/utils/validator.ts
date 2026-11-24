@@ -171,6 +171,15 @@ const schemas = {
     password: Joi.string().required(),
   }),
 
+  forgotPasswordSchema: Joi.object().keys({
+    email: email.required(),
+  }),
+
+  resetPasswordSchema: Joi.object().keys({
+    token: Joi.string().trim().min(1).max(200).required(),
+    password: Joi.string().min(8).max(72, "utf8").required(),
+  }),
+
   profileUpdateSchema: Joi.object()
     .keys({
       fullName,
@@ -185,6 +194,11 @@ const schemas = {
     isActive: Joi.boolean(),
     ...searchQuery,
     ...pageQuery,
+  }),
+
+  auditQuerySchema: Joi.object().keys({
+    action: Joi.string().trim().max(64),
+    actorId: Joi.number().integer().positive(),
   }),
 
   adminUserUpdateSchema: Joi.object()
@@ -347,6 +361,17 @@ const schemas = {
     quizId: Joi.number().integer().positive(),
     status: Joi.string().valid("in_progress", "completed"),
     ...pageQuery,
+  }),
+
+  // ----- Grading -----
+  submissionsQuerySchema: Joi.object().keys({
+    courseId: Joi.number().integer().positive(),
+    quizId: Joi.number().integer().positive(),
+  }),
+
+  feedbackInputSchema: Joi.object().keys({
+    comment: Joi.string().trim().max(5000).allow("").required(),
+    totalScore: Joi.number().integer().min(0).allow(null),
   }),
 
   // ----- Notifications -----

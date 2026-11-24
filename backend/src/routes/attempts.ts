@@ -3,6 +3,7 @@ import { authenticate, authorize } from "../middlewares/auth.ts";
 import { validateBody, validateParams, schemas } from "../utils/validator.ts";
 
 import attemptsController from "../controllers/attempts.ts";
+import gradingController from "../controllers/grading.ts";
 
 const router = express.Router();
 
@@ -20,6 +21,13 @@ router.post(
   attemptId,
   validateBody(schemas.submitAttemptSchema),
   attemptsController.submitMyAttempt,
+);
+
+router.get(
+  "/:attemptId/feedback",
+  authorize("learner", "admin"),
+  attemptId,
+  gradingController.getMyAttemptFeedback,
 );
 
 export default router;

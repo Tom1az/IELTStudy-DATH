@@ -16,14 +16,22 @@ export const authenticate = async (req: Request, res: Response, next: NextFuncti
     throw httpError(401, "Please log in");
   }
 
-  const userId = verifyToken(header.slice("Bearer ".length));
-  if (userId === null) {
+  const verified = verifyToken(header.slice("Bearer ".length));
+  if (verified === null) {
     throw httpError(401, "Please log in");
   }
 
-  const user = await Users.first({ userId });
+  const user = await Users.first({ userId: verified.userId });
   if (!user) {
     throw httpError(401, "Please log in");
+  }
+  // A password reset logs out every session that logged in before it. `iat` has whole seconds,
+  // so a token from the same second as the change still counts as newer.
+  if (
+    user.passwordChangedAt !== null &&
+    verified.issuedAt < Math.floor(user.passwordChangedAt.epochMilliseconds / 1000)
+  ) {
+    throw httpError(401, "Your password was changed. Please log in again");
   }
   if (!user.isActive) {
     throw httpError(401, "This account is deactivated");

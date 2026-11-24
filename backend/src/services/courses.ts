@@ -124,24 +124,31 @@ type StatusChanges = {
 // Step 2 must be ONE SQL statement, so it uses updateAndCount. The ORM's update() reads the
 // matching row first and then updates it by id alone, which lets two parallel changes both
 // pass the check (backend/CLAUDE.md, Prisma notes).
+// `afterChange` runs in the same transaction, after the update: the audit log entry and the
+// notifications that announce the change are saved with it or not at all.
 export const changeCourseStatus = async (
   course: CourseRow,
   from: CourseStatus[],
   changes: StatusChanges,
   conflictMessage: string,
+  afterChange?: (orm: typeof db.orm.public, updated: CourseRow) => Promise<void>,
 ) => {
   if (!from.includes(course.status)) {
     throw httpError(409, conflictMessage);
   }
 
-  const updatedCount = await Courses.where((c) =>
-    and(c.courseId.eq(course.courseId), c.status.in(from)),
-  ).updateAndCount(changes);
+  return db.transaction(async (tx) => {
+    const orm = tx.orm.public;
+    const updatedCount = await orm.Courses.where((c) =>
+      and(c.courseId.eq(course.courseId), c.status.in(from)),
+    ).updateAndCount(changes);
 
-  if (updatedCount === 0) {
-    throw httpError(409, conflictMessage);
-  }
-  // We updated this row a moment ago, so it exists
-  const updated = await Courses.first({ courseId: course.courseId });
-  return updated!;
+    if (updatedCount === 0) {
+      throw httpError(409, conflictMessage);
+    }
+    // We updated this row a moment ago, so it exists
+    const updated = (await orm.Courses.first({ courseId: course.courseId }))!;
+    if (afterChange) await afterChange(orm, updated);
+    return updated;
+  });
 };

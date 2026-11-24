@@ -20,8 +20,9 @@ export const signToken = (userId: number) => {
   });
 };
 
-// Returns the user id inside a valid token, or null if the token is bad, expired or signed
-// with another secret. Pinning the algorithm stops a token from choosing its own (e.g. "none").
+// Returns the user id and the issue time (seconds since the epoch) inside a valid token, or
+// null if the token is bad, expired or signed with another secret. Pinning the algorithm stops
+// a token from choosing its own (e.g. "none").
 export const verifyToken = (token: string) => {
   let payload;
   try {
@@ -34,6 +35,7 @@ export const verifyToken = (token: string) => {
 
   const userId = Number(payload.sub);
   if (!Number.isInteger(userId) || userId < 1) return null;
+  if (typeof payload.iat !== "number") return null;
 
-  return userId;
+  return { userId, issuedAt: payload.iat };
 };

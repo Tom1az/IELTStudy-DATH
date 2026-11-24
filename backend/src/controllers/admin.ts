@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { and, or } from "@prisma/orm-postgres/orm-client";
 import { db } from "../prisma/db.ts";
+import { audit, listAuditEntries } from "../services/audit.ts";
 import { getUsageStats } from "../services/stats.ts";
 import { httpError } from "../utils/http-error.ts";
 import { toPublicUser } from "../utils/public-user.ts";
@@ -59,14 +60,43 @@ const updateUserAccess = async (req: Request, res: Response) => {
     throw httpError(409, "You can't change your own role or account status");
   }
 
+  const before = await Users.first({ userId });
+  if (!before) {
+    throw httpError(404, "User not found");
+  }
+
   const changes: { role?: UserRole; isActive?: boolean } = {};
   if (role !== undefined) changes.role = role;
   if (isActive !== undefined) changes.isActive = isActive;
 
-  const user = await Users.where({ userId }).update(changes);
-  if (!user) {
-    throw httpError(404, "User not found");
-  }
+  const adminId = req.user!.userId;
+  // The change and its audit entries are saved together or not at all
+  const user = await db.transaction(async (tx) => {
+    const orm = tx.orm.public;
+    const updated = await orm.Users.where({ userId }).update(changes);
+    if (!updated) {
+      throw httpError(404, "User not found");
+    }
+    if (role !== undefined && role !== before.role) {
+      await audit(orm, adminId, {
+        action: "user.role_change",
+        targetType: "user",
+        targetId: userId,
+        summary: `Changed the role of ${before.email} from ${before.role} to ${role}`,
+        details: { from: before.role, to: role },
+      });
+    }
+    if (isActive !== undefined && isActive !== before.isActive) {
+      await audit(orm, adminId, {
+        action: isActive ? "user.activate" : "user.deactivate",
+        targetType: "user",
+        targetId: userId,
+        summary: `${isActive ? "Reactivated" : "Deactivated"} the account ${before.email}`,
+        details: null,
+      });
+    }
+    return updated;
+  });
 
   return res.status(200).json({
     user: toPublicUser(user),
@@ -81,7 +111,17 @@ const getStats = async (req: Request, res: Response) => {
   });
 };
 
+// GET /admin/audit: the newest entries, optionally for one action and/or one admin
+const listAudit = async (req: Request, res: Response) => {
+  const { action, actorId }: { action?: string; actorId?: number } = req.value!.query;
+  return res.status(200).json({
+    entries: await listAuditEntries({ action, actorId }),
+    message: "Audit log",
+  });
+};
+
 export default {
+  listAudit,
   listUsers,
   updateUserAccess,
   getStats,
