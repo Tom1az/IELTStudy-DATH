@@ -12,6 +12,8 @@ import { useAuth } from "@/lib/auth-context";
 import { SKILL_META, cx } from "@/lib/format";
 import { ErrorState, PageLoader, ProgressBar, Spinner, useToast } from "@/components/ui";
 import { SkillIcon } from "@/components/SkillIcon";
+import { LessonDiscussion } from "@/components/LessonDiscussion";
+import { ReportButton } from "@/components/ReportButton";
 
 function Sidebar({ view, onNavigate }: { view: LessonView; onNavigate?: () => void }) {
   const [openSkill, setOpenSkill] = useState<SkillCategory | null>(view.lesson.skill);
@@ -160,6 +162,7 @@ export default function LessonPage() {
               {skillSection && <>Lesson {lesson.order} of {skillSection.total} · </>}Level {course.level}
             </div>
             <h1 className="mt-2 text-[28px] font-extrabold leading-tight md:text-[34px]">{lesson.title}</h1>
+            {view.unlocked && <ReportButton className="mt-2" targetType="lesson" targetId={lesson.id} label="Report a problem with this lesson" />}
 
             {!view.unlocked ? (
               <div className="mt-8 rounded-2xl border border-line bg-white p-8 text-center">
@@ -204,6 +207,7 @@ export default function LessonPage() {
                 {view.nextId ? <Link className="flex items-center gap-1 text-ink-muted hover:text-ink" href={`/learn/${course.id}/${view.nextId}`}>Next lesson <ArrowRight className="h-4 w-4" /></Link> : <span />}
               </div>
             )}
+            {view.unlocked && <LessonDiscussion lessonId={lesson.id} />}
           </div>
         </div>
       </div>

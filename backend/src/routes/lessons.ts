@@ -1,7 +1,8 @@
 import express from "express";
 import { authenticate, authorize } from "../middlewares/auth.ts";
-import { validateBody, validateParams, schemas } from "../utils/validator.ts";
+import { validateBody, validateParams, validateQuery, schemas } from "../utils/validator.ts";
 
+import discussionController from "../controllers/discussion.ts";
 import lessonsController from "../controllers/lessons.ts";
 
 const router = express.Router();
@@ -28,5 +29,19 @@ router.put(
   validateBody(schemas.progressInputSchema),
   lessonsController.setLessonProgress,
 );
+
+// The lesson's discussion: whoever may open the lesson (services/comments.ts)
+router
+  .route("/:lessonId/comments")
+  .get(
+    validateParams(schemas.idSchema, "lessonId"),
+    validateQuery(schemas.commentListQuerySchema),
+    discussionController.listLessonComments,
+  )
+  .post(
+    validateParams(schemas.idSchema, "lessonId"),
+    validateBody(schemas.commentInputSchema),
+    discussionController.postLessonComment,
+  );
 
 export default router;

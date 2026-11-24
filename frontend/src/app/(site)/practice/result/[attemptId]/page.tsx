@@ -12,6 +12,7 @@ import { Avatar, ErrorState, PageLoader } from "@/components/ui";
 import { QuestionView } from "@/components/quiz/QuestionView";
 import { PassagePane } from "@/components/quiz/PassagePane";
 import { RecommendationList, recHref } from "@/components/RecommendationList";
+import { ReportButton } from "@/components/ReportButton";
 
 // Spec: a micro-skill below this mastery triggers remedial recommendations
 const THRESHOLD = 0.65;
@@ -218,7 +219,11 @@ function ResultInner() {
         {showPassage && sections.map((s) => <div key={s.id} className="card mt-4 animate-rise p-6"><PassagePane passage={s.passage} revealScript /></div>)}
         <div className="card mt-4 space-y-8 p-6">
           {questions.map((q, i) => (
-            <QuestionView key={q.id} q={q} number={i + 1} value={resp[q.id]?.userAnswer ?? ""} review={{ isCorrect: !!resp[q.id]?.isCorrect, answerKey: q.answerKey, explanation: q.explanation }} />
+            <div key={q.id}>
+              <QuestionView q={q} number={i + 1} value={resp[q.id]?.userAnswer ?? ""} review={{ isCorrect: !!resp[q.id]?.isCorrect, answerKey: q.answerKey, explanation: q.explanation }} />
+              {/* A wrong answer key or a confusing question can be reported for an admin to check */}
+              <ReportButton className="mt-2" targetType="question" targetId={q.id} label="Report this question" />
+            </div>
           ))}
         </div>
       </section>

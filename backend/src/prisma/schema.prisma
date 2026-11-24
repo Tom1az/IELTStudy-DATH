@@ -448,6 +448,7 @@ model LessonComments {
   lesson      Lessons              @relation(fields: [lessonId], references: [lessonId], onDelete: Cascade, index: false)
   user        Users                @relation("CommentAuthor", fields: [userId], references: [userId], onDelete: Cascade)
   parent      LessonComments?      @relation("CommentReplies", fields: [parentId], references: [commentId], onDelete: Cascade)
+  replies     LessonComments[]     @relation("CommentReplies")
   deletedBy   Users?               @relation("CommentRemover", fields: [deletedById], references: [userId], onDelete: SetNull)
 
   @@index([lessonId, createdAt])

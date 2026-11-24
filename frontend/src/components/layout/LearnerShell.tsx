@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { BookOpen, ChartNoAxesCombined, History, House, LogOut, PenLine, Target } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar } from "@/components/ui";
+import { NotificationBell } from "@/components/NotificationBell";
 import { band, cx } from "@/lib/format";
 import { Logo } from "./Logo";
 
@@ -40,7 +41,10 @@ export function LearnerShell({ children }: { children: ReactNode }) {
 
       {/* Desktop sidebar */}
       <aside className="sticky top-0 hidden h-screen w-[260px] shrink-0 flex-col gap-9 overflow-y-auto border-r border-line bg-white p-6 lg:flex">
-        <Logo href="/my-learning" />
+        <div className="flex items-center justify-between gap-2">
+          <Logo href="/my-learning" />
+          <NotificationBell />
+        </div>
         <nav className="flex flex-col gap-2" aria-label="Main">
           <p className="text-[10px] font-bold uppercase tracking-eyebrow text-ink-muted">Your workspace</p>
           {NAV.map((n) => (
@@ -93,7 +97,10 @@ export function LearnerShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-ivory/95 px-4 backdrop-blur lg:hidden">
           <Logo href="/my-learning" />
           {user && (
-            <Link href="/profile" aria-label="Profile and settings"><Avatar name={user.name} size={34} /></Link>
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <Link href="/profile" aria-label="Profile and settings"><Avatar name={user.name} size={34} /></Link>
+            </div>
           )}
         </header>
 

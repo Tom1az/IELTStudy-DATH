@@ -3148,7 +3148,7 @@ components:
           required: [averageScorePercent, scoredAttempts, averageMastery, masteredPercent, byCategory, bySkill]
           properties:
             averageScorePercent:
-              { type: [number, "null"], description: "Mean score of completed attempts (diagnostic included). Null with none." }
+              { type: [number, "null"], description: "Share of correct answers over all completed attempts (diagnostic included). Null with none." }
             scoredAttempts: { type: integer }
             averageMastery: { type: [number, "null"], minimum: 0, maximum: 1 }
             masteredPercent:

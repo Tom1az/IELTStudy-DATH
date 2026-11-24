@@ -10,3 +10,7 @@ export type * from "./practice";
 export type * from "./instructor";
 export type * from "./grading";
 export type * from "./admin";
+export { notificationsApi } from "./notifications";
+export type * from "./notifications";
+export { discussionApi, reportsApi } from "./discussion";
+export type * from "./discussion";

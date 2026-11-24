@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { ChevronDown, LayoutDashboard, LogOut, Menu, Settings, Shield, User as UserIcon, X } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar } from "@/components/ui";
+import { NotificationBell } from "@/components/NotificationBell";
 import { cx } from "@/lib/format";
 import { Logo } from "./Logo";
 
@@ -56,6 +57,7 @@ export function SiteHeader() {
             </>
           ) : (
             <>
+              <NotificationBell />
               <div className="relative" ref={menuRef}>
                 <button className="flex items-center gap-1 rounded-full" onClick={() => setMenu((m) => !m)} aria-haspopup="menu" aria-expanded={menu} aria-label="Account menu">
                   <Avatar name={user.name} size={40} />

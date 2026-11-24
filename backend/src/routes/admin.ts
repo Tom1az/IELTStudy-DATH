@@ -4,6 +4,7 @@ import { validateBody, validateParams, validateQuery, schemas } from "../utils/v
 
 import adminController from "../controllers/admin.ts";
 import coursesController from "../controllers/courses.ts";
+import discussionController from "../controllers/discussion.ts";
 
 const router = express.Router();
 
@@ -28,5 +29,14 @@ router.get(
 router.get("/stats", adminController.getStats);
 
 router.get("/audit", validateQuery(schemas.auditQuerySchema), adminController.listAudit);
+
+// The moderation queue
+router.get("/reports", validateQuery(schemas.reportListQuerySchema), discussionController.getReports);
+router.patch(
+  "/reports/:reportId",
+  validateParams(schemas.idSchema, "reportId"),
+  validateBody(schemas.reportUpdateSchema),
+  discussionController.patchReport,
+);
 
 export default router;

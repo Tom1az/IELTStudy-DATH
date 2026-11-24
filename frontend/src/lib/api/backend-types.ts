@@ -254,6 +254,19 @@ export interface BackendAdminStats {
   enrollments: number;
   attempts: { completed: number; completedLast7Days: number };
   activeLearnersLast7Days: number;
+  completion: {
+    averageProgressPercent: number | null;
+    completionRatePercent: number | null;
+    courses: { courseId: number; title: string; coreLessons: number; enrolled: number; completed: number; completionRatePercent: number | null; averageProgressPercent: number | null }[];
+  };
+  learning: {
+    averageScorePercent: number | null;
+    scoredAttempts: number;
+    averageMastery: number | null;
+    masteredPercent: number | null;
+    byCategory: { category: BackendSkillCategory; averageMastery: number | null; learners: number }[];
+    bySkill: { skillId: number; skillCode: string; name: string; category: BackendSkillCategory; averageMastery: number | null; learners: number }[];
+  };
 }
 
 /** Error body for every 4xx/5xx: `{ error: { message, details? } }`. */

@@ -1192,8 +1192,9 @@ export namespace Models {
     deletedBy: public_Users | null;
     lesson: public_Lessons;
     parent: public_LessonComments | null;
+    replies: public_LessonComments[];
     user: public_Users;
-    readonly [RelationKeys]?: 'deletedBy' | 'lesson' | 'parent' | 'user';
+    readonly [RelationKeys]?: 'deletedBy' | 'lesson' | 'parent' | 'replies' | 'user';
   };
   export type public_LessonProgress = {
     completedAt: CodecTypes['pg/timestamptz-temporal@1']['output'] | null;
@@ -4167,6 +4168,17 @@ type ContractBase = Omit<
                 readonly on: {
                   readonly localFields: readonly ['parentId'];
                   readonly targetFields: readonly ['commentId'];
+                };
+              };
+              readonly replies: {
+                readonly to: {
+                  readonly namespace: 'public' & NamespaceId;
+                  readonly model: 'LessonComments';
+                };
+                readonly cardinality: '1:N';
+                readonly on: {
+                  readonly localFields: readonly ['commentId'];
+                  readonly targetFields: readonly ['parentId'];
                 };
               };
               readonly user: {

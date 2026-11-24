@@ -289,7 +289,7 @@ describe("GET /api/v1/admin/stats", () => {
       .set("Authorization", authHeader(admin.userId));
 
     expect(res.status).toBe(200);
-    expect(res.body.stats).toEqual({
+    expect(res.body.stats).toMatchObject({
       users: { total: 1, active: 1, inactive: 0, byRole: { learner: 0, instructor: 0, admin: 1 } },
       courses: {
         total: 0,
@@ -368,7 +368,7 @@ describe("GET /api/v1/admin/stats", () => {
       .set("Authorization", authHeader(admin.userId));
 
     expect(res.status).toBe(200);
-    expect(res.body.stats).toEqual({
+    expect(res.body.stats).toMatchObject({
       users: { total: 6, active: 5, inactive: 1, byRole: { learner: 4, instructor: 1, admin: 1 } },
       courses: {
         total: 4,
@@ -378,5 +378,42 @@ describe("GET /api/v1/admin/stats", () => {
       attempts: { completed: 3, completedLast7Days: 2 },
       activeLearnersLast7Days: 1,
     });
+  });
+});
+
+describe("GET /api/v1/admin/stats: completion and learning", () => {
+  it("reports completion per approved course and learning results", async () => {
+    const { user: admin } = await createTestUser({ role: "admin" });
+    const { user: instructor } = await createTestUser({ role: "instructor" });
+    const { user: a } = await createTestUser();
+    const { user: b } = await createTestUser();
+    const course = await createTestCourse({ instructorId: instructor.userId, status: "approved" });
+    const l1 = await createTestLesson({ courseId: course.courseId, orderIndex: 0 });
+    const l2 = await createTestLesson({ courseId: course.courseId, orderIndex: 1 });
+    await enrollTestUser(a.userId, course.courseId);
+    await enrollTestUser(b.userId, course.courseId);
+    for (const lessonId of [l1.lessonId, l2.lessonId]) {
+      await db.orm.public.LessonProgress.create({ userId: a.userId, lessonId, status: "completed", completedAt: Temporal.Now.instant() });
+    }
+    await db.orm.public.LessonProgress.create({ userId: b.userId, lessonId: l1.lessonId, status: "completed", completedAt: Temporal.Now.instant() });
+    // One completed attempt with 1 of 1 correct
+    await createAnsweredQuiz({ lessonId: l1.lessonId, createdById: instructor.userId, learnerId: a.userId });
+
+    const res = await request(app).get("/api/v1/admin/stats").set("Authorization", authHeader(admin.userId));
+    expect(res.status).toBe(200);
+    expect(res.body.stats.completion).toEqual({
+      averageProgressPercent: 75,
+      completionRatePercent: 50,
+      courses: [
+        { courseId: course.courseId, title: "Test course", coreLessons: 2, enrolled: 2, completed: 1, completionRatePercent: 50, averageProgressPercent: 75 },
+      ],
+    });
+    expect(res.body.stats.learning).toMatchObject({
+      averageScorePercent: 100,
+      scoredAttempts: 1,
+      averageMastery: null,
+      masteredPercent: null,
+    });
+    expect(res.body.stats.learning.byCategory).toHaveLength(4);
   });
 });

@@ -10,6 +10,7 @@ import authRoute from "./routes/auth.ts";
 import coursesRoute from "./routes/courses.ts";
 import diagnosticRoute from "./routes/diagnostic.ts";
 import instructorRoute from "./routes/instructor.ts";
+import { commentsRouter, reportsRouter } from "./routes/discussion.ts";
 import { progressRouter, recommendationsRouter } from "./routes/learning.ts";
 import lessonsRoute from "./routes/lessons.ts";
 import meRoute from "./routes/me.ts";
@@ -58,6 +59,8 @@ app.use("/api/v1/instructor", instructorRoute);
 app.use("/api/v1/admin", adminRoute);
 app.use("/api/v1/recommendations", recommendationsRouter);
 app.use("/api/v1/progress", progressRouter);
+app.use("/api/v1/comments", commentsRouter);
+app.use("/api/v1/reports", reportsRouter);
 
 app.get("/", (req, res) => {
   return res.status(200).json({

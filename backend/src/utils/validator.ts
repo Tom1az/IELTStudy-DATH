@@ -389,6 +389,38 @@ const schemas = {
     totalScore: Joi.number().integer().min(0).allow(null),
   }),
 
+  // ----- Discussion and reports -----
+  commentListQuerySchema: Joi.object().keys({
+    ...pageQuery,
+  }),
+
+  commentInputSchema: Joi.object().keys({
+    body: Joi.string().trim().min(1).max(2000).required(),
+    parentId: Joi.number().integer().positive().allow(null),
+  }),
+
+  commentUpdateSchema: Joi.object().keys({
+    body: Joi.string().trim().min(1).max(2000).required(),
+  }),
+
+  reportInputSchema: Joi.object().keys({
+    targetType: Joi.string().valid("comment", "lesson", "question").required(),
+    targetId: Joi.number().integer().positive().required(),
+    reason: Joi.string().trim().min(3).max(1000).required(),
+  }),
+
+  reportListQuerySchema: Joi.object().keys({
+    status: Joi.string().valid("open", "resolved", "dismissed"),
+    targetType: Joi.string().valid("comment", "lesson", "question"),
+    ...pageQuery,
+  }),
+
+  reportUpdateSchema: Joi.object().keys({
+    status: Joi.string().valid("resolved", "dismissed").required(),
+    note: Joi.string().trim().max(1000).allow(""),
+    removeComment: Joi.boolean(),
+  }),
+
   // ----- Notifications -----
   notificationsQuerySchema: Joi.object().keys({
     unread: Joi.boolean(),
