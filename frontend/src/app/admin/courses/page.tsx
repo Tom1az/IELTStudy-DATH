@@ -1,17 +1,26 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Archive, CheckCircle2, Eye, XCircle } from "lucide-react";
 import { adminApi, ApiError } from "@/lib/api";
 import type { AdminCourse } from "@/lib/api";
 import { SKILL_CATEGORIES } from "@/lib/types";
 import { useAsync } from "@/lib/hooks";
 import { SKILL_META, cx, fmtDate, timeAgo } from "@/lib/format";
-import { ConfirmDialog, EmptyState, ErrorState, Modal, PageHeader, PageLoader, Spinner, TextArea, useToast } from "@/components/ui";
+import { ConfirmDialog, EmptyState, ErrorState, Modal, PageHeader, PageLoader, Pagination, Spinner, TextArea, useToast } from "@/components/ui";
 import { CourseStatusPill } from "@/components/studio/CourseStatusPill";
 
-export default function AdminCourses() {
+function AdminCoursesInner() {
+  const sp = useSearchParams();
+  const router = useRouter();
+  const [page, setPage] = useState(Number(sp.get("page") ?? 1) || 1);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set("page", String(page));
+    router.replace(`/admin/courses${params.toString() ? `?${params}` : ""}`, { scroll: false });
+  }, [page, router]);
   const toast = useToast();
   const { data, error, loading, reload } = useAsync(() => adminApi.courses(), []);
   const [review, setReview] = useState<{ course: AdminCourse; decision: "approve" | "reject" } | null>(null);
@@ -24,6 +33,10 @@ export default function AdminCourses() {
   if (error || !data) return <ErrorState error={error} onRetry={reload} />;
   const waiting = data.filter((c) => c.status === "pending");
   const others = data.filter((c) => c.status !== "pending");
+  const PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(others.length / PER_PAGE));
+  const current = Math.min(page, totalPages);
+  const shown = others.slice((current - 1) * PER_PAGE, current * PER_PAGE);
 
   const submit = async () => {
     if (!review) return;
@@ -84,7 +97,7 @@ export default function AdminCourses() {
         <table className="table-base min-w-[760px]">
           <thead><tr><th>Course</th><th>Instructor</th><th>Status</th><th>Lessons</th><th>Updated</th><th /></tr></thead>
           <tbody>
-            {others.map((c) => (
+            {shown.map((c) => (
               <tr key={c.id}>
                 <td><p className="font-semibold">{c.title}</p><p className="text-xs text-ink-muted">Level {c.level} · {c.levelName}</p></td>
                 <td>{c.instructorName}</td>
@@ -98,6 +111,7 @@ export default function AdminCourses() {
           </tbody>
         </table>
       </div>
+      <div className="mt-4 flex justify-center"><Pagination page={current} totalPages={totalPages} onChange={setPage} /></div>
 
       <Modal open={!!review} onClose={() => setReview(null)} title={review?.decision === "approve" ? `Approve ${review?.course.title}?` : `Request changes to ${review?.course.title}`}
         footer={<><button className="btn-ghost" onClick={() => setReview(null)}>Cancel</button><button className={review?.decision === "approve" ? "btn-primary" : "btn-danger"} onClick={submit} disabled={pending}>{pending && <Spinner className="h-4 w-4" />}{review?.decision === "approve" ? "Approve" : "Send feedback"}</button></>}>
@@ -107,5 +121,13 @@ export default function AdminCourses() {
       <ConfirmDialog open={!!archiving} onClose={() => setArchiving(null)} danger title={`Archive ${archiving?.title}?`} confirmLabel="Archive"
         onConfirm={() => archive(archiving!)} body={<>The course leaves the catalog for good. Learner history is kept.</>} />
     </div>
+  );
+}
+
+export default function AdminCourses() {
+  return (
+    <Suspense>
+      <AdminCoursesInner />
+    </Suspense>
   );
 }

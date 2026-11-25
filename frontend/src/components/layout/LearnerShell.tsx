@@ -6,6 +6,7 @@ import type { ReactNode } from "react";
 import { BookOpen, ChartNoAxesCombined, History, House, LogOut, PenLine, Target } from "lucide-react";
 import { useAuth } from "@/lib/auth-context";
 import { Avatar } from "@/components/ui";
+import { NotificationBell } from "@/components/NotificationBell";
 import { band, cx } from "@/lib/format";
 import { Logo } from "./Logo";
 
@@ -81,6 +82,7 @@ export function LearnerShell({ children }: { children: ReactNode }) {
                 <span className="block text-[11px] text-ink-muted">Learner</span>
               </span>
             </Link>
+            <NotificationBell />
             <button onClick={doLogout} className="rounded-lg p-2 text-ink-muted transition-colors duration-150 hover:bg-brand-tint hover:text-ink" aria-label="Log out" title="Log out">
               <LogOut className="h-4 w-4" />
             </button>
@@ -93,7 +95,10 @@ export function LearnerShell({ children }: { children: ReactNode }) {
         <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-line bg-ivory/95 px-4 backdrop-blur lg:hidden">
           <Logo href="/my-learning" />
           {user && (
-            <Link href="/profile" aria-label="Profile and settings"><Avatar name={user.name} size={34} /></Link>
+            <div className="flex items-center gap-1">
+              <NotificationBell />
+              <Link href="/profile" aria-label="Profile and settings"><Avatar name={user.name} size={34} /></Link>
+            </div>
           )}
         </header>
 

@@ -4,17 +4,30 @@ import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { adminApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
-import { ErrorState, PageHeader, PageLoader, StatCard } from "@/components/ui";
+import { SKILL_META } from "@/lib/format";
+import { SKILL_CATEGORIES } from "@/lib/types";
+import { ErrorState, PageHeader, PageLoader, ProgressBar, StatCard } from "@/components/ui";
+import { MOCK_STATS_EXTRAS } from "@/lib/mock/stats";
 
 const STATUS_LABEL = { draft: "Draft", pending_review: "Waiting for review", approved: "Approved", rejected: "Rejected", archived: "Archived" };
 
-/** The usage statistics `GET /admin/stats` counts. */
+/** The usage statistics `GET /admin/stats` counts. Completion and learning figures are mock data for now. */
 export default function AdminHome() {
   const { data, error, loading, reload } = useAsync(() => adminApi.stats(), []);
   if (loading && !data) return <PageLoader />;
   if (error || !data) return <ErrorState error={error} onRetry={reload} />;
   const s = data;
   const pending = s.courses.byStatus.pending_review;
+
+  const courseRows = MOCK_STATS_EXTRAS.completion.courses.map((c) => ({
+    ...c,
+    pct: c.enrolled ? Math.round((c.completed / c.enrolled) * 100) : 0,
+  }));
+  const averageCompletion = courseRows.length
+    ? Math.round(courseRows.reduce((sum, c) => sum + c.pct, 0) / courseRows.length)
+    : 0;
+  const { averageScorePct, masteryBySkill } = MOCK_STATS_EXTRAS.learning;
+
   return (
     <div className="mx-auto max-w-6xl">
       <PageHeader eyebrow="Admin" title="Platform overview">Users, courses, enrolments and quiz activity across the platform.</PageHeader>
@@ -47,6 +60,44 @@ export default function AdminHome() {
           </ul>
         </section>
       </div>
+
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <section className="card p-5">
+          <h2 className="text-lg font-extrabold">Completion</h2>
+          <p className="text-sm text-ink-muted">Average across courses: <span className="font-semibold text-ink">{averageCompletion}%</span></p>
+          <ul className="mt-4 space-y-4">
+            {courseRows.map((c) => (
+              <li key={c.courseId}>
+                <div className="flex justify-between gap-3 text-sm">
+                  <span className="font-semibold">{c.title}</span>
+                  <span className="whitespace-nowrap tabular-nums text-ink-muted">{c.completed} of {c.enrolled} finished · {c.pct}%</span>
+                </div>
+                <div className="mt-1.5"><ProgressBar value={c.pct} label={`${c.title} completion`} /></div>
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section className="card p-5">
+          <h2 className="text-lg font-extrabold">Learning results</h2>
+          <p className="text-sm text-ink-muted">Average quiz score: <span className="font-semibold text-ink">{averageScorePct}%</span></p>
+          <ul className="mt-4 space-y-4">
+            {SKILL_CATEGORIES.map((skill) => {
+              const pct = Math.round(masteryBySkill[skill] * 100);
+              return (
+                <li key={skill}>
+                  <div className="flex justify-between text-sm">
+                    <span className="font-semibold">{SKILL_META[skill].label}</span>
+                    <span className="tabular-nums text-ink-muted">Mastery {pct}%</span>
+                  </div>
+                  <div className="mt-1.5"><ProgressBar value={pct} label={`${SKILL_META[skill].label} mastery`} /></div>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      </div>
+      <p className="mt-4 text-xs text-ink-soft">Completion and learning figures are sample data until the stats endpoint returns them.</p>
     </div>
   );
 }

@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Avatar } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { Logo } from "./Logo";
+import { NotificationBell } from "@/components/NotificationBell";
 
 export interface NavItem {
   href: string;
@@ -63,6 +64,7 @@ export function AppShell({ section, nav, children }: { section: string; nav: Nav
         <header className="sticky top-0 z-30 flex h-16 items-center gap-3 border-b border-line bg-ivory/95 px-4 backdrop-blur md:px-8">
           <button className="rounded-lg p-2 transition-colors hover:bg-brand-tint lg:hidden" onClick={() => setOpen(true)} aria-label="Open navigation">{open ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</button>
           <div className="ml-auto flex items-center gap-3">
+            {user && <NotificationBell />}
             {user && (
               <Link href="/profile" className="flex items-center gap-2.5 rounded-lg px-1 py-1 transition-opacity hover:opacity-80">
                 <span className="hidden text-right sm:block"><span className="block text-sm font-semibold leading-tight">{user.name}</span><span className="block text-xs capitalize text-ink-muted">{user.role}</span></span>

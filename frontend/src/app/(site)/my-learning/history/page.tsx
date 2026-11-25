@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { practiceApi } from "@/lib/api";
 import { useAsync } from "@/lib/hooks";
 import { RequireRole } from "@/lib/auth-context";
@@ -12,9 +13,16 @@ import { EmptyState, ErrorState, PageHeader, PageLoader, Pagination, Select } fr
 import { LineChart } from "@/components/charts";
 
 function HistoryInner() {
+  const sp = useSearchParams();
+  const router = useRouter();
   const { data, error, loading, reload } = useAsync(() => practiceApi.history(), []);
   const [skill, setSkill] = useState<SkillCategory | "all">("all");
-  const [page, setPage] = useState(1);
+  const [page, setPage] = useState(Number(sp.get("page") ?? 1) || 1);
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (page > 1) params.set("page", String(page));
+    router.replace(`/my-learning/history${params.toString() ? `?${params}` : ""}`, { scroll: false });
+  }, [page, router]);
 
   const series = useMemo(() => {
     if (!data) return [];
@@ -77,5 +85,11 @@ function HistoryInner() {
 }
 
 export default function HistoryPage() {
-  return <RequireRole roles={["learner"]}><HistoryInner /></RequireRole>;
+  return (
+    <RequireRole roles={["learner"]}>
+      <Suspense>
+        <HistoryInner />
+      </Suspense>
+    </RequireRole>
+  );
 }

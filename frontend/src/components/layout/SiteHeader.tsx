@@ -8,6 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { Avatar } from "@/components/ui";
 import { cx } from "@/lib/format";
 import { Logo } from "./Logo";
+import { NotificationBell } from "@/components/NotificationBell";
 
 const NAV = [
   { href: "/courses", label: "Courses" },
@@ -49,6 +50,7 @@ export function SiteHeader() {
         </nav>
 
         <div className="ml-auto flex items-center gap-3">
+          {user && <NotificationBell />}
           {!user ? (
             <>
               <Link href="/login" className="hidden px-3 py-2 text-[15px] text-ink hover:text-brand sm:inline">Log in</Link>
